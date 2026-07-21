@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#171714" />
+    <meta
+      name="description"
+      content="A friendly group challenge to reach 10,000 push-ups together."
+    />
+    <title>Oldchella 10K</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Oldchella 10K home">
+          <span class="brand-mark" aria-hidden="true">10K</span>
+          <span>OLDCHELLA</span>
+        </a>
+        <button class="icon-button" id="reset-button" type="button" aria-label="Reset demo data">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8.1 8.1 0 1 1-2.2-5.5L20 8M20 3v5h-5" />
+          </svg>
+        </button>
+      </header>
+
+      <main>
+        <section class="hero">
+          <p class="eyebrow">ROAD TO JOSHUA TREE · OCT 22–25</p>
+          <h1>Stronger<br /><span>together.</span></h1>
+          <p class="hero-copy">Nine bros. Ten thousand push-ups. One desert weekend worth training for.</p>
+
+          <div class="goal-card">
+            <div class="goal-card__top">
+              <div>
+                <p class="label">GROUP PROGRESS</p>
+                <p class="goal-total"><span id="group-total">0</span><small> / 10,000</small></p>
+              </div>
+              <div class="goal-percent" id="goal-percent">0%</div>
+            </div>
+            <div
+              class="progress-track"
+              role="progressbar"
+              aria-label="Group progress"
+              aria-valuemin="0"
+              aria-valuemax="10000"
+              aria-valuenow="0"
+            >
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="goal-meta">
+              <span><strong id="remaining-total">10,000</strong> reps to go</span>
+              <span id="pace-copy">Oldchella awaits</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">THE CREW</p>
+              <h2>Leaderboard</h2>
+            </div>
+            <span class="live-pill"><span></span> LIVE</span>
+          </div>
+          <div class="leaderboard" id="leaderboard"></div>
+        </section>
+
+        <section class="section activity-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LATEST</p>
+              <h2>Activity</h2>
+            </div>
+          </div>
+          <div class="activity-list" id="activity-list"></div>
+        </section>
+      </main>
+
+      <button class="fab" id="open-log-button" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        LOG REPS
+      </button>
+    </div>
+
+    <dialog id="log-dialog">
+      <form id="log-form" method="dialog">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">ADD ACTIVITY</p>
+            <h2>Log your reps</h2>
+          </div>
+          <button class="icon-button close-button" id="close-dialog-button" type="button" aria-label="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <label>
+          Who are you?
+          <select id="person-input" name="person" required></select>
+        </label>
+        <label>
+          Push-ups
+          <input
+            id="reps-input"
+            name="reps"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            max="1000"
+            placeholder="100"
+            required
+          />
+        </label>
+        <label>
+          Note <span>(optional)</span>
+          <input id="note-input" name="note" type="text" maxlength="80" placeholder="4 sets of 25" />
+        </label>
+
+        <div class="quick-reps" aria-label="Quick rep amounts">
+          <button type="button" data-reps="25">+25</button>
+          <button type="button" data-reps="50">+50</button>
+          <button type="button" data-reps="100">+100</button>
+        </div>
+        <button class="submit-button" type="submit">ADD TO THE TOTAL</button>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">Reps logged. Nice work.</div>
+  </body>
+</html>
