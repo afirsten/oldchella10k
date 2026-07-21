@@ -1,32 +1,92 @@
-const GOAL = 10000;
-const STORAGE_KEY = "oldchella-10k-activities-v1";
+const GOAL_PER_PERSON = 10000;
+const STORAGE_KEY = "oldchella-10k-activities-v3";
+const STATUS_KEY = "oldchella-10k-participation-v1";
+const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 
 const crew = [
-  { id: "andrew", name: "Andrew F", initials: "AF", color: "#d7ff45" },
-  { id: "brian", name: "Brian M", initials: "BM", color: "#ff9f45" },
-  { id: "chris", name: "Chris E", initials: "CE", color: "#58d7ff" },
-  { id: "james", name: "James Z", initials: "JZ", color: "#f58aab" },
-  { id: "jamie", name: "Jamie D", initials: "JD", color: "#b993ff" },
-  { id: "joe", name: "Joe D", initials: "JD", color: "#f6d85e" },
-  { id: "john", name: "John Z", initials: "JZ", color: "#74e1a6" },
-  { id: "matt", name: "Matt H", initials: "MH", color: "#ff795f" },
-  { id: "mike", name: "Mike B", initials: "MB", color: "#7ea8ff" },
+  { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
+  { id: "brian", name: "Brian M", image: "./assets/people/brian.png" },
+  { id: "chris", name: "Chris E", image: "./assets/people/chris.png" },
+  { id: "james", name: "James Z", image: "./assets/people/james.png" },
+  { id: "jamie", name: "Jamie D", image: "./assets/people/jamie.png" },
+  { id: "joe", name: "Joe D", image: "./assets/people/joe.png" },
+  { id: "john", name: "John Z", image: "./assets/people/john.png" },
+  { id: "matt", name: "Matt H", image: "./assets/people/matt.png" },
+  { id: "mike", name: "Mike B", image: "./assets/people/mike.png" },
 ];
 
+function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setNote, run = false }) {
+  const entries = [];
+  const createdAt = `${date}T18:00:00`;
+  if (pushups) {
+    entries.push({
+      id: `${personId}-${date}-pushups`,
+      personId,
+      exercise: "pushups",
+      reps: pushups,
+      note: pushupNote || setNote,
+      createdAt,
+    });
+  }
+  if (squats) {
+    entries.push({
+      id: `${personId}-${date}-squats`,
+      personId,
+      exercise: "squats",
+      reps: squats,
+      note: setNote,
+      createdAt,
+    });
+  }
+  if (planks) {
+    entries.push({
+      id: `${personId}-${date}-planks`,
+      personId,
+      exercise: "planks",
+      reps: planks * 60,
+      note: `${planks} × 1 min`,
+      createdAt,
+    });
+  }
+  if (run) {
+    entries.push({
+      id: `${personId}-${date}-run`,
+      personId,
+      exercise: "other",
+      otherActivity: "Run",
+      reps: 100,
+      percent: 100,
+      note: "",
+      createdAt,
+    });
+  }
+  return entries;
+}
+
 const seedActivities = [
-  { id: 1, personId: "andrew", reps: 175, note: "7 sets of 25", createdAt: "2026-07-20T18:30:00" },
-  { id: 2, personId: "joe", reps: 100, note: "Push-ups, squats & planks", createdAt: "2026-07-20T17:05:00" },
-  { id: 3, personId: "matt", reps: 100, note: "20 sets of 5", createdAt: "2026-07-20T08:20:00" },
-  { id: 4, personId: "andrew", reps: 75, note: "3 sets of 25", createdAt: "2026-07-19T19:10:00" },
-  { id: 5, personId: "joe", reps: 100, note: "4 sets of 25", createdAt: "2026-07-19T15:40:00" },
-  { id: 6, personId: "matt", reps: 100, note: "Mix of 10s and 5s", createdAt: "2026-07-19T09:15:00" },
-  { id: 7, personId: "andrew", reps: 75, note: "3 sets of 25", createdAt: "2026-07-18T18:00:00" },
-  { id: 8, personId: "joe", reps: 100, note: "4 sets of 25", createdAt: "2026-07-18T12:00:00" },
-  { id: 9, personId: "matt", reps: 100, note: "10×4 + 5×12", createdAt: "2026-07-18T07:30:00" },
+  ...seedWorkout("matt", "2026-07-17", { pushups: 100, pushupNote: "5 reps × 20" }),
+  ...seedWorkout("matt", "2026-07-18", { pushups: 100, pushupNote: "10 reps × 4, 5 reps × 12" }),
+  ...seedWorkout("matt", "2026-07-19", { pushups: 100, pushupNote: "1 × 15, 2 × 10, 13 × 5" }),
+  ...seedWorkout("matt", "2026-07-20", { pushups: 100, pushupNote: "20 sets of 5" }),
+
+  ...seedWorkout("joe", "2026-07-15", { pushups: 100, squats: 100, planks: 4, setNote: "4 sets of 25" }),
+  ...seedWorkout("joe", "2026-07-16", { pushups: 100, squats: 100, planks: 4, setNote: "4 sets of 25" }),
+  ...seedWorkout("joe", "2026-07-17", { pushups: 100, squats: 100, planks: 4, setNote: "4 sets of 25" }),
+  ...seedWorkout("joe", "2026-07-18", { pushups: 100, squats: 100, planks: 4, setNote: "4 sets of 25" }),
+  ...seedWorkout("joe", "2026-07-19", { pushups: 100, squats: 100, planks: 4, setNote: "4 sets of 25" }),
+  ...seedWorkout("joe", "2026-07-20", { pushups: 100, squats: 100, planks: 4, setNote: "4 sets of 25" }),
+
+  ...seedWorkout("andrew", "2026-07-15", { pushups: 50, squats: 50, planks: 2, setNote: "2 sets of 25" }),
+  ...seedWorkout("andrew", "2026-07-16", { pushups: 50, squats: 50, planks: 2, setNote: "2 sets of 25", run: true }),
+  ...seedWorkout("andrew", "2026-07-17", { pushups: 50, squats: 50, planks: 2, setNote: "2 sets of 25" }),
+  ...seedWorkout("andrew", "2026-07-18", { pushups: 75, squats: 75, planks: 3, setNote: "3 sets of 25" }),
+  ...seedWorkout("andrew", "2026-07-19", { pushups: 75, squats: 75, planks: 3, setNote: "3 sets of 25" }),
+  ...seedWorkout("andrew", "2026-07-20", { pushups: 75, squats: 75, planks: 3, setNote: "3 sets of 25", run: true }),
 ];
 
 const $ = (selector) => document.querySelector(selector);
 const number = new Intl.NumberFormat("en-US");
+const durationNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 function loadActivities() {
   try {
@@ -38,23 +98,65 @@ function loadActivities() {
 }
 
 let activities = loadActivities();
+let participation = {};
+let apiAvailable = false;
+try {
+  participation = JSON.parse(localStorage.getItem(STATUS_KEY) || "{}");
+} catch {
+  participation = {};
+}
 
-function saveActivities() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(activities));
+function personStatus(personId) {
+  if (participation[personId]) return participation[personId];
+  return activities.some((activity) => activity.personId === personId) ? "in" : "unknown";
 }
 
 function getPerson(id) {
   return crew.find((person) => person.id === id) ?? crew[0];
 }
 
+function activityExercise(activity) {
+  return activity.exercise ?? "pushups";
+}
+
+function exerciseName(activity) {
+  const exercise = activityExercise(activity);
+  if (exercise === "squats") return "Squats";
+  if (exercise === "planks") return "Plank";
+  if (exercise === "other") return activity.otherActivity || "Other activity";
+  return "Push-ups";
+}
+
+function exerciseUnit(activity) {
+  if (activityExercise(activity) === "planks") return "SEC";
+  if (activityExercise(activity) === "other") return "% GOAL";
+  return "REPS";
+}
+
 function totalsByPerson() {
-  return crew.map((person) => ({
-    ...person,
-    total: activities
-      .filter((activity) => activity.personId === person.id)
-      .reduce((sum, activity) => sum + activity.reps, 0),
-    sessions: activities.filter((activity) => activity.personId === person.id).length,
-  }));
+  return crew.map((person) => {
+    const personActivities = activities.filter((activity) => activity.personId === person.id);
+    const pushupActivities = personActivities.filter(
+      (activity) => activityExercise(activity) === "pushups",
+    );
+    const metrics = personActivities.reduce(
+      (totals, activity) => {
+        totals[activityExercise(activity)] += activity.reps;
+        return totals;
+      },
+      { pushups: 0, squats: 0, planks: 0, other: 0 },
+    );
+    const primaryType = metrics.pushups > 0 ? "pushups" : metrics.other > 0 ? "other" : "pushups";
+    return {
+      ...person,
+      metrics,
+      primaryType,
+      total: metrics[primaryType],
+      status: personStatus(person.id),
+      sessions: new Set(personActivities.map((activity) => activity.createdAt.slice(0, 10))).size,
+      pushupSessions: pushupActivities.length,
+    };
+  });
 }
 
 function escapeHtml(value) {
@@ -64,32 +166,82 @@ function escapeHtml(value) {
 }
 
 function render() {
-  const ranking = totalsByPerson().sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
-  const total = ranking.reduce((sum, person) => sum + person.total, 0);
-  const percent = Math.min(100, Math.round((total / GOAL) * 100));
+  const ranking = totalsByPerson().sort(
+    (a, b) =>
+      Number(a.status === "out") - Number(b.status === "out") ||
+      b.total - a.total ||
+      a.name.localeCompare(b.name),
+  );
+  const includedPeople = ranking.filter((person) => person.status !== "out");
+  const participants = ranking.filter((person) => person.status === "in");
+  const goal = participants.length * GOAL_PER_PERSON;
+  const total = includedPeople.reduce((sum, person) => sum + person.total, 0);
+  const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
+  const includedIds = new Set(includedPeople.map((person) => person.id));
+  const categoryTotals = activities
+    .filter((activity) => includedIds.has(activity.personId))
+    .reduce(
+    (totals, activity) => {
+      totals[activityExercise(activity)] += activity.reps;
+      return totals;
+    },
+    { pushups: 0, squats: 0, planks: 0, other: 0 },
+  );
 
   $("#group-total").textContent = number.format(total);
-  $("#remaining-total").textContent = number.format(Math.max(0, GOAL - total));
+  $("#goal-target").textContent = number.format(goal);
+  $("#pushups-total").textContent = number.format(categoryTotals.pushups);
+  $("#squats-total").textContent = number.format(categoryTotals.squats);
+  $("#planks-total").textContent = number.format(categoryTotals.planks);
+  $("#other-total").textContent = number.format(categoryTotals.other);
+  $("#remaining-total").textContent = number.format(Math.max(0, goal - total));
   $("#goal-percent").textContent = `${percent}%`;
   $("#progress-fill").style.width = `${percent}%`;
   $(".progress-track").setAttribute("aria-valuenow", String(total));
-  $("#pace-copy").textContent = total >= GOAL ? "Challenge complete!" : "Oldchella awaits";
+  $(".progress-track").setAttribute("aria-valuemax", String(goal));
+  $("#pace-copy").textContent =
+    goal > 0 && total >= goal ? "Challenge complete!" : "Oldchella awaits";
+  $("#potential-copy").textContent =
+    participants.length === crew.length
+      ? "All nine said yes. The rotator cuffs have been notified."
+      : `If all ${crew.length} joined: ${number.format(crew.length * GOAL_PER_PERSON)} reps. The group chat chose mercy.`;
 
   $("#leaderboard").innerHTML = ranking
     .map(
       (person, index) => `
-        <article class="leader-row">
+        <a class="leader-row${person.status === "out" ? " is-out" : ""}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
           <span class="rank">${String(index + 1).padStart(2, "0")}</span>
-          <span class="avatar" style="background:${person.color}">${person.initials}</span>
+          <span class="avatar-wrap">
+            <img class="avatar" src="${person.image}" alt="" />
+            ${person.status === "out" ? '<span class="out-stamp">OUT</span>' : ""}
+          </span>
           <div>
             <p class="leader-name">${escapeHtml(person.name)}</p>
-            <p class="leader-sub">${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}</p>
+            <p class="leader-sub">${
+              person.status === "out"
+                ? "Out"
+                : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`
+            }</p>
           </div>
           <div class="leader-reps">
-            <strong>${number.format(person.total)}</strong>
-            <small>REPS</small>
+            <span class="${person.primaryType === "pushups" ? "is-primary" : ""}">
+              <strong>${number.format(person.metrics.pushups)}</strong>
+              <small>PUSH</small>
+            </span>
+            <span>
+              <strong>${number.format(person.metrics.squats)}</strong>
+              <small>SQUAT</small>
+            </span>
+            <span>
+              <strong>${number.format(person.metrics.planks)}</strong>
+              <small>PLANK</small>
+            </span>
+            <span class="${person.primaryType === "other" ? "is-primary" : ""}">
+              <strong>${number.format(person.metrics.other)}</strong>
+              <small>OTHER</small>
+            </span>
           </div>
-        </article>
+        </a>
       `,
     )
     .join("");
@@ -104,20 +256,22 @@ function render() {
           const person = getPerson(activity.personId);
           return `
             <article class="activity-item">
-              <span class="activity-avatar" style="background:${person.color}">${person.initials}</span>
+              <img class="activity-avatar" src="${person.image}" alt="" />
               <div class="activity-main">
                 <p>${escapeHtml(person.name)}</p>
-                <span>${escapeHtml(activity.note || "Push-ups")}</span>
+                <span>${escapeHtml(exerciseName(activity))}${activity.note ? ` · ${escapeHtml(activity.note)}` : ""}</span>
               </div>
               <div>
                 <p class="activity-reps">+${number.format(activity.reps)}</p>
-                <span class="activity-time">${formatDate(activity.createdAt)}</span>
+                <span class="activity-time">${exerciseUnit(activity)} · ${formatDate(activity.createdAt)}</span>
               </div>
             </article>
           `;
         })
         .join("")
     : '<div class="empty-state">No reps yet. Be the first to get moving.</div>';
+
+  renderPersonPage();
 }
 
 function formatDate(value) {
@@ -134,53 +288,432 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("is-visible"), 2400);
 }
 
+class ApiError extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function setConnectionState(isLive) {
+  const pill = $(".live-pill");
+  pill.classList.toggle("is-demo", !isLive);
+  pill.innerHTML = `<span></span> ${isLive ? "LIVE" : "DEMO"}`;
+}
+
+async function loadSharedState() {
+  try {
+    const response = await fetch("/api/state", {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("Shared API did not respond.");
+    const state = await response.json();
+    if (!Array.isArray(state.activities) || !state.participation || typeof state.participation !== "object") {
+      throw new Error("Shared API returned invalid data.");
+    }
+    activities = state.activities;
+    participation = state.participation;
+    apiAvailable = true;
+    setConnectionState(true);
+    render();
+    return true;
+  } catch {
+    apiAvailable = false;
+    setConnectionState(false);
+    return false;
+  }
+}
+
+async function apiRequest(path, method, body) {
+  let response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("Shared API unavailable. Deploy or start the Vercel app before making changes.");
+  }
+
+  let result = {};
+  try {
+    result = await response.json();
+  } catch {
+    result = {};
+  }
+  if (!response.ok) {
+    if (response.status === 404 || response.status >= 500) {
+      apiAvailable = false;
+      setConnectionState(false);
+    }
+    throw new ApiError(
+      result.error || "The shared tracker could not save that change.",
+      response.status,
+    );
+  }
+  return result;
+}
+
+function storedPin(personId) {
+  try {
+    return localStorage.getItem(`${PIN_STORAGE_PREFIX}${personId}`) || "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberPin(personId, pin) {
+  try {
+    localStorage.setItem(`${PIN_STORAGE_PREFIX}${personId}`, pin);
+  } catch {
+    // Saving still works if this browser blocks localStorage.
+  }
+}
+
+function forgetPin(personId) {
+  try {
+    localStorage.removeItem(`${PIN_STORAGE_PREFIX}${personId}`);
+  } catch {
+    // Nothing else to clear.
+  }
+}
+
+let resolvePinPrompt = null;
+
+function requestPin(personId, errorMessage = "") {
+  const person = getPerson(personId);
+  $("#pin-person-name").textContent = person.name;
+  $("#pin-error").textContent = errorMessage;
+  $("#pin-error").hidden = !errorMessage;
+  $("#pin-form").reset();
+  $("#pin-dialog").showModal();
+  window.setTimeout(() => $("#pin-input").focus(), 0);
+
+  return new Promise((resolve) => {
+    resolvePinPrompt = resolve;
+  });
+}
+
+function closePinPrompt(value = null) {
+  const resolve = resolvePinPrompt;
+  resolvePinPrompt = null;
+  $("#pin-dialog").close();
+  if (resolve) resolve(value);
+}
+
+async function protectedRequest(path, method, personId, body) {
+  if (!apiAvailable && !(await loadSharedState())) {
+    throw new ApiError("Shared API unavailable. Deploy or start the Vercel app before making changes.");
+  }
+
+  let pin = storedPin(personId);
+  let pinError = "";
+
+  while (true) {
+    if (!pin) {
+      pin = await requestPin(personId, pinError);
+      if (!pin) return null;
+    }
+
+    try {
+      const result = await apiRequest(path, method, { ...body, personId, pin });
+      rememberPin(personId, pin);
+      return result;
+    } catch (error) {
+      if (error.status !== 401 && error.status !== 403) throw error;
+      forgetPin(personId);
+      pin = "";
+      pinError = error.message;
+    }
+  }
+}
+
+function currentPersonId() {
+  const match = window.location.hash.match(/^#\/person\/([a-z]+)$/);
+  return match && crew.some((person) => person.id === match[1]) ? match[1] : null;
+}
+
+function renderPersonPage() {
+  const personId = currentPersonId();
+  const dashboard = $("#dashboard-page");
+  const personPage = $("#person-page");
+  const backButton = $("#back-button");
+
+  if (!personId) {
+    dashboard.hidden = false;
+    personPage.hidden = true;
+    backButton.hidden = true;
+    return;
+  }
+
+  const person = getPerson(personId);
+  const allStats = totalsByPerson();
+  const ranking = allStats
+    .filter((entry) => entry.status !== "out")
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  const personStats = allStats.find((entry) => entry.id === personId);
+  const rank = ranking.findIndex((entry) => entry.id === personId) + 1;
+  const history = activities
+    .filter((activity) => activity.personId === personId)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const primarySessions =
+    personStats.primaryType === "other" ? personStats.sessions : personStats.pushupSessions;
+  const average = primarySessions ? Math.round(personStats.total / primarySessions) : 0;
+  const personalPercent = Math.round((personStats.total / GOAL_PER_PERSON) * 100);
+  const plankMinutes = personStats.metrics.planks / 60;
+  const fullOtherDays = new Set(
+    history
+      .filter(
+        (activity) =>
+          activityExercise(activity) === "other" &&
+          Number(activity.percent ?? activity.reps) >= 100,
+      )
+      .map((activity) => activity.createdAt.slice(0, 10)),
+  ).size;
+
+  dashboard.hidden = true;
+  personPage.hidden = false;
+  backButton.hidden = false;
+  $("#person-avatar").src = person.image;
+  $("#person-avatar").alt = `${person.name} profile photo`;
+  $("#person-name").textContent = person.name;
+  $("#person-summary").textContent =
+    personStats.status === "out"
+      ? `${person.name.split(" ")[0]} is sitting this challenge out.`
+      : history.length
+        ? `${person.name.split(" ")[0]} has put in ${personStats.sessions} ${personStats.sessions === 1 ? "session" : "sessions"} on the road to Joshua Tree.`
+        : `${person.name.split(" ")[0]} is ready to choose whether to join the challenge.`;
+  const participationCard = $("#participation-card");
+  participationCard.hidden = history.length > 0;
+  participationCard.querySelectorAll("[data-participation]").forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.participation === personStats.status);
+  });
+  const showProgress = history.length > 0 || personStats.status === "in";
+  $(".personal-total").hidden = !showProgress;
+  $(".personal-breakdown").hidden = !showProgress;
+  $(".stat-grid").hidden = !showProgress;
+  $("#person-log-button").hidden = personStats.status !== "in";
+  $("#person-total").textContent = number.format(personStats.total);
+  $("#person-total-label").textContent =
+    personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "TOTAL PUSH-UPS";
+  $("#person-goal-percent").textContent = `${personalPercent}%`;
+  $("#person-goal-current").textContent = number.format(personStats.total);
+  $("#person-progress-fill").style.width = `${Math.min(100, personalPercent)}%`;
+  $(".personal-progress-track").setAttribute("aria-valuenow", String(personStats.total));
+  $("#person-pushups-total").textContent = number.format(personStats.metrics.pushups);
+  $("#person-squats-total").textContent = number.format(personStats.metrics.squats);
+  $("#person-plank-minutes").textContent = durationNumber.format(plankMinutes);
+  $("#person-other-days").textContent = number.format(fullOtherDays);
+  $("#person-sessions").textContent = number.format(personStats.sessions);
+  $("#person-average").textContent = number.format(average);
+  $("#person-rank").textContent = personStats.status === "out" ? "OUT" : rank ? `#${rank}` : "—";
+  $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
+  $("#person-activity-list").innerHTML = history.length
+    ? history
+        .map(
+          (activity) => `
+            <article class="activity-item">
+              <img class="activity-avatar" src="${person.image}" alt="" />
+              <div class="activity-main">
+                <p>${escapeHtml(exerciseName(activity))}</p>
+                <span>${new Date(activity.createdAt).toLocaleDateString("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                })}${activity.note ? ` · ${escapeHtml(activity.note)}` : ""}</span>
+              </div>
+              <div>
+                <p class="activity-reps">+${number.format(activity.reps)}</p>
+                <span class="activity-time">${exerciseUnit(activity)}</span>
+              </div>
+            </article>
+          `,
+        )
+        .join("")
+    : '<div class="empty-state">No sessions yet. Time to get on the board.</div>';
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 const personInput = $("#person-input");
-personInput.innerHTML = crew
-  .map((person) => `<option value="${person.id}">${escapeHtml(person.name)}</option>`)
-  .join("");
+
+const exerciseInput = $("#exercise-input");
+const exerciseButtons = [...document.querySelectorAll("[data-exercise]")];
+const quickButtons = [...document.querySelectorAll("[data-increment]")];
+
+function setAmount(value) {
+  const amount = Math.max(0, Math.min(10000, Number(value) || 0));
+  $("#reps-input").value = amount;
+  $("#amount-output").textContent = number.format(amount);
+}
+
+function updateExerciseFields() {
+  const exercise = exerciseInput.value;
+  const settings = {
+    pushups: { label: "Push-up reps", unit: "REPS", quick: [1, 5, 10, 25] },
+    squats: { label: "Squat reps", unit: "REPS", quick: [1, 5, 10, 25] },
+    planks: { label: "Plank time", unit: "SECONDS", quick: [1, 30, 60, 90] },
+    other: { label: "Daily goal", unit: "%", quick: [] },
+  }[exercise];
+
+  exerciseButtons.forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.exercise === exercise);
+  });
+  $("#amount-label").textContent = settings.label;
+  $("#amount-unit").textContent = settings.unit;
+  $("#other-field").hidden = exercise !== "other";
+  $("#other-input").required = exercise === "other";
+  $("#counter-field").hidden = exercise === "other";
+  $("#other-slider-field").hidden = exercise !== "other";
+  quickButtons.forEach((button, index) => {
+    button.dataset.increment = settings.quick[index] || 0;
+    button.textContent = `+${settings.quick[index] || 0}`;
+  });
+  if (exercise === "other") {
+    const percent = Number($("#other-slider").value);
+    setAmount(percent);
+    $("#other-percent").textContent = `${percent}%`;
+    $(".slider-value span").textContent = `= ${percent} reps toward today’s 100-rep goal`;
+  } else {
+    setAmount(0);
+  }
+}
+
+exerciseButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    exerciseInput.value = button.dataset.exercise;
+    updateExerciseFields();
+  });
+});
 
 const dialog = $("#log-dialog");
-$("#open-log-button").addEventListener("click", () => {
+const pinDialog = $("#pin-dialog");
+function openLogDialog(personId) {
+  if (!personId) return;
+  const person = getPerson(personId);
+  personInput.value = personId;
+  $("#log-person-image").src = person.image;
+  $("#log-person-image").alt = `${person.name} profile photo`;
+  $("#log-person-name").textContent = person.name;
   dialog.showModal();
-  window.setTimeout(() => $("#reps-input").focus(), 100);
-});
+}
+
+$("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
 $("#close-dialog-button").addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", (event) => {
   if (event.target === dialog) dialog.close();
 });
 
-document.querySelectorAll("[data-reps]").forEach((button) => {
+$("#pin-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const pin = $("#pin-input").value.trim();
+  if (!/^(?:\d{4}|\d{6})$/.test(pin)) {
+    $("#pin-error").textContent = "Enter a 4-digit participant PIN or 6-digit master PIN.";
+    $("#pin-error").hidden = false;
+    return;
+  }
+  closePinPrompt(pin);
+});
+$("#close-pin-button").addEventListener("click", () => closePinPrompt());
+pinDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closePinPrompt();
+});
+pinDialog.addEventListener("click", (event) => {
+  if (event.target === pinDialog) closePinPrompt();
+});
+
+quickButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    $("#reps-input").value = button.dataset.reps;
-    $("#reps-input").focus();
+    setAmount(Number($("#reps-input").value) + Number(button.dataset.increment));
   });
 });
 
-$("#log-form").addEventListener("submit", (event) => {
+$("#reset-amount-button").addEventListener("click", () => setAmount(0));
+$("#other-slider").addEventListener("input", (event) => {
+  const percent = Number(event.currentTarget.value);
+  setAmount(percent);
+  $("#other-percent").textContent = `${percent}%`;
+  $(".slider-value span").textContent = `= ${percent} reps toward today’s 100-rep goal`;
+});
+
+$("#log-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const reps = Number($("#reps-input").value);
+  const exercise = exerciseInput.value;
   if (!Number.isInteger(reps) || reps < 1 || reps > 1000) return;
+  const personId = personInput.value;
+  if (personId !== currentPersonId()) {
+    dialog.close();
+    showToast("Open a participant profile before logging activity.");
+    return;
+  }
 
-  activities.push({
-    id: Date.now(),
-    personId: personInput.value,
-    reps,
-    note: $("#note-input").value.trim(),
-    createdAt: new Date().toISOString(),
+  const submitButton = event.currentTarget.querySelector(".submit-button");
+  submitButton.disabled = true;
+  try {
+    const result = await protectedRequest("/api/activities", "POST", personId, {
+      exercise,
+      otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
+      reps,
+    });
+    if (!result) return;
+
+    activities.push(result.activity);
+    participation[personId] = result.status;
+    render();
+    event.currentTarget.reset();
+    updateExerciseFields();
+    dialog.close();
+    showToast(
+      exercise === "planks"
+        ? `${number.format(reps)} seconds logged. Nice work.`
+        : `${number.format(reps)} added. Nice work.`,
+    );
+  } catch (error) {
+    showToast(error.message || "Activity could not be saved.");
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+document.querySelectorAll("[data-participation]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const personId = currentPersonId();
+    if (!personId) return;
+    button.disabled = true;
+    try {
+      const result = await protectedRequest("/api/participation", "PUT", personId, {
+        status: button.dataset.participation,
+      });
+      if (!result) return;
+      participation[personId] = result.status;
+      render();
+      showToast(result.status === "in" ? "You’re in. Let’s move." : "Status set to out.");
+    } catch (error) {
+      showToast(error.message || "Participation could not be saved.");
+    } finally {
+      button.disabled = false;
+    }
   });
-  saveActivities();
-  render();
-  event.currentTarget.reset();
-  dialog.close();
-  showToast(`${number.format(reps)} reps logged. Nice work.`);
 });
 
-$("#reset-button").addEventListener("click", () => {
-  if (!window.confirm("Reset all activity to the original demo data?")) return;
-  activities = structuredClone(seedActivities);
-  saveActivities();
-  render();
-  showToast("Demo data restored.");
+$("#leaderboard").addEventListener("click", (event) => {
+  const row = event.target.closest("[data-person-id]");
+  if (row) window.location.hash = `/person/${row.dataset.personId}`;
 });
 
+$("#back-button").addEventListener("click", () => {
+  window.location.hash = "";
+});
+
+window.addEventListener("hashchange", renderPersonPage);
+
+updateExerciseFields();
 render();
+loadSharedState();
