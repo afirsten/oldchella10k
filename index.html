@@ -15,8 +15,8 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=44" />
-    <script src="./app.js?v=42" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=50" />
+    <script src="./app.js?v=49" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -44,7 +44,7 @@
             <span class="logo-top">Ripped-</span>
             <span class="logo-chella">Chella</span>
           </h1>
-          <p class="hero-copy">Nine bros. Ten thousand each. One desert weekend worth training for.</p>
+          <p class="hero-copy">Nine bros. Ten thousand push-ups. One desert weekend worth being ripped for.</p>
 
           <div class="goal-card">
             <div class="goal-card__top">
@@ -90,6 +90,11 @@
                 <strong id="other-total">0</strong>
                 <small>% GOAL</small>
               </div>
+              <div>
+                <span>CREW</span>
+                <strong id="crew-status-total">0 / 0</strong>
+                <small>IN / OUT</small>
+              </div>
             </div>
           </div>
         </section>
@@ -109,7 +114,7 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow">LATEST</p>
-              <h2>Activity</h2>
+              <h2>SCAD Bro Activity</h2>
             </div>
           </div>
           <div class="activity-list" id="activity-list"></div>
@@ -183,7 +188,12 @@
             </div>
             <div>
               <span>AVG / SESSION</span>
-              <strong id="person-average">0</strong>
+              <div class="person-averages" id="person-average" aria-label="Average per workout type">
+                <span><strong id="person-avg-pushups">0</strong><small>PU</small></span>
+                <span><strong id="person-avg-squats">0</strong><small>SQ</small></span>
+                <span><strong id="person-avg-planks">0</strong><small>PL</small></span>
+                <span><strong id="person-avg-other">0</strong><small>O</small></span>
+              </div>
             </div>
             <div>
               <span>CREW RANK</span>

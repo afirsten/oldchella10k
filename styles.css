@@ -213,14 +213,14 @@ h1 .logo-chella {
 }
 .exercise-breakdown {
   display: grid;
-  grid-template-columns: repeat(4,1fr);
+  grid-template-columns: repeat(5,1fr);
   margin: 22px -24px -24px;
   border-top: 1px solid var(--line);
 }
 .exercise-breakdown div {
   display: grid;
   gap: 5px;
-  padding: 16px 12px;
+  padding: 16px 8px;
   border-right: 1px solid var(--line);
 }
 .exercise-breakdown div:last-child { border-right: 0; }
@@ -231,9 +231,10 @@ h1 .logo-chella {
   font-weight: 700;
   letter-spacing: .08em;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .exercise-breakdown strong {
-  font: 800 17px "Manrope", sans-serif;
+  font: 800 15px "Manrope", sans-serif;
   letter-spacing: -.03em;
 }
 .exercise-breakdown small {
@@ -288,8 +289,10 @@ h1 .logo-chella {
 .leader-row:active {
   background: rgba(255,255,255,.025);
 }
-.leader-row.is-out > :not(.avatar-wrap) { opacity: .42; }
-.leader-row.is-out .avatar {
+.leader-row.is-out > :not(.avatar-wrap),
+.leader-row.is-undecided > :not(.avatar-wrap) { opacity: .42; }
+.leader-row.is-out .avatar,
+.leader-row.is-undecided .avatar {
   filter: grayscale(1);
   opacity: .48;
 }
@@ -435,19 +438,56 @@ h1 .logo-chella {
 }
 .activity-item {
   display: grid;
-  grid-template-columns: 38px 1fr 30px;
+  grid-template-columns: 38px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 15px;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: rgba(36,36,31,.55);
+  color: inherit;
+  text-decoration: none;
+}
+.activity-item.is-feed {
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 14px;
+}
+.activity-item.is-editable {
+  grid-template-columns: 38px minmax(0, 1fr) 30px;
   cursor: pointer;
 }
-.activity-item:hover,
-.activity-item:focus-visible {
+.activity-item.is-editable:hover,
+.activity-item.is-editable:focus-visible,
+a.activity-item:hover,
+a.activity-item:focus-visible {
   border-color: rgba(245,200,66,.35);
   outline: none;
+}
+.activity-stack {
+  position: relative;
+  width: 54px;
+  height: 38px;
+}
+.activity-stack .activity-avatar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: 38px;
+  height: 38px;
+  border: 2px solid #24241f;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #2a2620;
+}
+.activity-stack .activity-icon {
+  position: absolute;
+  top: 5px;
+  right: 0;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  font-size: 9px;
 }
 .activity-avatar { width: 38px; height: 38px; font-size: 11px; }
 .activity-icon {
@@ -481,6 +521,24 @@ h1 .logo-chella {
   color: var(--green);
 }
 .activity-main p {
+  margin: 0 0 3px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.activity-person {
+  margin: 0 0 3px;
+  color: var(--ink);
+  font: 700 16px/1.15 "DM Sans", sans-serif;
+}
+.activity-main > span {
+  color: var(--quiet);
+  font-size: 11px;
+}
+.activity-meta {
+  text-align: right;
+  white-space: nowrap;
+}
+.activity-meta p {
   margin: 0;
   color: var(--ink);
   font-size: 14px;
@@ -490,6 +548,9 @@ h1 .logo-chella {
   color: var(--lime);
   font: 800 15px/1 "Manrope", sans-serif;
   font-variant-numeric: tabular-nums;
+}
+.activity-item.is-editable .activity-main p {
+  margin: 0;
 }
 .delete-activity-button {
   display: grid;
@@ -702,9 +763,10 @@ h1 .logo-chella {
   gap: 8px;
   padding: 18px 14px;
   border-right: 1px solid var(--line);
+  align-content: start;
 }
 .stat-grid div:last-child { border-right: 0; }
-.stat-grid span {
+.stat-grid > div > span {
   color: var(--quiet);
   font-size: 8px;
   font-weight: 700;
@@ -712,6 +774,28 @@ h1 .logo-chella {
 }
 .stat-grid strong {
   font: 800 20px "Manrope", sans-serif;
+}
+.person-averages {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+.person-averages > span {
+  display: grid;
+  gap: 2px;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+}
+.person-averages strong {
+  font: 800 15px/1 "Manrope", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.person-averages small {
+  color: var(--quiet);
+  font: 700 8px/1 "Manrope", sans-serif;
+  letter-spacing: .08em;
 }
 .person-log-button {
   display: flex;

@@ -224,17 +224,18 @@ function render() {
   const ranking = totalsByPerson().sort(
     (a, b) =>
       Number(a.status === "out") - Number(b.status === "out") ||
+      Number(a.status === "unknown") - Number(b.status === "unknown") ||
       b.total - a.total ||
       a.name.localeCompare(b.name),
   );
-  const includedPeople = ranking.filter((person) => person.status !== "out");
   const participants = ranking.filter((person) => person.status === "in");
+  const optedOut = ranking.filter((person) => person.status === "out");
   const goal = participants.length * GOAL_PER_PERSON;
-  const total = includedPeople.reduce((sum, person) => sum + person.total, 0);
+  const total = participants.reduce((sum, person) => sum + person.total, 0);
   const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
-  const includedIds = new Set(includedPeople.map((person) => person.id));
+  const participantIds = new Set(participants.map((person) => person.id));
   const categoryTotals = activities
-    .filter((activity) => includedIds.has(activity.personId))
+    .filter((activity) => participantIds.has(activity.personId))
     .reduce(
     (totals, activity) => {
       totals[activityExercise(activity)] += activity.reps;
@@ -249,6 +250,7 @@ function render() {
   $("#squats-total").textContent = number.format(categoryTotals.squats);
   $("#planks-total").textContent = number.format(categoryTotals.planks);
   $("#other-total").textContent = number.format(categoryTotals.other);
+  $("#crew-status-total").textContent = `${participants.length} / ${optedOut.length}`;
   $("#remaining-total").textContent = number.format(Math.max(0, goal - total));
   $("#goal-percent").textContent = `${percent}%`;
   $("#progress-fill").style.width = `${percent}%`;
@@ -263,8 +265,21 @@ function render() {
 
   $("#leaderboard").innerHTML = ranking
     .map(
-      (person, index) => `
-        <a class="leader-row${person.status === "out" ? " is-out" : ""}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
+      (person, index) => {
+        const rowState =
+          person.status === "out"
+            ? " is-out"
+            : person.status === "unknown"
+              ? " is-undecided"
+              : "";
+        const subtitle =
+          person.status === "out"
+            ? "Out"
+            : person.status === "unknown"
+              ? "Undecided"
+              : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
+        return `
+        <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
           <span class="rank">${String(index + 1).padStart(2, "0")}</span>
           <span class="avatar-wrap">
             <img class="avatar" src="${person.image}" alt="" />
@@ -272,11 +287,7 @@ function render() {
           </span>
           <div>
             <p class="leader-name">${escapeHtml(person.name)}</p>
-            <p class="leader-sub">${
-              person.status === "out"
-                ? "Out"
-                : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`
-            }</p>
+            <p class="leader-sub">${subtitle}</p>
           </div>
           <div class="leader-reps">
             <span class="${person.primaryType === "pushups" ? "is-primary" : ""}">
@@ -297,7 +308,8 @@ function render() {
             </span>
           </div>
         </a>
-      `,
+      `;
+      },
     )
     .join("");
 
@@ -310,17 +322,19 @@ function render() {
         .map((activity) => {
           const person = getPerson(activity.personId);
           return `
-            <article class="activity-item">
-              <img class="activity-avatar" src="${person.image}" alt="" />
+            <a class="activity-item is-feed" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
+              <div class="activity-stack" aria-hidden="true">
+                <img class="activity-avatar" src="${person.image}" alt="" />
+                ${exerciseIcon(activity)}
+              </div>
               <div class="activity-main">
-                <p>${escapeHtml(person.name)}</p>
-                <span>${escapeHtml(exerciseName(activity))}${activity.note ? ` · ${escapeHtml(activity.note)}` : ""}</span>
+                <p class="activity-person">${escapeHtml(person.name)}</p>
+                <span>${formatDate(activity.createdAt)}</span>
               </div>
-              <div>
-                <p class="activity-reps">+${number.format(activity.reps)}</p>
-                <span class="activity-time">${exerciseUnit(activity)} · ${formatDate(activity.createdAt)}</span>
+              <div class="activity-meta">
+                <p><span class="activity-reps">+${number.format(activity.reps)}</span> ${escapeHtml(exerciseName(activity))}</p>
               </div>
-            </article>
+            </a>
           `;
         })
         .join("")
@@ -508,7 +522,7 @@ function renderPersonPage() {
   const person = getPerson(personId);
   const allStats = totalsByPerson();
   const ranking = allStats
-    .filter((entry) => entry.status !== "out")
+    .filter((entry) => entry.status === "in")
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   const personStats = allStats.find((entry) => entry.id === personId);
   const rank = ranking.findIndex((entry) => entry.id === personId) + 1;
@@ -530,9 +544,14 @@ function renderPersonPage() {
     }
     return groups;
   }, []);
-  const primarySessions =
-    personStats.primaryType === "other" ? personStats.sessions : personStats.pushupSessions;
-  const average = primarySessions ? Math.round(personStats.total / primarySessions) : 0;
+  const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
+  history.forEach((activity) => {
+    sessionDays[activityExercise(activity)].add(activity.createdAt.slice(0, 10));
+  });
+  const averageFor = (exercise, value) => {
+    const days = sessionDays[exercise].size;
+    return days ? value / days : 0;
+  };
   const personalPercent = Math.round((personStats.total / GOAL_PER_PERSON) * 100);
   const plankMinutes = personStats.metrics.planks / 60;
   const fullOtherDays = new Set(
@@ -579,8 +598,20 @@ function renderPersonPage() {
   $("#person-plank-minutes").textContent = durationNumber.format(plankMinutes);
   $("#person-other-days").textContent = number.format(fullOtherDays);
   $("#person-sessions").textContent = number.format(personStats.sessions);
-  $("#person-average").textContent = number.format(average);
-  $("#person-rank").textContent = personStats.status === "out" ? "OUT" : rank ? `#${rank}` : "—";
+  $("#person-avg-pushups").textContent = number.format(
+    Math.round(averageFor("pushups", personStats.metrics.pushups)),
+  );
+  $("#person-avg-squats").textContent = number.format(
+    Math.round(averageFor("squats", personStats.metrics.squats)),
+  );
+  $("#person-avg-planks").textContent = durationNumber.format(
+    averageFor("planks", plankMinutes),
+  );
+  $("#person-avg-other").textContent = number.format(
+    Math.round(averageFor("other", personStats.metrics.other)),
+  );
+  $("#person-rank").textContent =
+    personStats.status === "out" ? "OUT" : personStats.status === "unknown" ? "—" : rank ? `#${rank}` : "—";
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   $("#person-activity-list").innerHTML = history.length
     ? historyByDate
@@ -601,7 +632,7 @@ function renderPersonPage() {
                 ${group.activities
                   .map(
                     (activity) => `
-                      <article class="activity-item" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
+                      <article class="activity-item is-editable" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
                           <p><span class="activity-reps">+${number.format(activity.reps)}</span> ${escapeHtml(exerciseName(activity))}</p>
