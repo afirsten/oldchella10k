@@ -618,6 +618,8 @@ function openLogDialog(personId, activityDate = localDateValue()) {
   window.clearTimeout(logSuccessTimer);
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
+  $("#log-form").reset();
+  updateExerciseFields();
   const person = getPerson(personId);
   personInput.value = personId;
   $("#activity-date-input").max = localDateValue();
@@ -696,6 +698,7 @@ $("#other-slider").addEventListener("input", (event) => {
 
 $("#log-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  const form = event.currentTarget;
   const reps = Number($("#reps-input").value);
   const exercise = exerciseInput.value;
   if (!Number.isInteger(reps) || reps < 1 || reps > 1000) return;
@@ -706,7 +709,7 @@ $("#log-form").addEventListener("submit", async (event) => {
     return;
   }
 
-  const submitButton = event.currentTarget.querySelector(".submit-button");
+  const submitButton = form.querySelector(".submit-button");
   submitButton.disabled = true;
   try {
     const result = await protectedRequest("/api/activities", "POST", personId, {
@@ -720,7 +723,7 @@ $("#log-form").addEventListener("submit", async (event) => {
     activities.push(result.activity);
     participation[personId] = result.status;
     render();
-    event.currentTarget.reset();
+    form.reset();
     updateExerciseFields();
     showLogSuccess(personId, reps, exercise);
   } catch (error) {
