@@ -15,8 +15,8 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=29" />
-    <script src="./app.js?v=28" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=44" />
+    <script src="./app.js?v=42" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -235,6 +235,15 @@
           Workout date
           <input id="activity-date-input" name="activityDate" type="date" required />
         </label>
+        <div class="daily-goals-card">
+          <p class="label">DAILY GOAL</p>
+          <ul>
+            <li><strong>100</strong> push-ups</li>
+            <li><strong>100</strong> squats</li>
+            <li><strong>4 × 1 min</strong> plank <span>(240 seconds)</span></li>
+            <li class="is-bonus"><strong>Other</strong> is a bonus</li>
+          </ul>
+        </div>
         <div class="exercise-picker">
           <span>What did you do?</span>
           <div class="exercise-tabs">
@@ -280,7 +289,7 @@
         <div class="other-slider" id="other-slider-field" hidden>
           <div class="slider-value">
             <output id="other-percent">50%</output>
-            <span>= 50 reps toward today’s 100-rep goal</span>
+            <span>= 50% bonus effort logged</span>
           </div>
           <input id="other-slider" type="range" min="0" max="100" step="1" value="50" aria-label="Percent of daily goal" />
         </div>
@@ -324,7 +333,7 @@
           />
         </label>
         <p class="pin-error" id="pin-error" role="alert" hidden></p>
-        <p class="pin-help">A PIN is required for every protected change.</p>
+        <p class="pin-help">A successful PIN is remembered on this browser until you clear site data.</p>
         <button class="submit-button" type="submit">CONFIRM CHANGE</button>
       </form>
     </dialog>

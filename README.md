@@ -47,6 +47,7 @@ Opening the site through `python3 -m http.server` still shows demo data, but pro
 
 - `GET /api/state` — public activity and participation
 - `POST /api/activities` — add activity with `personId`, `activityDate`, and `pin`
+- `PUT /api/activities` — update one activity with `activityId`, `personId`, `activityDate`, and `pin`
 - `DELETE /api/activities` — delete one activity with `activityId`, `personId`, and `pin`
 - `PUT /api/participation` — update status with `personId` and `pin`
 

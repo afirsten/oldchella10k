@@ -1,6 +1,12 @@
 const GOAL_PER_PERSON = 10000;
+const DAILY_GOALS = {
+  pushups: 100,
+  squats: 100,
+  planks: 240,
+};
 const STORAGE_KEY = "oldchella-10k-activities-v3";
 const STATUS_KEY = "oldchella-10k-participation-v1";
+const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 
 const crew = [
   { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
@@ -130,6 +136,56 @@ function exerciseUnit(activity) {
   if (activityExercise(activity) === "planks") return "SEC";
   if (activityExercise(activity) === "other") return "% GOAL";
   return "REPS";
+}
+
+function dayGoalProgress(dayActivities) {
+  const totals = dayActivities.reduce(
+    (sums, activity) => {
+      sums[activityExercise(activity)] += Number(activity.reps) || 0;
+      return sums;
+    },
+    { pushups: 0, squats: 0, planks: 0, other: 0 },
+  );
+  const percents = {
+    pushups: Math.min(100, Math.round((totals.pushups / DAILY_GOALS.pushups) * 100)),
+    squats: Math.min(100, Math.round((totals.squats / DAILY_GOALS.squats) * 100)),
+    planks: Math.min(100, Math.round((totals.planks / DAILY_GOALS.planks) * 100)),
+    other: Math.min(100, Math.round((totals.other / 100) * 100)),
+  };
+  const complete =
+    percents.pushups >= 100 && percents.squats >= 100 && percents.planks >= 100;
+
+  return { percents, complete };
+}
+
+function dayGoalCheck(complete) {
+  if (!complete) return "";
+  return `
+    <span class="history-day-goal is-complete" aria-label="Daily goals complete">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" /></svg>
+    </span>
+  `;
+}
+
+function dayGoalBreakdown(dayActivities) {
+  const { percents } = dayGoalProgress(dayActivities);
+  return `
+    <span class="history-day-breakdown" aria-label="Daily goal progress">
+      ${percents.pushups}% pushups / ${percents.squats}% squats / ${percents.planks}% plank / ${percents.other}% Other
+    </span>
+  `;
+}
+
+function exerciseIcon(activity) {
+  const exercise = activityExercise(activity);
+  const labels = {
+    pushups: "PU",
+    squats: "SQ",
+    planks: "PL",
+    other: "O",
+  };
+  const label = labels[exercise] || "PU";
+  return `<span class="activity-icon is-${exercise}" aria-hidden="true">${label}</span>`;
 }
 
 function totalsByPerson() {
@@ -361,6 +417,30 @@ async function apiRequest(path, method, body) {
   return result;
 }
 
+function storedPin(personId) {
+  try {
+    return localStorage.getItem(`${PIN_STORAGE_PREFIX}${personId}`) || "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberPin(personId, pin) {
+  try {
+    localStorage.setItem(`${PIN_STORAGE_PREFIX}${personId}`, pin);
+  } catch {
+    // Saving still works if this browser blocks localStorage.
+  }
+}
+
+function forgetPin(personId) {
+  try {
+    localStorage.removeItem(`${PIN_STORAGE_PREFIX}${personId}`);
+  } catch {
+    // Nothing else to clear.
+  }
+}
+
 let resolvePinPrompt = null;
 
 function requestPin(personId, errorMessage = "") {
@@ -385,18 +465,23 @@ function closePinPrompt(value = null) {
 }
 
 async function protectedRequest(path, method, personId, body) {
-  let pin = "";
+  let pin = storedPin(personId);
   let pinError = "";
 
   while (true) {
-    pin = await requestPin(personId, pinError);
-    if (!pin) return null;
+    if (!pin) {
+      pin = await requestPin(personId, pinError);
+      if (!pin) return null;
+    }
 
     try {
       const result = await apiRequest(path, method, { ...body, personId, pin });
+      rememberPin(personId, pin);
       return result;
     } catch (error) {
       if (error.status !== 401 && error.status !== 403) throw error;
+      forgetPin(personId);
+      pin = "";
       pinError = error.message;
     }
   }
@@ -503,36 +588,34 @@ function renderPersonPage() {
           (group) => `
             <div class="history-day">
               <div class="history-date-divider">
-                <span>${group.date.toLocaleDateString("en-US", {
+                ${dayGoalCheck(dayGoalProgress(group.activities).complete)}
+                <span class="history-day-date">${group.date.toLocaleDateString("en-US", {
                   weekday: "long",
                   month: "long",
                   day: "numeric",
                 })}</span>
+                <span class="history-day-rule" aria-hidden="true"></span>
+                ${dayGoalBreakdown(group.activities)}
               </div>
               <div class="history-day-activities">
                 ${group.activities
                   .map(
                     (activity) => `
-                      <article class="activity-item">
-                        <img class="activity-avatar" src="${person.image}" alt="" />
+                      <article class="activity-item" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
+                        ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p>${escapeHtml(exerciseName(activity))}</p>
-                          <span>${activity.note ? escapeHtml(activity.note) : "Logged activity"}</span>
+                          <p><span class="activity-reps">+${number.format(activity.reps)}</span> ${escapeHtml(exerciseName(activity))}</p>
                         </div>
-                        <div class="activity-actions">
-                          <p class="activity-reps">+${number.format(activity.reps)}</p>
-                          <span class="activity-time">${exerciseUnit(activity)}</span>
-                          <button
-                            class="delete-activity-button"
-                            type="button"
-                            data-delete-activity-id="${escapeHtml(activity.id)}"
-                            aria-label="Delete ${escapeHtml(exerciseName(activity))} entry"
-                          >
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                              <path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" />
-                            </svg>
-                          </button>
-                        </div>
+                        <button
+                          class="delete-activity-button"
+                          type="button"
+                          data-delete-activity-id="${escapeHtml(activity.id)}"
+                          aria-label="Delete ${escapeHtml(exerciseName(activity))} entry"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" />
+                          </svg>
+                        </button>
                       </article>
                     `,
                   )
@@ -562,7 +645,7 @@ function setAmount(value) {
   $("#reps-input").value = amount;
 }
 
-function updateExerciseFields() {
+function updateExerciseFields({ keepAmount = false } = {}) {
   const exercise = exerciseInput.value;
   const settings = {
     pushups: { label: "Push-up reps", unit: "REPS", quick: [1, 5, 10, 25] },
@@ -585,11 +668,14 @@ function updateExerciseFields() {
     button.textContent = `+${settings.quick[index] || 0}`;
   });
   if (exercise === "other") {
-    const percent = Number($("#other-slider").value);
+    const percent = keepAmount
+      ? Math.max(0, Math.min(100, Number($("#reps-input").value) || 0))
+      : Number($("#other-slider").value);
+    $("#other-slider").value = percent;
     setAmount(percent);
     $("#other-percent").textContent = `${percent}%`;
-    $(".slider-value span").textContent = `= ${percent} reps toward today’s 100-rep goal`;
-  } else {
+    $(".slider-value span").textContent = `= ${percent}% bonus effort logged`;
+  } else if (!keepAmount) {
     setAmount(0);
   }
 }
@@ -604,6 +690,7 @@ exerciseButtons.forEach((button) => {
 const dialog = $("#log-dialog");
 const pinDialog = $("#pin-dialog");
 let logSuccessTimer = null;
+let editingActivityId = null;
 
 function localDateValue(date = new Date()) {
   return [
@@ -613,13 +700,17 @@ function localDateValue(date = new Date()) {
   ].join("-");
 }
 
-function openLogDialog(personId, activityDate = localDateValue()) {
+function openLogDialog(personId, options = {}) {
   if (!personId) return;
+  const activity = options.activity || null;
+  const activityDate = options.activityDate || localDateValue();
+  editingActivityId = activity?.id || null;
+
   window.clearTimeout(logSuccessTimer);
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-form").reset();
-  updateExerciseFields();
+
   const person = getPerson(personId);
   personInput.value = personId;
   $("#activity-date-input").max = localDateValue();
@@ -627,6 +718,19 @@ function openLogDialog(personId, activityDate = localDateValue()) {
   $("#log-person-image").src = person.image;
   $("#log-person-image").alt = `${person.name} profile photo`;
   $("#log-person-name").textContent = person.name;
+  $("#log-dialog .dialog-heading h2").textContent = activity ? "Edit your reps" : "Log your reps";
+  $("#log-dialog .dialog-heading .eyebrow").textContent = activity ? "EDIT ACTIVITY" : "ADD ACTIVITY";
+  $("#log-form .submit-button").textContent = activity ? "SAVE CHANGES" : "ADD TO THE TOTAL";
+
+  if (activity) {
+    exerciseInput.value = activityExercise(activity);
+    $("#other-input").value = activity.otherActivity || "";
+    setAmount(activity.reps);
+    updateExerciseFields({ keepAmount: true });
+  } else {
+    updateExerciseFields();
+  }
+
   dialog.showModal();
 }
 
@@ -657,9 +761,18 @@ function showLogSuccess(personId, reps, exercise) {
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
-$("#close-dialog-button").addEventListener("click", () => dialog.close());
+$("#close-dialog-button").addEventListener("click", () => {
+  editingActivityId = null;
+  dialog.close();
+});
 dialog.addEventListener("click", (event) => {
-  if (event.target === dialog) dialog.close();
+  if (event.target === dialog) {
+    editingActivityId = null;
+    dialog.close();
+  }
+});
+dialog.addEventListener("close", () => {
+  editingActivityId = null;
 });
 
 $("#pin-form").addEventListener("submit", (event) => {
@@ -693,7 +806,7 @@ $("#other-slider").addEventListener("input", (event) => {
   const percent = Number(event.currentTarget.value);
   setAmount(percent);
   $("#other-percent").textContent = `${percent}%`;
-  $(".slider-value span").textContent = `= ${percent} reps toward today’s 100-rep goal`;
+  $(".slider-value span").textContent = `= ${percent}% bonus effort logged`;
 });
 
 $("#log-form").addEventListener("submit", async (event) => {
@@ -710,18 +823,32 @@ $("#log-form").addEventListener("submit", async (event) => {
   }
 
   const submitButton = form.querySelector(".submit-button");
+  const activityId = editingActivityId;
   submitButton.disabled = true;
   try {
-    const result = await protectedRequest("/api/activities", "POST", personId, {
-      exercise,
-      otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
-      reps,
-      activityDate: $("#activity-date-input").value,
-    });
+    const result = await protectedRequest(
+      "/api/activities",
+      activityId ? "PUT" : "POST",
+      personId,
+      {
+        activityId,
+        exercise,
+        otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
+        reps,
+        activityDate: $("#activity-date-input").value,
+      },
+    );
     if (!result) return;
 
-    activities.push(result.activity);
+    if (activityId) {
+      const index = activities.findIndex((entry) => entry.id === activityId);
+      if (index >= 0) activities[index] = result.activity;
+      else activities.push(result.activity);
+    } else {
+      activities.push(result.activity);
+    }
     participation[personId] = result.status;
+    editingActivityId = null;
     render();
     form.reset();
     updateExerciseFields();
@@ -757,39 +884,59 @@ document.querySelectorAll("[data-participation]").forEach((button) => {
 $("#person-activity-list").addEventListener("click", async (event) => {
   const addButton = event.target.closest("[data-log-date]");
   if (addButton) {
-    openLogDialog(currentPersonId(), addButton.dataset.logDate);
+    openLogDialog(currentPersonId(), { activityDate: addButton.dataset.logDate });
     return;
   }
 
-  const button = event.target.closest("[data-delete-activity-id]");
-  if (!button) return;
+  const deleteButton = event.target.closest("[data-delete-activity-id]");
+  if (deleteButton) {
+    event.stopPropagation();
+    const activity = activities.find((entry) => entry.id === deleteButton.dataset.deleteActivityId);
+    const personId = currentPersonId();
+    if (!activity || !personId || activity.personId !== personId) return;
+    if (
+      !window.confirm(
+        `Delete this ${number.format(activity.reps)} ${exerciseUnit(activity).toLowerCase()} ${exerciseName(activity).toLowerCase()} entry?`,
+      )
+    ) {
+      return;
+    }
 
-  const activity = activities.find((entry) => entry.id === button.dataset.deleteActivityId);
+    deleteButton.disabled = true;
+    try {
+      const result = await protectedRequest("/api/activities", "DELETE", personId, {
+        activityId: activity.id,
+      });
+      if (!result) return;
+
+      activities = activities.filter((entry) => entry.id !== result.deletedActivityId);
+      render();
+      showToast("Activity deleted. Totals updated.");
+    } catch (error) {
+      showToast(error.message || "Activity could not be deleted.");
+    } finally {
+      deleteButton.disabled = false;
+    }
+    return;
+  }
+
+  const item = event.target.closest("[data-activity-id]");
+  if (!item) return;
+  const activity = activities.find((entry) => entry.id === item.dataset.activityId);
   const personId = currentPersonId();
   if (!activity || !personId || activity.personId !== personId) return;
-  if (
-    !window.confirm(
-      `Delete this ${number.format(activity.reps)} ${exerciseUnit(activity).toLowerCase()} ${exerciseName(activity).toLowerCase()} entry?`,
-    )
-  ) {
-    return;
-  }
+  openLogDialog(personId, {
+    activity,
+    activityDate: localDateValue(new Date(activity.createdAt)),
+  });
+});
 
-  button.disabled = true;
-  try {
-    const result = await protectedRequest("/api/activities", "DELETE", personId, {
-      activityId: activity.id,
-    });
-    if (!result) return;
-
-    activities = activities.filter((entry) => entry.id !== result.deletedActivityId);
-    render();
-    showToast("Activity deleted. Totals updated.");
-  } catch (error) {
-    showToast(error.message || "Activity could not be deleted.");
-  } finally {
-    button.disabled = false;
-  }
+$("#person-activity-list").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const item = event.target.closest("[data-activity-id]");
+  if (!item || event.target.closest("[data-delete-activity-id]")) return;
+  event.preventDefault();
+  item.click();
 });
 
 $("#leaderboard").addEventListener("click", (event) => {

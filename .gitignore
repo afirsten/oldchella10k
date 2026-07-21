@@ -2,4 +2,3 @@ secrets/
 .vercel/
 .env*.local
 .dev.vars
-

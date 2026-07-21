@@ -358,8 +358,9 @@ h1 .logo-chella {
 }
 .history-day + .history-day { margin-top: 18px; }
 .history-date-divider {
+  position: relative;
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   color: var(--lime);
   font-size: 9px;
@@ -367,11 +368,43 @@ h1 .logo-chella {
   letter-spacing: .12em;
   text-transform: uppercase;
 }
-.history-date-divider::after {
-  content: "";
+.history-day-date { flex-shrink: 0; }
+.history-day-rule {
   height: 1px;
   flex: 1;
+  min-width: 12px;
   background: var(--line);
+}
+.history-day-breakdown {
+  flex-shrink: 0;
+  color: var(--quiet);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-align: right;
+  white-space: nowrap;
+}
+.history-day-goal.is-complete {
+  position: absolute;
+  top: 50%;
+  left: -28px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid rgba(76,223,138,.45);
+  border-radius: 50%;
+  background: rgba(76,223,138,.12);
+  color: var(--green);
+  transform: translateY(-50%);
+}
+.history-day-goal.is-complete svg {
+  width: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
 }
 .history-day-activities {
   display: grid;
@@ -402,34 +435,70 @@ h1 .logo-chella {
 }
 .activity-item {
   display: grid;
-  grid-template-columns: 38px 1fr auto;
+  grid-template-columns: 38px 1fr 30px;
   gap: 12px;
   align-items: center;
   padding: 15px;
   border: 1px solid var(--line);
   border-radius: 15px;
   background: rgba(36,36,31,.55);
+  cursor: pointer;
+}
+.activity-item:hover,
+.activity-item:focus-visible {
+  border-color: rgba(245,200,66,.35);
+  outline: none;
 }
 .activity-avatar { width: 38px; height: 38px; font-size: 11px; }
-.activity-main p { margin: 0 0 3px; font-size: 14px; }
-.activity-main span, .activity-time { color: var(--quiet); font-size: 11px; }
-.activity-actions {
+.activity-icon {
   display: grid;
-  justify-items: end;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  font: 800 11px/1 "Manrope", sans-serif;
+  letter-spacing: .04em;
+}
+.activity-icon.is-pushups {
+  border-color: rgba(255,45,120,.4);
+  background: rgba(255,45,120,.14);
+  color: var(--pink);
+}
+.activity-icon.is-squats {
+  border-color: rgba(232,118,58,.45);
+  background: rgba(232,118,58,.14);
+  color: var(--terra);
+}
+.activity-icon.is-planks {
+  border-color: rgba(245,200,66,.45);
+  background: rgba(245,200,66,.14);
+  color: var(--lime);
+}
+.activity-icon.is-other {
+  border-color: rgba(76,223,138,.4);
+  background: rgba(76,223,138,.12);
+  color: var(--green);
+}
+.activity-main p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
 }
 .activity-reps {
-  margin: 0 0 3px;
+  margin: 0 4px 0 0;
   color: var(--lime);
-  font: 800 16px "Manrope", sans-serif;
-  text-align: right;
+  font: 800 15px/1 "Manrope", sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 .delete-activity-button {
   display: grid;
   width: 30px;
   height: 30px;
-  margin: 5px -7px -7px 0;
+  margin: 0;
   padding: 0;
   place-items: center;
+  justify-self: end;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -825,6 +894,43 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 }
 .activity-date-field input {
   color-scheme: dark;
+}
+.daily-goals-card {
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(245,200,66,.06), transparent), var(--surface);
+}
+.daily-goals-card .label {
+  margin-bottom: 10px;
+}
+.daily-goals-card ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.daily-goals-card li {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.daily-goals-card strong {
+  color: var(--ink);
+  font-weight: 800;
+}
+.daily-goals-card span {
+  color: var(--quiet);
+  font-size: 12px;
+}
+.daily-goals-card .is-bonus {
+  color: var(--quiet);
+  font-size: 12px;
+}
+.daily-goals-card .is-bonus strong {
+  color: var(--muted);
+  font-weight: 700;
 }
 .exercise-picker {
   display: grid;
