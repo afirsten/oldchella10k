@@ -15,14 +15,16 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=24" />
-    <script src="./app.js?v=20" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=29" />
+    <script src="./app.js?v=27" defer></script>
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
         <button class="back-button" id="back-button" type="button" aria-label="Back to Ripped-Chella home" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-6h6v6" />
+          </svg>
           <span class="compact-wordmark ripped-wordmark" aria-hidden="true">
             <span class="wordmark-base">RIPPED-</span><span class="wordmark-accent">CHELLA</span>
           </span>
@@ -229,6 +231,10 @@
           </div>
           <input id="person-input" name="person" type="hidden" />
         </div>
+        <label class="activity-date-field" for="activity-date-input">
+          Workout date
+          <input id="activity-date-input" name="activityDate" type="date" required />
+        </label>
         <div class="exercise-picker">
           <span>What did you do?</span>
           <div class="exercise-tabs">
@@ -249,10 +255,21 @@
             <button id="reset-amount-button" type="button">RESET</button>
           </div>
           <div class="amount-display">
-            <output id="amount-output">0</output>
+            <input
+              id="reps-input"
+              class="amount-input"
+              name="reps"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="1000"
+              step="1"
+              value="0"
+              aria-label="Activity amount"
+              required
+            />
             <span id="amount-unit">REPS</span>
           </div>
-          <input id="reps-input" name="reps" type="hidden" value="0" />
           <div class="quick-reps" aria-label="Add amount">
             <button type="button" data-increment="1">+1</button>
             <button type="button" data-increment="5">+5</button>
@@ -269,6 +286,14 @@
         </div>
         <button class="submit-button" type="submit">ADD TO THE TOTAL</button>
       </form>
+      <div class="log-success" id="log-success" hidden>
+        <div class="success-confetti" id="success-confetti" aria-hidden="true"></div>
+        <div class="success-check" aria-hidden="true">✓</div>
+        <p>ACTIVITY LOGGED</p>
+        <strong id="success-amount">+0</strong>
+        <span id="success-unit">REPS</span>
+        <small id="success-copy">Added to your personal progress.</small>
+      </div>
     </dialog>
 
     <dialog class="pin-dialog" id="pin-dialog">
@@ -299,7 +324,7 @@
           />
         </label>
         <p class="pin-error" id="pin-error" role="alert" hidden></p>
-        <p class="pin-help">A successful PIN is remembered only on this browser.</p>
+        <p class="pin-help">A PIN is required for every protected change.</p>
         <button class="submit-button" type="submit">CONFIRM CHANGE</button>
       </form>
     </dialog>

@@ -1,7 +1,6 @@
 const GOAL_PER_PERSON = 10000;
 const STORAGE_KEY = "oldchella-10k-activities-v3";
 const STATUS_KEY = "oldchella-10k-participation-v1";
-const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 
 const crew = [
   { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
@@ -352,35 +351,14 @@ async function apiRequest(path, method, body) {
       setConnectionState(false);
     }
     throw new ApiError(
-      result.error || "The shared tracker could not save that change.",
+      result.error ||
+        (response.status === 404
+          ? "Shared API unavailable. Deploy or start the Vercel app before making changes."
+          : "The shared tracker could not save that change."),
       response.status,
     );
   }
   return result;
-}
-
-function storedPin(personId) {
-  try {
-    return localStorage.getItem(`${PIN_STORAGE_PREFIX}${personId}`) || "";
-  } catch {
-    return "";
-  }
-}
-
-function rememberPin(personId, pin) {
-  try {
-    localStorage.setItem(`${PIN_STORAGE_PREFIX}${personId}`, pin);
-  } catch {
-    // Saving still works if this browser blocks localStorage.
-  }
-}
-
-function forgetPin(personId) {
-  try {
-    localStorage.removeItem(`${PIN_STORAGE_PREFIX}${personId}`);
-  } catch {
-    // Nothing else to clear.
-  }
 }
 
 let resolvePinPrompt = null;
@@ -407,27 +385,18 @@ function closePinPrompt(value = null) {
 }
 
 async function protectedRequest(path, method, personId, body) {
-  if (!apiAvailable && !(await loadSharedState())) {
-    throw new ApiError("Shared API unavailable. Deploy or start the Vercel app before making changes.");
-  }
-
-  let pin = storedPin(personId);
+  let pin = "";
   let pinError = "";
 
   while (true) {
-    if (!pin) {
-      pin = await requestPin(personId, pinError);
-      if (!pin) return null;
-    }
+    pin = await requestPin(personId, pinError);
+    if (!pin) return null;
 
     try {
       const result = await apiRequest(path, method, { ...body, personId, pin });
-      rememberPin(personId, pin);
       return result;
     } catch (error) {
       if (error.status !== 401 && error.status !== 403) throw error;
-      forgetPin(personId);
-      pin = "";
       pinError = error.message;
     }
   }
@@ -461,6 +430,21 @@ function renderPersonPage() {
   const history = activities
     .filter((activity) => activity.personId === personId)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const historyByDate = history.reduce((groups, activity) => {
+    const date = new Date(activity.createdAt);
+    const dateKey = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+    const existingGroup = groups.find((group) => group.dateKey === dateKey);
+    if (existingGroup) {
+      existingGroup.activities.push(activity);
+    } else {
+      groups.push({ dateKey, date, activities: [activity] });
+    }
+    return groups;
+  }, []);
   const primarySessions =
     personStats.primaryType === "other" ? personStats.sessions : personStats.pushupSessions;
   const average = primarySessions ? Math.round(personStats.total / primarySessions) : 0;
@@ -514,24 +498,51 @@ function renderPersonPage() {
   $("#person-rank").textContent = personStats.status === "out" ? "OUT" : rank ? `#${rank}` : "—";
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   $("#person-activity-list").innerHTML = history.length
-    ? history
+    ? historyByDate
         .map(
-          (activity) => `
-            <article class="activity-item">
-              <img class="activity-avatar" src="${person.image}" alt="" />
-              <div class="activity-main">
-                <p>${escapeHtml(exerciseName(activity))}</p>
-                <span>${new Date(activity.createdAt).toLocaleDateString("en-US", {
-                  weekday: "short",
-                  month: "short",
+          (group) => `
+            <div class="history-day">
+              <div class="history-date-divider">
+                <span>${group.date.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
                   day: "numeric",
-                })}${activity.note ? ` · ${escapeHtml(activity.note)}` : ""}</span>
+                })}</span>
               </div>
-              <div>
-                <p class="activity-reps">+${number.format(activity.reps)}</p>
-                <span class="activity-time">${exerciseUnit(activity)}</span>
+              <div class="history-day-activities">
+                ${group.activities
+                  .map(
+                    (activity) => `
+                      <article class="activity-item">
+                        <img class="activity-avatar" src="${person.image}" alt="" />
+                        <div class="activity-main">
+                          <p>${escapeHtml(exerciseName(activity))}</p>
+                          <span>${activity.note ? escapeHtml(activity.note) : "Logged activity"}</span>
+                        </div>
+                        <div class="activity-actions">
+                          <p class="activity-reps">+${number.format(activity.reps)}</p>
+                          <span class="activity-time">${exerciseUnit(activity)}</span>
+                          <button
+                            class="delete-activity-button"
+                            type="button"
+                            data-delete-activity-id="${escapeHtml(activity.id)}"
+                            aria-label="Delete ${escapeHtml(exerciseName(activity))} entry"
+                          >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                              <path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" />
+                            </svg>
+                          </button>
+                        </div>
+                      </article>
+                    `,
+                  )
+                  .join("")}
               </div>
-            </article>
+              <button class="add-to-date-button" type="button" data-log-date="${group.dateKey}">
+                <span aria-hidden="true">+</span>
+                ADD REPS TO THIS DAY
+              </button>
+            </div>
           `,
         )
         .join("")
@@ -547,9 +558,8 @@ const exerciseButtons = [...document.querySelectorAll("[data-exercise]")];
 const quickButtons = [...document.querySelectorAll("[data-increment]")];
 
 function setAmount(value) {
-  const amount = Math.max(0, Math.min(10000, Number(value) || 0));
+  const amount = Math.max(0, Math.min(1000, Math.round(Number(value) || 0)));
   $("#reps-input").value = amount;
-  $("#amount-output").textContent = number.format(amount);
 }
 
 function updateExerciseFields() {
@@ -593,14 +603,55 @@ exerciseButtons.forEach((button) => {
 
 const dialog = $("#log-dialog");
 const pinDialog = $("#pin-dialog");
-function openLogDialog(personId) {
+let logSuccessTimer = null;
+
+function localDateValue(date = new Date()) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function openLogDialog(personId, activityDate = localDateValue()) {
   if (!personId) return;
+  window.clearTimeout(logSuccessTimer);
+  $("#log-form").hidden = false;
+  $("#log-success").hidden = true;
   const person = getPerson(personId);
   personInput.value = personId;
+  $("#activity-date-input").max = localDateValue();
+  $("#activity-date-input").value = activityDate;
   $("#log-person-image").src = person.image;
   $("#log-person-image").alt = `${person.name} profile photo`;
   $("#log-person-name").textContent = person.name;
   dialog.showModal();
+}
+
+function showLogSuccess(personId, reps, exercise) {
+  const person = getPerson(personId);
+  const unit = exercise === "planks" ? "SECONDS" : exercise === "other" ? "% GOAL" : "REPS";
+  const confettiColors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1"];
+  $("#success-confetti").innerHTML = Array.from({ length: 20 }, (_, index) => {
+    const direction = index % 2 === 0 ? -1 : 1;
+    const distance = 45 + ((index * 37) % 180);
+    const drop = 110 + ((index * 29) % 150);
+    const rotation = direction * (160 + ((index * 47) % 300));
+    const delay = (index % 5) * 35;
+    return `<i style="--x:${direction * distance}px;--y:${drop}px;--r:${rotation}deg;--delay:${delay}ms;--confetti:${confettiColors[index % confettiColors.length]}"></i>`;
+  }).join("");
+  $("#success-amount").textContent = `+${number.format(reps)}`;
+  $("#success-unit").textContent = unit;
+  $("#success-copy").textContent = `Added to ${person.name.split(" ")[0]}’s personal progress.`;
+  $("#log-form").hidden = true;
+  $("#log-success").hidden = false;
+
+  logSuccessTimer = window.setTimeout(() => {
+    $("#log-success").hidden = true;
+    $("#log-form").hidden = false;
+    if (dialog.open) dialog.close();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, 1400);
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
@@ -635,6 +686,7 @@ quickButtons.forEach((button) => {
 });
 
 $("#reset-amount-button").addEventListener("click", () => setAmount(0));
+$("#reps-input").addEventListener("blur", (event) => setAmount(event.currentTarget.value));
 $("#other-slider").addEventListener("input", (event) => {
   const percent = Number(event.currentTarget.value);
   setAmount(percent);
@@ -661,6 +713,7 @@ $("#log-form").addEventListener("submit", async (event) => {
       exercise,
       otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
       reps,
+      activityDate: $("#activity-date-input").value,
     });
     if (!result) return;
 
@@ -669,12 +722,7 @@ $("#log-form").addEventListener("submit", async (event) => {
     render();
     event.currentTarget.reset();
     updateExerciseFields();
-    dialog.close();
-    showToast(
-      exercise === "planks"
-        ? `${number.format(reps)} seconds logged. Nice work.`
-        : `${number.format(reps)} added. Nice work.`,
-    );
+    showLogSuccess(personId, reps, exercise);
   } catch (error) {
     showToast(error.message || "Activity could not be saved.");
   } finally {
@@ -701,6 +749,44 @@ document.querySelectorAll("[data-participation]").forEach((button) => {
       button.disabled = false;
     }
   });
+});
+
+$("#person-activity-list").addEventListener("click", async (event) => {
+  const addButton = event.target.closest("[data-log-date]");
+  if (addButton) {
+    openLogDialog(currentPersonId(), addButton.dataset.logDate);
+    return;
+  }
+
+  const button = event.target.closest("[data-delete-activity-id]");
+  if (!button) return;
+
+  const activity = activities.find((entry) => entry.id === button.dataset.deleteActivityId);
+  const personId = currentPersonId();
+  if (!activity || !personId || activity.personId !== personId) return;
+  if (
+    !window.confirm(
+      `Delete this ${number.format(activity.reps)} ${exerciseUnit(activity).toLowerCase()} ${exerciseName(activity).toLowerCase()} entry?`,
+    )
+  ) {
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const result = await protectedRequest("/api/activities", "DELETE", personId, {
+      activityId: activity.id,
+    });
+    if (!result) return;
+
+    activities = activities.filter((entry) => entry.id !== result.deletedActivityId);
+    render();
+    showToast("Activity deleted. Totals updated.");
+  } catch (error) {
+    showToast(error.message || "Activity could not be deleted.");
+  } finally {
+    button.disabled = false;
+  }
 });
 
 $("#leaderboard").addEventListener("click", (event) => {

@@ -46,7 +46,8 @@ Opening the site through `python3 -m http.server` still shows demo data, but pro
 ## API
 
 - `GET /api/state` — public activity and participation
-- `POST /api/activities` — add activity with `personId` and `pin`
+- `POST /api/activities` — add activity with `personId`, `activityDate`, and `pin`
+- `DELETE /api/activities` — delete one activity with `activityId`, `personId`, and `pin`
 - `PUT /api/participation` — update status with `personId` and `pin`
 
 A participant PIN can modify only its matching person. The master PIN can modify anyone and bypass a lockout. Five incorrect attempts lock that visitor out of the selected profile for 30 minutes.
