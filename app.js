@@ -155,7 +155,7 @@ function dayGoalProgress(dayActivities) {
   const complete =
     percents.pushups >= 100 && percents.squats >= 100 && percents.planks >= 100;
 
-  return { percents, complete };
+  return { totals, percents, complete };
 }
 
 function dayGoalCheck(complete) {
@@ -168,10 +168,20 @@ function dayGoalCheck(complete) {
 }
 
 function dayGoalBreakdown(dayActivities) {
-  const { percents } = dayGoalProgress(dayActivities);
+  const { totals } = dayGoalProgress(dayActivities);
+  const lines = [
+    `${number.format(totals.pushups)} of ${number.format(DAILY_GOALS.pushups)} pushups`,
+    `${number.format(totals.squats)} of ${number.format(DAILY_GOALS.squats)} squats`,
+    `${number.format(totals.planks)} of ${number.format(DAILY_GOALS.planks)} seconds planking`,
+    `${number.format(totals.other)} of 100 Other`,
+  ];
   return `
-    <span class="history-day-breakdown" aria-label="Daily goal progress">
-      ${percents.pushups}% pushups / ${percents.squats}% squats / ${percents.planks}% plank / ${percents.other}% Other
+    <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${lines.join(", ")}">
+      <span class="history-day-breakdown-inline">${lines.join(" / ")}</span>
+      <span class="history-day-breakdown-card" role="tooltip">
+        <span class="label">DAILY GOAL</span>
+        ${lines.map((line) => `<span>${line}</span>`).join("")}
+      </span>
     </span>
   `;
 }
