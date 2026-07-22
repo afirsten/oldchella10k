@@ -8,6 +8,7 @@
   --line: rgba(255,160,80,.14);
   --lime: #f5c842;
   --pink: #ff2d78;
+  --lavender: #c9b3ff;
   --terra: #e8763a;
   --green: #4cdf8a;
   --background: #120a06;
@@ -208,6 +209,56 @@ button { color: inherit; }
 }
 
 .hero { padding: 36px 0 26px; }
+.hero-welcome {
+  margin: 0 0 8px;
+  color: var(--lavender);
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 22px;
+  letter-spacing: .05em;
+}
+.hero-brand-row {
+  display: flex;
+  gap: 18px;
+  align-items: stretch;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.hero-brand-row .hero-logo {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+}
+.hero-quick-add {
+  flex-shrink: 0;
+  display: grid;
+  gap: 10px;
+  align-content: center;
+  justify-items: center;
+  align-self: stretch;
+  min-width: 168px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    linear-gradient(160deg, rgba(232,118,58,.08), transparent 55%),
+    var(--surface);
+  box-shadow: inset 0 1px rgba(255,160,80,.05);
+}
+.hero-quick-add[hidden] {
+  display: none;
+}
+.hero-quick-prompt {
+  margin: 0;
+  color: var(--lavender);
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 18px;
+  letter-spacing: .04em;
+  text-align: center;
+}
 .eyebrow, .label {
   margin: 0 0 9px;
   color: var(--lime);
@@ -217,7 +268,7 @@ button { color: inherit; }
 }
 h1, h2, p { margin-top: 0; }
 h1 {
-  margin-bottom: 18px;
+  margin-bottom: 12px;
   font: 400 clamp(54px, 15vw, 92px)/.82 "Abril Fatface", serif;
   letter-spacing: -.025em;
   text-transform: uppercase;
@@ -233,6 +284,9 @@ h1 .logo-chella {
 .logo-top {
   display: block;
   color: var(--ink);
+}
+.hero > .eyebrow {
+  margin: 0 0 18px;
 }
 .hero-copy {
   width: 100%;
@@ -260,17 +314,45 @@ h1 .logo-chella {
   letter-spacing: -.04em;
 }
 .goal-total small { color: var(--quiet); font-size: 15px; }
+.goal-meters {
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+  align-items: center;
+  margin-top: -10px;
+}
+.goal-days,
 .goal-percent {
   display: grid;
   width: 58px;
   height: 58px;
-  margin-top: -10px;
-  place-items: center;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
   border: 1px solid rgba(245,200,66,.4);
   border-radius: 50%;
   color: var(--lime);
   font: 800 15px/1 "Manrope", sans-serif;
   letter-spacing: -.03em;
+}
+.goal-days {
+  border-color: rgba(201,179,255,.4);
+  color: var(--lavender);
+}
+.goal-days strong,
+.goal-percent strong {
+  font: 800 15px/1 "Manrope", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+}
+.goal-days span,
+.goal-percent span {
+  color: inherit;
+  font-family: "DM Mono", monospace;
+  font-size: 7px;
+  font-weight: 500;
+  letter-spacing: .12em;
+  opacity: .85;
 }
 .progress-track {
   position: relative;
@@ -322,14 +404,88 @@ h1 .logo-chella {
   padding-top: 14px;
   border-top: 1px dashed var(--line);
   color: var(--muted);
-  font-size: 11px;
-  font-style: italic;
-  line-height: 1.4;
+  font: 400 14px/1.4 "Abril Fatface", serif;
+  text-align: center;
   min-height: 2.8em;
   transition: opacity 220ms ease;
 }
 .potential-copy.is-fading {
   opacity: 0;
+}
+.quick-add-button {
+  display: flex;
+  width: auto;
+  min-width: 148px;
+  height: 44px;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--terra), var(--lime));
+  color: var(--background);
+  font: 800 11px/1 "Manrope", sans-serif;
+  font-weight: 800;
+  letter-spacing: .1em;
+  cursor: pointer;
+}
+.quick-add-button[hidden] {
+  display: none;
+}
+.quick-add-button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2.4;
+}
+.quick-add-label {
+  font-weight: 800;
+}
+.person-picker-dialog {
+  padding: 22px 22px calc(28px + env(safe-area-inset-bottom));
+}
+.person-picker-copy {
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.person-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.person-picker-option {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(18,10,6,.55);
+  color: var(--ink);
+  font: 700 12px/1.2 "DM Sans", sans-serif;
+  cursor: pointer;
+}
+.person-picker-option:hover,
+.person-picker-option:focus-visible {
+  border-color: rgba(245,200,66,.45);
+  outline: none;
+}
+.person-picker-option img {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+@media (max-width: 420px) {
+  .person-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .exercise-breakdown {
   display: grid;
@@ -394,7 +550,7 @@ h1 .logo-chella {
 .leader-row {
   display: grid;
   width: 100%;
-  grid-template-columns: 24px 42px minmax(62px,1fr) minmax(142px,42%);
+  grid-template-columns: 22px 42px minmax(62px,1fr) minmax(142px,42%);
   gap: 11px;
   align-items: center;
   padding: 16px 0;
@@ -416,7 +572,45 @@ h1 .logo-chella {
   filter: grayscale(1);
   opacity: .48;
 }
-.rank { color: var(--quiet); font: 700 12px "Manrope", sans-serif; }
+.rank {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.35) inset,
+    0 3px 8px rgba(0,0,0,.35);
+  font: 800 12px/1 "Manrope", sans-serif;
+  letter-spacing: -.03em;
+}
+.rank-gold {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.35), transparent 42%),
+    linear-gradient(135deg, #ffe08a 0%, var(--lime) 40%, var(--terra) 100%);
+  color: #2a1608;
+}
+.rank-silver {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.4), transparent 42%),
+    linear-gradient(135deg, #f4f1ea 0%, #c8c2b6 48%, #8f8778 100%);
+  color: #2a2620;
+}
+.rank-bronze {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.28), transparent 42%),
+    linear-gradient(135deg, #f0b07a 0%, #c67a45 45%, #8a4a28 100%);
+  color: #2a1608;
+}
+.rank-steel {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.18), transparent 42%),
+    linear-gradient(135deg, #7a7f88 0%, #4e545e 48%, #2f343c 100%);
+  color: #f4f1ea;
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.16) inset,
+    0 3px 8px rgba(0,0,0,.35);
+}
 .avatar, .activity-avatar {
   border-radius: 50%;
   object-fit: cover;
@@ -558,9 +752,7 @@ h1 .logo-chella {
   transform: translateY(0);
 }
 .history-day-goal.is-complete {
-  position: absolute;
-  top: 50%;
-  left: -28px;
+  flex-shrink: 0;
   display: grid;
   width: 18px;
   height: 18px;
@@ -569,7 +761,6 @@ h1 .logo-chella {
   border-radius: 50%;
   background: rgba(76,223,138,.12);
   color: var(--green);
-  transform: translateY(-50%);
 }
 .history-day-goal.is-complete svg {
   width: 11px;
@@ -809,6 +1000,7 @@ a.activity-item:focus-visible {
   position: relative;
   flex-shrink: 0;
   display: inline-block;
+  padding-bottom: 6px;
 }
 .person-avatar {
   display: block;
@@ -837,39 +1029,30 @@ a.activity-item:focus-visible {
 .person-rank-badge {
   position: absolute;
   left: 50%;
-  bottom: -21px;
+  bottom: -10px;
   display: grid;
-  gap: 1px;
-  width: 78px;
-  padding: 4px 6px 5px;
+  width: max-content;
+  max-width: 96px;
+  padding: 2px 8px;
   border: 1px solid rgba(255, 214, 120, .75);
-  border-radius: 8px;
+  border-radius: 6px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.28), transparent 38%),
     linear-gradient(135deg, #ffe08a 0%, var(--lime) 38%, var(--terra) 100%);
   box-shadow:
     0 1px 0 rgba(255,255,255,.35) inset,
-    0 6px 14px rgba(0,0,0,.4),
-    0 0 12px rgba(245,200,66,.22);
+    0 4px 10px rgba(0,0,0,.35),
+    0 0 10px rgba(245,200,66,.18);
   text-align: center;
   justify-items: center;
   transform: translateX(-50%);
 }
-.person-rank-badge .label {
-  margin: 0;
-  color: rgba(48, 28, 10, .72);
-  font-size: 6px;
-  letter-spacing: .1em;
-}
 .person-rank-badge strong {
   color: #2a1608;
-  font: 800 12px/1 "Manrope", sans-serif;
-  letter-spacing: -.03em;
+  font: 800 9px/1.1 "Manrope", sans-serif;
+  letter-spacing: .02em;
+  white-space: nowrap;
   text-shadow: 0 1px 0 rgba(255,255,255,.28);
-}
-.person-rank-badge .rank-hash {
-  margin-right: 1px;
-  font-weight: 400;
 }
 .person-rank-badge.is-out {
   border-color: rgba(255,120,160,.65);
@@ -878,11 +1061,8 @@ a.activity-item:focus-visible {
     linear-gradient(135deg, #ff8fb3 0%, var(--pink) 55%, #b01648 100%);
   box-shadow:
     0 1px 0 rgba(255,255,255,.28) inset,
-    0 6px 14px rgba(0,0,0,.4),
-    0 0 12px rgba(255,45,120,.22);
-}
-.person-rank-badge.is-out .label {
-  color: rgba(255, 236, 244, .82);
+    0 4px 10px rgba(0,0,0,.35),
+    0 0 10px rgba(255,45,120,.18);
 }
 .person-rank-badge.is-out strong {
   color: #fff4f8;
@@ -1103,9 +1283,13 @@ a.activity-item:focus-visible {
   border-radius: 14px;
   background: linear-gradient(90deg, var(--terra), var(--lime));
   color: var(--background);
-  font: 800 11px "Manrope", sans-serif;
+  font: 800 12px/1 "Manrope", sans-serif;
+  font-weight: 800;
   letter-spacing: .1em;
   cursor: pointer;
+}
+.person-log-label {
+  font-weight: 800;
 }
 
 .fab {
@@ -1519,6 +1703,20 @@ input:focus, select:focus {
 }
 @media (max-width: 560px) {
   .nav-countdown { display: none; }
+  .hero-brand-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .hero-quick-add {
+    min-width: 0;
+    width: 100%;
+    min-height: 0;
+    padding: 16px;
+  }
+  .quick-add-button {
+    width: 100%;
+  }
 }
 @media (min-width: 700px) {
   .app-shell { padding-inline: 32px; }

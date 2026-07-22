@@ -11,6 +11,7 @@ const DAILY_GOALS = {
 const STORAGE_KEY = "oldchella-10k-activities-v3";
 const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
+const LAST_PERSON_KEY = "rippedchella-last-person-v1";
 
 const crew = [
   { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
@@ -322,16 +323,78 @@ function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDel
   ].filter(Boolean);
 }
 
+function activityCallout(activity) {
+  const person = getPerson(activity.personId);
+  if (!person) return null;
+  const first = person.name.split(" ")[0];
+  const exercise = activityExercise(activity);
+  const amount = number.format(activity.reps);
+  const label = exerciseName(activity);
+  const seed = String(activity.id || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+
+  if (exercise === "planks") {
+    const lines = [
+      `Fresh drop: ${first} just locked in ${amount} seconds of plank.`,
+      `${first} banked ${amount} plank seconds. Desert stillness unlocked.`,
+      `+${amount} plank seconds from ${first}. Core tax collected.`,
+    ];
+    return lines[seed % lines.length];
+  }
+  if (exercise === "other") {
+    const lines = [
+      `Fresh drop: ${first} just logged ${amount}% on Other — ${label}.`,
+      `${first} slipped in ${amount}% Other (${label}). The side quest counts.`,
+      `+${amount}% Other from ${first}: ${label}.`,
+    ];
+    return lines[seed % lines.length];
+  }
+  if (exercise === "squats") {
+    const lines = [
+      `Fresh drop: ${first} just added +${amount} squats.`,
+      `${first} banked +${amount} squats. Knees filed the receipt.`,
+      `+${amount} squats from ${first}. Engine still running.`,
+    ];
+    return lines[seed % lines.length];
+  }
+  const lines = [
+    `Fresh drop: ${first} just added +${amount} push-ups.`,
+    `${first} banked +${amount} push-ups. Chest taxes paid.`,
+    `+${amount} push-ups from ${first}. Keep the feed hot.`,
+  ];
+  return lines[seed % lines.length];
+}
+
+function buildRecentActivityFacts(limit = 8) {
+  return [...activities]
+    .sort(compareActivitiesRecentFirst)
+    .slice(0, limit)
+    .map(activityCallout)
+    .filter(Boolean);
+}
+
 let rotatingFacts = [];
+let recentActivityFacts = [];
 let factSignature = "";
 let factIndex = 0;
+let factTick = 0;
 let factTimer = null;
 
 function showNextFact(animate = true) {
   const el = $("#potential-copy");
-  if (!el || !rotatingFacts.length) return;
-  const next = rotatingFacts[factIndex % rotatingFacts.length];
-  factIndex += 1;
+  if (!el) return;
+  if (!rotatingFacts.length && !recentActivityFacts.length) return;
+
+  let next;
+  if (recentActivityFacts.length && factTick % 3 === 2) {
+    next = recentActivityFacts[Math.floor(factTick / 3) % recentActivityFacts.length];
+  } else if (rotatingFacts.length) {
+    next = rotatingFacts[factIndex % rotatingFacts.length];
+    factIndex += 1;
+  } else {
+    next = recentActivityFacts[factTick % recentActivityFacts.length];
+  }
+  factTick += 1;
+
   if (!animate) {
     el.textContent = next;
     return;
@@ -344,9 +407,10 @@ function showNextFact(animate = true) {
 }
 
 function startFactRotation(facts) {
-  const signature = facts.join("|");
+  recentActivityFacts = buildRecentActivityFacts();
+  const signature = `${facts.join("|")}::${recentActivityFacts.join("|")}`;
   rotatingFacts = facts;
-  if (!rotatingFacts.length) {
+  if (!rotatingFacts.length && !recentActivityFacts.length) {
     window.clearInterval(factTimer);
     factTimer = null;
     factSignature = "";
@@ -356,9 +420,27 @@ function startFactRotation(facts) {
   if (signature === factSignature && factTimer) return;
   factSignature = signature;
   factIndex = 0;
+  factTick = 0;
   showNextFact(false);
   window.clearInterval(factTimer);
   factTimer = window.setInterval(() => showNextFact(true), FACT_ROTATE_MS);
+}
+
+function formatRankLabel(rank) {
+  const value = Number(rank);
+  if (!Number.isFinite(value) || value < 1) return "";
+  const mod100 = value % 100;
+  const suffix =
+    mod100 >= 11 && mod100 <= 13
+      ? "th"
+      : value % 10 === 1
+        ? "st"
+        : value % 10 === 2
+          ? "nd"
+          : value % 10 === 3
+            ? "rd"
+            : "th";
+  return `Ranked ${value}${suffix}`;
 }
 
 function formatPersonHeadline(name) {
@@ -403,7 +485,8 @@ function render() {
   $("#other-total").textContent = number.format(categoryTotals.other);
   $("#crew-status-total").textContent = `${participants.length} / ${optedOut.length}`;
   $("#remaining-total").textContent = number.format(Math.max(0, goal - total));
-  $("#goal-percent").textContent = `${percent}%`;
+  $("#goal-percent-value").textContent = `${percent}%`;
+  $("#goal-percent").setAttribute("aria-label", `${percent}% done`);
   $("#progress-fill").style.width = `${percent}%`;
   $("#progress-target").style.width = `${targetPercent}%`;
   $("#progress-pace").style.left = `${targetPercent}%`;
@@ -433,6 +516,7 @@ function render() {
       groupTarget,
     }),
   );
+  updateQuickAddButton();
 
   $("#leaderboard").innerHTML = ranking
     .map(
@@ -451,7 +535,7 @@ function render() {
               : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
         return `
         <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
-          <span class="rank">${String(index + 1).padStart(2, "0")}</span>
+          <span class="rank rank-${index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel"}">${index + 1}</span>
           <span class="avatar-wrap">
             <img class="avatar" src="${person.image}" alt="" />
             ${person.status === "out" ? '<span class="out-stamp">OUT</span>' : ""}
@@ -613,6 +697,7 @@ function storedPin(personId) {
 function rememberPin(personId, pin) {
   try {
     localStorage.setItem(`${PIN_STORAGE_PREFIX}${personId}`, pin);
+    localStorage.setItem(LAST_PERSON_KEY, personId);
   } catch {
     // Saving still works if this browser blocks localStorage.
   }
@@ -621,9 +706,68 @@ function rememberPin(personId, pin) {
 function forgetPin(personId) {
   try {
     localStorage.removeItem(`${PIN_STORAGE_PREFIX}${personId}`);
+    if (localStorage.getItem(LAST_PERSON_KEY) === personId) {
+      const next = crew.find((person) => person.id !== personId && storedPin(person.id));
+      if (next) localStorage.setItem(LAST_PERSON_KEY, next.id);
+      else localStorage.removeItem(LAST_PERSON_KEY);
+    }
   } catch {
     // Nothing else to clear.
   }
+}
+
+function rememberedPersonId() {
+  try {
+    const last = localStorage.getItem(LAST_PERSON_KEY);
+    if (last && storedPin(last) && crew.some((person) => person.id === last)) return last;
+    const match = crew.find((person) => storedPin(person.id));
+    return match ? match.id : null;
+  } catch {
+    return null;
+  }
+}
+
+function updateQuickAddButton() {
+  const wrap = $("#hero-quick-add");
+  const button = $("#quick-add-button");
+  const label = $("#quick-add-label");
+  if (!wrap || !button || !label) return;
+  if (currentPersonId()) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  const personId = rememberedPersonId();
+  if (personId) {
+    const first = getPerson(personId).name.split(" ")[0].toUpperCase();
+    button.dataset.personId = personId;
+    label.textContent = `ADD REPS FOR ${first}`;
+    button.setAttribute("aria-label", `Add reps for ${first}`);
+  } else {
+    delete button.dataset.personId;
+    label.textContent = "ADD REPS";
+    button.setAttribute("aria-label", "Add reps — pick who you are");
+  }
+}
+
+function openPersonPicker() {
+  const grid = $("#person-picker-grid");
+  grid.innerHTML = crew
+    .map(
+      (person) => `
+        <button class="person-picker-option" type="button" data-person-id="${person.id}">
+          <img src="${person.image}" alt="" />
+          <span>${escapeHtml(person.name)}</span>
+        </button>
+      `,
+    )
+    .join("");
+  $("#person-picker-dialog").showModal();
+}
+
+function closePersonPicker() {
+  const picker = $("#person-picker-dialog");
+  if (picker.open) picker.close();
 }
 
 let resolvePinPrompt = null;
@@ -672,19 +816,26 @@ async function protectedRequest(path, method, personId, body) {
   }
 }
 
+function parsePersonRoute() {
+  const match = window.location.hash.match(/^#\/person\/([a-z]+)(?:\/(add))?\/?$/);
+  if (!match || !crew.some((person) => person.id === match[1])) return null;
+  return { personId: match[1], openAdd: match[2] === "add" };
+}
+
 function currentPersonId() {
-  const match = window.location.hash.match(/^#\/person\/([a-z]+)$/);
-  return match && crew.some((person) => person.id === match[1]) ? match[1] : null;
+  return parsePersonRoute()?.personId || null;
 }
 
 function renderPersonPage({ skipScroll = false } = {}) {
-  const personId = currentPersonId();
+  const route = parsePersonRoute();
+  const personId = route?.personId || null;
   const dashboard = $("#dashboard-page");
   const personPage = $("#person-page");
 
   if (!personId) {
     dashboard.hidden = false;
     personPage.hidden = true;
+    updateQuickAddButton();
     return;
   }
 
@@ -750,15 +901,9 @@ function renderPersonPage({ skipScroll = false } = {}) {
       : personStats.status === "unknown"
         ? ""
         : rank
-          ? `#${rank}`
+          ? formatRankLabel(rank)
           : "";
-  if (personStats.status === "out") {
-    rankBadge.textContent = "OUT";
-  } else if (rank) {
-    rankBadge.innerHTML = `<span class="rank-hash">#</span>${rank}`;
-  } else {
-    rankBadge.textContent = "—";
-  }
+  rankBadge.textContent = rankLabel || "—";
   rankTile.hidden = !rankLabel;
   rankTile.classList.toggle("is-out", personStats.status === "out");
   $("#person-name").innerHTML = formatPersonHeadline(person.name);
@@ -879,7 +1024,16 @@ function renderPersonPage({ skipScroll = false } = {}) {
     }, Math.max(1000, Math.min(...justAddedMs) + 50));
   }
 
-  if (!skipScroll) window.scrollTo({ top: 0, behavior: "smooth" });
+  if (!skipScroll && !dialog.open) window.scrollTo({ top: 0, behavior: "smooth" });
+  updateQuickAddButton();
+
+  if (route?.openAdd) {
+    window.history.replaceState(null, "", `#/person/${personId}`);
+    // Don't reopen/reset if the log sheet is already up (e.g. mid-success).
+    if (!dialog.open) {
+      window.setTimeout(() => openLogDialog(personId), 0);
+    }
+  }
 }
 
 const personInput = $("#person-input");
@@ -986,6 +1140,7 @@ function showLogSuccess(personId, reps, exercise) {
   const person = getPerson(personId);
   const unit = exercise === "planks" ? "SECONDS" : exercise === "other" ? "% GOAL" : "REPS";
   const confettiColors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1"];
+  window.clearTimeout(logSuccessTimer);
   $("#success-confetti").innerHTML = Array.from({ length: 20 }, (_, index) => {
     const direction = index % 2 === 0 ? -1 : 1;
     const distance = 45 + ((index * 37) % 180);
@@ -999,6 +1154,7 @@ function showLogSuccess(personId, reps, exercise) {
   $("#success-copy").textContent = `Added to ${person.name.split(" ")[0]}’s personal progress.`;
   $("#log-form").hidden = true;
   $("#log-success").hidden = false;
+  if (!dialog.open) dialog.showModal();
 
   logSuccessTimer = window.setTimeout(() => {
     $("#log-success").hidden = true;
@@ -1009,6 +1165,24 @@ function showLogSuccess(personId, reps, exercise) {
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
+$("#quick-add-button").addEventListener("click", () => {
+  const personId = rememberedPersonId();
+  if (personId) {
+    window.location.hash = `/person/${personId}/add`;
+    return;
+  }
+  openPersonPicker();
+});
+$("#person-picker-grid").addEventListener("click", (event) => {
+  const option = event.target.closest("[data-person-id]");
+  if (!option) return;
+  closePersonPicker();
+  window.location.hash = `/person/${option.dataset.personId}/add`;
+});
+$("#close-person-picker-button").addEventListener("click", () => closePersonPicker());
+$("#person-picker-dialog").addEventListener("click", (event) => {
+  if (event.target === $("#person-picker-dialog")) closePersonPicker();
+});
 $("#close-dialog-button").addEventListener("click", () => {
   editingActivityId = null;
   dialog.close();
@@ -1097,10 +1271,8 @@ $("#log-form").addEventListener("submit", async (event) => {
     }
     participation[personId] = result.status;
     editingActivityId = null;
-    render();
-    form.reset();
-    updateExerciseFields();
     showLogSuccess(personId, reps, exercise);
+    render();
   } catch (error) {
     showToast(error.message || "Activity could not be saved.");
   } finally {
@@ -1194,12 +1366,24 @@ $("#leaderboard").addEventListener("click", (event) => {
 
 function tickOldchellaCountdown() {
   const diff = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
+  const dayCount = Math.floor(diff / 86400000);
   const days = $("#nav-cd-days");
   const hours = $("#nav-cd-hours");
   const mins = $("#nav-cd-mins");
   const secs = $("#nav-cd-secs");
+  const goalDays = $("#goal-days-value");
+  if (goalDays) {
+    goalDays.textContent = String(dayCount);
+    const goalDaysWrap = $("#goal-days");
+    if (goalDaysWrap) {
+      goalDaysWrap.setAttribute(
+        "aria-label",
+        dayCount === 1 ? "1 day left until Old-Chella" : `${dayCount} days left until Old-Chella`,
+      );
+    }
+  }
   if (!days || !hours || !mins || !secs) return;
-  days.textContent = String(Math.floor(diff / 86400000)).padStart(3, "0");
+  days.textContent = String(dayCount).padStart(3, "0");
   hours.textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2, "0");
   mins.textContent = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
   secs.textContent = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");

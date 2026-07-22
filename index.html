@@ -12,11 +12,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=81" />
-    <script src="./app.js?v=63" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=96" />
+    <script src="./app.js?v=73" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -73,12 +73,22 @@
     <div class="app-shell">
       <main id="dashboard-page">
         <section class="hero">
-          <p class="eyebrow">ROAD TO JOSHUA TREE · OCT 22–25</p>
-          <h1 class="hero-logo">
-            <span class="logo-top">Ripped-</span>
-            <span class="logo-chella">Chella</span>
-          </h1>
-          <p class="hero-copy">Nine bros. Ten thousand push-ups. One desert weekend worth being ripped for.</p>
+          <p class="hero-welcome">Welcome to</p>
+          <div class="hero-brand-row">
+            <h1 class="hero-logo">
+              <span class="logo-top">Ripped-</span>
+              <span class="logo-chella">Chella</span>
+            </h1>
+            <div class="hero-quick-add" id="hero-quick-add" hidden>
+              <p class="hero-quick-prompt">Ready to go?</p>
+              <button class="quick-add-button" id="quick-add-button" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                <span class="quick-add-label" id="quick-add-label">ADD REPS</span>
+              </button>
+            </div>
+          </div>
+          <p class="eyebrow">TRAINING CENTER + TRACKER</p>
+          <p class="hero-copy">SCAD Bros Trip · Joshua Tree Desert Festival · Oct 22–25</p>
 
           <div class="goal-card">
             <div class="goal-card__top">
@@ -86,7 +96,16 @@
                 <p class="label">GROUP PROGRESS</p>
                 <p class="goal-total"><span id="group-total">0</span><small> / <span id="goal-target">0</span></small></p>
               </div>
-              <div class="goal-percent" id="goal-percent">0%</div>
+              <div class="goal-meters">
+                <div class="goal-days" id="goal-days" aria-label="Days left until Old-Chella">
+                  <strong id="goal-days-value">--</strong>
+                  <span>DAYS</span>
+                </div>
+                <div class="goal-percent" id="goal-percent" aria-label="0% done">
+                  <strong id="goal-percent-value">0%</strong>
+                  <span>DONE</span>
+                </div>
+              </div>
             </div>
             <div
               class="progress-track"
@@ -164,7 +183,6 @@
             <div class="person-avatar-wrap">
               <img class="person-avatar" id="person-avatar" src="" alt="" />
               <div class="person-rank-badge" id="person-rank-tile" hidden>
-                <span class="label">BRO RANK</span>
                 <strong id="person-rank">—</strong>
               </div>
             </div>
@@ -263,7 +281,7 @@
 
           <button class="person-log-button" id="person-log-button" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-            LOG REPS FOR <span id="person-button-name"></span>
+            <span class="person-log-label">ADD REPS FOR <span id="person-button-name"></span></span>
           </button>
         </section>
 
@@ -281,7 +299,7 @@
     </div>
 
     <dialog id="log-dialog">
-      <form id="log-form" method="dialog">
+      <form id="log-form">
         <div class="sheet-handle" aria-hidden="true"></div>
         <div class="dialog-heading">
           <div>
@@ -373,6 +391,20 @@
         <span id="success-unit">REPS</span>
         <small id="success-copy">Added to your personal progress.</small>
       </div>
+    </dialog>
+
+    <dialog class="person-picker-dialog" id="person-picker-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">QUICK ADD</p>
+          <h2>Who’s logging?</h2>
+        </div>
+        <button class="icon-button close-button" id="close-person-picker-button" type="button" aria-label="Cancel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+      </div>
+      <p class="person-picker-copy">Pick yourself to jump to your progress page and log reps.</p>
+      <div class="person-picker-grid" id="person-picker-grid"></div>
     </dialog>
 
     <dialog class="pin-dialog" id="pin-dialog">
