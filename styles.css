@@ -208,8 +208,15 @@ button { color: inherit; }
   stroke-width: 1.8;
 }
 
-.hero { padding: 36px 0 26px; }
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 18px;
+  align-items: start;
+  padding: 36px 0 26px;
+}
 .hero-welcome {
+  grid-column: 1 / -1;
   margin: 0 0 8px;
   color: var(--lavender);
   font-family: "Cormorant Garamond", serif;
@@ -218,20 +225,15 @@ button { color: inherit; }
   font-size: 22px;
   letter-spacing: .05em;
 }
-.hero-brand-row {
-  display: flex;
-  gap: 18px;
-  align-items: stretch;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.hero-brand-row .hero-logo {
+.hero-logo {
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
-  flex: 1;
   margin: 0;
 }
 .hero-quick-add {
-  flex-shrink: 0;
+  grid-column: 2;
+  grid-row: 2;
   display: grid;
   gap: 10px;
   align-content: center;
@@ -286,14 +288,19 @@ h1 .logo-chella {
   color: var(--ink);
 }
 .hero > .eyebrow {
-  margin: 0 0 18px;
+  grid-column: 1 / -1;
+  margin: 10px 0 18px;
 }
 .hero-copy {
+  grid-column: 1 / -1;
   width: 100%;
   margin-bottom: 32px;
   color: var(--muted);
   font-size: 16px;
   line-height: 1.55;
+}
+.hero .goal-card {
+  grid-column: 1 / -1;
 }
 .goal-card {
   overflow: hidden;
@@ -400,13 +407,18 @@ h1 .logo-chella {
 }
 .goal-meta strong { color: var(--muted); font-weight: 500; }
 .potential-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: calc(14px + 4.05em);
   margin: 16px 0 0;
-  padding-top: 14px;
+  padding: 14px 8px 0;
+  overflow: hidden;
   border-top: 1px dashed var(--line);
   color: var(--muted);
-  font: 400 14px/1.4 "Abril Fatface", serif;
+  font: 400 13px/1.35 "Abril Fatface", serif;
   text-align: center;
-  min-height: 2.8em;
   transition: opacity 220ms ease;
 }
 .potential-copy.is-fading {
@@ -1325,6 +1337,18 @@ dialog::backdrop {
   backdrop-filter: blur(4px);
 }
 dialog[open] { animation: slide-up 250ms ease-out; }
+#log-dialog[open]:not(.is-closing) {
+  animation: log-sheet-up 340ms cubic-bezier(.22, 1, .36, 1);
+}
+#log-dialog[open]:not(.is-closing)::backdrop {
+  animation: log-backdrop-in 280ms ease-out;
+}
+#log-dialog.is-closing {
+  animation: log-sheet-down 280ms ease-in forwards;
+}
+#log-dialog.is-closing::backdrop {
+  animation: log-backdrop-out 280ms ease-in forwards;
+}
 #log-form {
   display: grid;
   gap: 18px;
@@ -1426,105 +1450,136 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   background: var(--quiet);
 }
 .dialog-heading { margin-bottom: 4px; }
-.close-button { width: 38px; height: 38px; }
-.logging-person {
-  display: grid;
-  gap: 8px;
-}
-.logging-person > span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-.logging-person > div {
+.log-heading-identity {
   display: flex;
-  height: 52px;
-  gap: 11px;
+  min-width: 0;
+  gap: 12px;
   align-items: center;
-  padding: 0 13px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
 }
-.logging-person img {
-  width: 34px;
-  height: 34px;
+.log-person-avatar {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
+  object-position: center top;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
 }
-.logging-person strong {
-  font-size: 15px;
+.dialog-heading h2 {
+  font-size: 22px;
 }
+.close-button { width: 38px; height: 38px; }
 .activity-date-field input {
   color-scheme: dark;
 }
 .daily-goals-card {
   padding: 14px 15px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(245,200,66,.28);
   border-radius: 14px;
-  background: linear-gradient(145deg, rgba(245,200,66,.06), transparent), var(--surface);
+  background:
+    linear-gradient(160deg, rgba(245,200,66,.08), transparent 42%),
+    var(--surface);
 }
-.daily-goals-card .label {
+.daily-goals-card.is-complete {
+  border-color: rgba(76,223,138,.4);
+  background:
+    linear-gradient(160deg, rgba(76,223,138,.1), transparent 42%),
+    var(--surface);
+}
+.daily-goals-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 10px;
 }
-.daily-goals-card ul {
-  display: grid;
-  gap: 7px;
+.daily-goals-card .label {
   margin: 0;
-  padding: 0;
-  list-style: none;
 }
-.daily-goals-card li {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.35;
-}
-.daily-goals-card strong {
-  color: var(--ink);
+.daily-goals-complete {
+  color: var(--green);
+  font-size: 10px;
   font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
-.daily-goals-card span {
-  color: var(--quiet);
-  font-size: 12px;
+.daily-goals-progress {
+  display: grid;
+  gap: 8px;
 }
-.daily-goals-card .is-bonus {
-  color: var(--quiet);
-  font-size: 12px;
-}
-.daily-goals-card .is-bonus strong {
-  color: var(--muted);
+.daily-goals-progress span {
+  color: var(--ink);
+  font-size: 13px;
   font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.35;
+  text-transform: none;
 }
 .exercise-picker {
   display: grid;
   gap: 8px;
 }
-.exercise-picker > span,
-.amount-heading {
+.exercise-picker > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
 }
 .exercise-tabs {
   display: grid;
-  grid-template-columns: repeat(4,1fr);
-  gap: 6px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(12, 7, 4, .72);
+  box-shadow: inset 0 1px rgba(255,160,80,.04);
 }
 .exercise-tabs button {
-  height: 42px;
-  padding: 0 5px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  height: 40px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--quiet);
-  font: 700 9px "Manrope", sans-serif;
-  letter-spacing: .06em;
+  font: 700 9px/1 "Manrope", sans-serif;
+  letter-spacing: .05em;
   cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
-.exercise-tabs button.is-selected {
-  border-color: var(--lime);
-  background: rgba(245,200,66,.1);
+.exercise-tabs button:hover {
+  color: var(--muted);
+}
+.exercise-tabs button.is-selected[data-exercise="pushups"] {
+  background: rgba(255,45,120,.18);
+  box-shadow: inset 0 0 0 1px rgba(255,45,120,.5);
+  color: var(--pink);
+}
+.exercise-tabs button.is-selected[data-exercise="squats"] {
+  background: rgba(232,118,58,.18);
+  box-shadow: inset 0 0 0 1px rgba(232,118,58,.55);
+  color: var(--terra);
+}
+.exercise-tabs button.is-selected[data-exercise="planks"] {
+  background: rgba(245,200,66,.16);
+  box-shadow: inset 0 0 0 1px rgba(245,200,66,.55);
   color: var(--lime);
+}
+.exercise-tabs button.is-selected[data-exercise="other"] {
+  background: rgba(76,223,138,.14);
+  box-shadow: inset 0 0 0 1px rgba(76,223,138,.5);
+  color: var(--green);
+}
+.exercise-tabs[data-active="pushups"] {
+  border-color: rgba(255,45,120,.28);
+}
+.exercise-tabs[data-active="squats"] {
+  border-color: rgba(232,118,58,.3);
+}
+.exercise-tabs[data-active="planks"] {
+  border-color: rgba(245,200,66,.3);
+}
+.exercise-tabs[data-active="other"] {
+  border-color: rgba(76,223,138,.28);
 }
 label {
   display: grid;
@@ -1549,47 +1604,35 @@ input:focus, select:focus {
   border-color: rgba(245,200,66,.7);
   box-shadow: 0 0 0 3px rgba(245,200,66,.08);
 }
-.amount-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.amount-heading button {
-  padding: 5px;
-  border: 0;
-  background: transparent;
-  color: var(--quiet);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: .1em;
-  cursor: pointer;
-}
 .amount-display {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  min-height: 82px;
-  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0;
+  gap: 4px;
+}
+#counter-field {
+  margin-top: -6px;
 }
 .amount-display .amount-input {
   width: min(180px, 52vw);
-  height: 72px;
-  padding: 0 10px;
-  border-color: transparent;
-  border-bottom-color: var(--line);
+  height: auto;
+  padding: 0;
+  border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--ink);
   font: 800 56px/1 "Manrope", sans-serif;
   letter-spacing: -.06em;
-  text-align: right;
+  text-align: center;
   appearance: textfield;
 }
 .amount-display .amount-input:focus {
-  border-color: transparent;
-  border-bottom-color: var(--lime);
+  border: 0;
   box-shadow: none;
+  outline: none;
 }
 .amount-input::-webkit-inner-spin-button,
 .amount-input::-webkit-outer-spin-button {
@@ -1615,10 +1658,39 @@ input:focus, select:focus {
   color: var(--ink);
   font-weight: 700;
   cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
-.quick-reps button:active {
-  border-color: var(--lime);
-  background: rgba(245,200,66,.08);
+.quick-reps[data-active="pushups"] button {
+  border-color: rgba(255,45,120,.4);
+  background: rgba(255,45,120,.12);
+  color: var(--pink);
+}
+.quick-reps[data-active="pushups"] button:active {
+  background: rgba(255,45,120,.22);
+}
+.quick-reps[data-active="squats"] button {
+  border-color: rgba(232,118,58,.45);
+  background: rgba(232,118,58,.12);
+  color: var(--terra);
+}
+.quick-reps[data-active="squats"] button:active {
+  background: rgba(232,118,58,.22);
+}
+.quick-reps[data-active="planks"] button {
+  border-color: rgba(245,200,66,.45);
+  background: rgba(245,200,66,.12);
+  color: var(--lime);
+}
+.quick-reps[data-active="planks"] button:active {
+  background: rgba(245,200,66,.22);
+}
+.quick-reps[data-active="other"] button {
+  border-color: rgba(76,223,138,.4);
+  background: rgba(76,223,138,.12);
+  color: var(--green);
+}
+.quick-reps[data-active="other"] button:active {
+  background: rgba(76,223,138,.22);
 }
 .other-slider {
   display: grid;
@@ -1633,7 +1705,7 @@ input:focus, select:focus {
 .slider-value output {
   font: 800 52px/1 "Manrope", sans-serif;
   letter-spacing: -.05em;
-  color: var(--lime);
+  color: var(--green);
 }
 .slider-value span {
   color: var(--muted);
@@ -1644,9 +1716,38 @@ input:focus, select:focus {
   padding: 0;
   border: 0;
   border-radius: 99px;
-  background: var(--surface);
-  accent-color: var(--lime);
+  background: rgba(76,223,138,.16);
+  accent-color: var(--green);
   cursor: pointer;
+}
+#other-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(76,223,138,.16);
+}
+#other-slider::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(76,223,138,.22);
+  appearance: none;
+}
+#other-slider::-moz-range-track {
+  height: 6px;
+  border: 0;
+  border-radius: 99px;
+  background: rgba(76,223,138,.16);
+}
+#other-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(76,223,138,.22);
 }
 .submit-button {
   height: 54px;
@@ -1684,6 +1785,22 @@ input:focus, select:focus {
 }
 .toast.is-visible { opacity: 1; transform: translate(-50%,0); }
 @keyframes slide-up { from { opacity: 0; transform: translateY(30px); } }
+@keyframes log-sheet-up {
+  from { opacity: .4; transform: translateY(110%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes log-sheet-down {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(110%); }
+}
+@keyframes log-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes log-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
 @keyframes confetti-pop {
   0% {
     opacity: 1;
@@ -1697,22 +1814,34 @@ input:focus, select:focus {
 }
 @media (prefers-reduced-motion: reduce) {
   .success-confetti i { animation: none; }
+  #log-dialog[open]:not(.is-closing),
+  #log-dialog[open]:not(.is-closing)::backdrop,
+  #log-dialog.is-closing,
+  #log-dialog.is-closing::backdrop {
+    animation: none;
+  }
 }
 @media (max-width: 900px) {
   .nav-links { display: none; }
 }
 @media (max-width: 560px) {
   .nav-countdown { display: none; }
-  .hero-brand-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
+  .hero {
+    grid-template-columns: 1fr;
+  }
+  .hero-logo,
+  .hero-quick-add {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .hero-copy {
+    margin-bottom: 14px;
   }
   .hero-quick-add {
-    min-width: 0;
     width: 100%;
-    min-height: 0;
-    padding: 16px;
+    min-width: 0;
+    margin-bottom: 24px;
+    align-self: stretch;
   }
   .quick-add-button {
     width: 100%;

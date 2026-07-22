@@ -172,14 +172,30 @@ function dayGoalCheck(complete) {
   `;
 }
 
+function activityDateKey(activity) {
+  const date = new Date(activity.createdAt);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function dayGoalProgressLines(dayActivities) {
+  const { totals, complete } = dayGoalProgress(dayActivities);
+  return {
+    complete,
+    lines: [
+      `${number.format(totals.pushups)} of ${number.format(DAILY_GOALS.pushups)} pushups`,
+      `${number.format(totals.squats)} of ${number.format(DAILY_GOALS.squats)} squats`,
+      `${number.format(totals.planks)} of ${number.format(DAILY_GOALS.planks)} seconds planking`,
+      `${number.format(totals.other)} of 100 Other`,
+    ],
+  };
+}
+
 function dayGoalBreakdown(dayActivities) {
-  const { totals } = dayGoalProgress(dayActivities);
-  const lines = [
-    `${number.format(totals.pushups)} of ${number.format(DAILY_GOALS.pushups)} pushups`,
-    `${number.format(totals.squats)} of ${number.format(DAILY_GOALS.squats)} squats`,
-    `${number.format(totals.planks)} of ${number.format(DAILY_GOALS.planks)} seconds planking`,
-    `${number.format(totals.other)} of 100 Other`,
-  ];
+  const { lines } = dayGoalProgressLines(dayActivities);
   return `
     <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${lines.join(", ")}">
       <span class="history-day-breakdown-inline">${lines.join(" / ")}</span>
@@ -189,6 +205,28 @@ function dayGoalBreakdown(dayActivities) {
       </span>
     </span>
   `;
+}
+
+function updateLogDailyGoalCard() {
+  const linesEl = $("#log-daily-goal-lines");
+  const completeEl = $("#log-daily-goal-complete");
+  const card = $("#log-daily-goal");
+  if (!linesEl || !completeEl || !card) return;
+  const personId = $("#person-input")?.value;
+  const dateKey = $("#activity-date-input")?.value;
+  if (!personId || !dateKey) {
+    linesEl.innerHTML = "";
+    completeEl.hidden = true;
+    card.classList.remove("is-complete");
+    return;
+  }
+  const dayActivities = activities.filter(
+    (activity) => activity.personId === personId && activityDateKey(activity) === dateKey,
+  );
+  const { lines, complete } = dayGoalProgressLines(dayActivities);
+  linesEl.innerHTML = lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("");
+  completeEl.hidden = !complete;
+  card.classList.toggle("is-complete", complete);
 }
 
 function exerciseIcon(activity) {
@@ -280,7 +318,7 @@ function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDel
   return [
     burned > 0
       ? `Rough burn so far: ~${number.format(burned)} calories across push-ups, squats, and planks.`
-      : "Log the first set and the calorie counter starts talking trash.",
+      : "Add the first set and the calorie counter starts talking trash.",
     categoryTotals.pushups > 0
       ? `${number.format(categoryTotals.pushups)} push-ups ≈ ${number.format(pushupCals)} calories. Chest taxes paid.`
       : null,
@@ -317,7 +355,7 @@ function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDel
     "Planks: the meeting that actually makes you stronger.",
     "Protein and patience. The desert will notice.",
     "You are not fragile. You are under-repped.",
-    "The group chat can meme. Only the log counts.",
+    "The group chat can meme. Only what you add counts.",
     "Ten thousand each. One weekend. Zero good excuses left.",
     "Strong at 40 looks like showing up when nobody is watching.",
   ].filter(Boolean);
@@ -342,7 +380,7 @@ function activityCallout(activity) {
   }
   if (exercise === "other") {
     const lines = [
-      `Fresh drop: ${first} just logged ${amount}% on Other — ${label}.`,
+      `Fresh drop: ${first} just added ${amount}% on Other — ${label}.`,
       `${first} slipped in ${amount}% Other (${label}). The side quest counts.`,
       `+${amount}% Other from ${first}: ${label}.`,
     ];
@@ -1057,10 +1095,16 @@ function updateExerciseFields({ keepAmount = false } = {}) {
   }[exercise];
 
   exerciseButtons.forEach((button) => {
-    button.classList.toggle("is-selected", button.dataset.exercise === exercise);
+    const selected = button.dataset.exercise === exercise;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
   });
-  $("#amount-label").textContent = settings.label;
+  const tabs = $(".exercise-tabs");
+  if (tabs) tabs.dataset.active = exercise;
+  const quickReps = $(".quick-reps");
+  if (quickReps) quickReps.dataset.active = exercise;
   $("#amount-unit").textContent = settings.unit;
+  $("#reps-input").setAttribute("aria-label", settings.label);
   $("#other-field").hidden = exercise !== "other";
   $("#other-input").required = exercise === "other";
   $("#counter-field").hidden = exercise === "other";
@@ -1076,7 +1120,7 @@ function updateExerciseFields({ keepAmount = false } = {}) {
     $("#other-slider").value = percent;
     setAmount(percent);
     $("#other-percent").textContent = `${percent}%`;
-    $(".slider-value span").textContent = `= ${percent}% bonus effort logged`;
+    $(".slider-value span").textContent = `= ${percent}% bonus effort added`;
   } else if (!keepAmount) {
     setAmount(0);
   }
@@ -1093,6 +1137,7 @@ const dialog = $("#log-dialog");
 const pinDialog = $("#pin-dialog");
 let logSuccessTimer = null;
 let editingActivityId = null;
+let logDialogClosing = false;
 
 function localDateValue(date = new Date()) {
   return [
@@ -1113,15 +1158,13 @@ function openLogDialog(personId, options = {}) {
   $("#log-success").hidden = true;
   $("#log-form").reset();
 
-  const person = getPerson(personId);
   personInput.value = personId;
+  const person = getPerson(personId);
+  $("#log-person-image").src = person.image;
+  $("#log-person-image").alt = "";
   $("#activity-date-input").max = localDateValue();
   $("#activity-date-input").value = activityDate;
-  $("#log-person-image").src = person.image;
-  $("#log-person-image").alt = `${person.name} profile photo`;
-  $("#log-person-name").textContent = person.name;
-  $("#log-dialog .dialog-heading h2").textContent = activity ? "Edit your reps" : "Log your reps";
-  $("#log-dialog .dialog-heading .eyebrow").textContent = activity ? "EDIT ACTIVITY" : "ADD ACTIVITY";
+  $("#log-dialog-title").textContent = activity ? "+ Edit reps" : "+ Add reps";
   $("#log-form .submit-button").textContent = activity ? "SAVE CHANGES" : "ADD TO THE TOTAL";
 
   if (activity) {
@@ -1133,7 +1176,39 @@ function openLogDialog(personId, options = {}) {
     updateExerciseFields();
   }
 
+  updateLogDailyGoalCard();
+  dialog.classList.remove("is-closing");
+  logDialogClosing = false;
   dialog.showModal();
+}
+
+function closeLogDialog() {
+  if (!dialog.open || logDialogClosing) return Promise.resolve();
+  logDialogClosing = true;
+  editingActivityId = null;
+  window.clearTimeout(logSuccessTimer);
+  dialog.classList.add("is-closing");
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      dialog.removeEventListener("animationend", onEnd);
+      dialog.classList.remove("is-closing");
+      if (dialog.open) dialog.close();
+      logDialogClosing = false;
+      $("#log-success").hidden = true;
+      $("#log-form").hidden = false;
+      resolve();
+    };
+    const onEnd = (event) => {
+      if (event.target !== dialog) return;
+      finish();
+    };
+    dialog.addEventListener("animationend", onEnd);
+    window.setTimeout(finish, 320);
+  });
 }
 
 function showLogSuccess(personId, reps, exercise) {
@@ -1157,10 +1232,9 @@ function showLogSuccess(personId, reps, exercise) {
   if (!dialog.open) dialog.showModal();
 
   logSuccessTimer = window.setTimeout(() => {
-    $("#log-success").hidden = true;
-    $("#log-form").hidden = false;
-    if (dialog.open) dialog.close();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    closeLogDialog().then(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
   }, 1400);
 }
 
@@ -1184,17 +1258,19 @@ $("#person-picker-dialog").addEventListener("click", (event) => {
   if (event.target === $("#person-picker-dialog")) closePersonPicker();
 });
 $("#close-dialog-button").addEventListener("click", () => {
-  editingActivityId = null;
-  dialog.close();
+  closeLogDialog();
 });
 dialog.addEventListener("click", (event) => {
-  if (event.target === dialog) {
-    editingActivityId = null;
-    dialog.close();
-  }
+  if (event.target === dialog) closeLogDialog();
+});
+dialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeLogDialog();
 });
 dialog.addEventListener("close", () => {
   editingActivityId = null;
+  logDialogClosing = false;
+  dialog.classList.remove("is-closing");
 });
 
 $("#pin-form").addEventListener("submit", (event) => {
@@ -1222,13 +1298,13 @@ quickButtons.forEach((button) => {
   });
 });
 
-$("#reset-amount-button").addEventListener("click", () => setAmount(0));
 $("#reps-input").addEventListener("blur", (event) => setAmount(event.currentTarget.value));
+$("#activity-date-input").addEventListener("change", () => updateLogDailyGoalCard());
 $("#other-slider").addEventListener("input", (event) => {
   const percent = Number(event.currentTarget.value);
   setAmount(percent);
   $("#other-percent").textContent = `${percent}%`;
-  $(".slider-value span").textContent = `= ${percent}% bonus effort logged`;
+  $(".slider-value span").textContent = `= ${percent}% bonus effort added`;
 });
 
 $("#log-form").addEventListener("submit", async (event) => {
@@ -1239,8 +1315,8 @@ $("#log-form").addEventListener("submit", async (event) => {
   if (!Number.isInteger(reps) || reps < 1 || reps > 1000) return;
   const personId = personInput.value;
   if (personId !== currentPersonId()) {
-    dialog.close();
-    showToast("Open a participant profile before logging activity.");
+    closeLogDialog();
+    showToast("Open a participant profile before adding activity.");
     return;
   }
 
