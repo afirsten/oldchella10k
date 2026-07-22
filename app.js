@@ -198,6 +198,21 @@ function exerciseIcon(activity) {
   return `<span class="activity-icon is-${exercise}" aria-hidden="true">${label}</span>`;
 }
 
+function activityLoggedAt(activity) {
+  return new Date(activity.loggedAt || activity.createdAt).getTime();
+}
+
+function isJustAdded(activity) {
+  if (!activity.loggedAt) return false;
+  return Date.now() - new Date(activity.loggedAt).getTime() < 60_000;
+}
+
+function compareActivitiesRecentFirst(a, b) {
+  const byTime = activityLoggedAt(b) - activityLoggedAt(a);
+  if (byTime) return byTime;
+  return activities.indexOf(b) - activities.indexOf(a);
+}
+
 function totalsByPerson() {
   return crew.map((person) => {
     const personActivities = activities.filter((activity) => activity.personId === person.id);
@@ -324,7 +339,7 @@ function render() {
     .join("");
 
   const recent = [...activities]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .sort(compareActivitiesRecentFirst)
     .slice(0, 8);
 
   $("#activity-list").innerHTML = recent.length
@@ -516,7 +531,7 @@ function currentPersonId() {
   return match && crew.some((person) => person.id === match[1]) ? match[1] : null;
 }
 
-function renderPersonPage() {
+function renderPersonPage({ skipScroll = false } = {}) {
   const personId = currentPersonId();
   const dashboard = $("#dashboard-page");
   const personPage = $("#person-page");
@@ -536,9 +551,7 @@ function renderPersonPage() {
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   const personStats = allStats.find((entry) => entry.id === personId);
   const rank = ranking.findIndex((entry) => entry.id === personId) + 1;
-  const history = activities
-    .filter((activity) => activity.personId === personId)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const history = activities.filter((activity) => activity.personId === personId);
   const historyByDate = history.reduce((groups, activity) => {
     const date = new Date(activity.createdAt);
     const dateKey = [
@@ -554,6 +567,10 @@ function renderPersonPage() {
     }
     return groups;
   }, []);
+  historyByDate.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+  historyByDate.forEach((group) => {
+    group.activities.sort(compareActivitiesRecentFirst);
+  });
   const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
   history.forEach((activity) => {
     sessionDays[activityExercise(activity)].add(activity.createdAt.slice(0, 10));
@@ -658,12 +675,14 @@ function renderPersonPage() {
               </div>
               <div class="history-day-activities">
                 ${group.activities
-                  .map(
-                    (activity) => `
-                      <article class="activity-item is-editable" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
+                  .map((activity) => {
+                    const justAdded = isJustAdded(activity);
+                    return `
+                      <article class="activity-item is-editable${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
                           <p><span class="activity-reps">+${number.format(activity.reps)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
                         </div>
                         <button
                           class="delete-activity-button"
@@ -676,8 +695,8 @@ function renderPersonPage() {
                           </svg>
                         </button>
                       </article>
-                    `,
-                  )
+                    `;
+                  })
                   .join("")}
               </div>
               <button class="add-to-date-button" type="button" data-log-date="${group.dateKey}">
@@ -690,7 +709,17 @@ function renderPersonPage() {
         .join("")
     : '<div class="empty-state">No sessions yet. Time to get on the board.</div>';
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  const justAddedMs = history
+    .filter(isJustAdded)
+    .map((activity) => 60_000 - (Date.now() - new Date(activity.loggedAt).getTime()));
+  window.clearTimeout(window.__justAddedTimer);
+  if (justAddedMs.length) {
+    window.__justAddedTimer = window.setTimeout(() => {
+      if (currentPersonId() === personId) renderPersonPage({ skipScroll: true });
+    }, Math.max(1000, Math.min(...justAddedMs) + 50));
+  }
+
+  if (!skipScroll) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 const personInput = $("#person-input");

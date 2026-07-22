@@ -93,6 +93,7 @@ export default async function handler(request, response) {
         id: activityId,
         personId,
         note: state.activities[activityIndex].note || "",
+        loggedAt: state.activities[activityIndex].loggedAt || new Date().toISOString(),
       };
       state.activities[activityIndex] = activity;
       state.participation[personId] = "in";
@@ -105,6 +106,7 @@ export default async function handler(request, response) {
       personId,
       note: "",
       ...fields,
+      loggedAt: new Date().toISOString(),
     };
     const state = await getState();
     state.activities.push(activity);
