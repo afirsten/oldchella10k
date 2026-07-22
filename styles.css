@@ -510,6 +510,8 @@ h1 .logo-chella {
   gap: 5px;
   padding: 16px 8px;
   border-right: 1px solid var(--line);
+  text-align: center;
+  justify-items: center;
 }
 .exercise-breakdown div:last-child { border-right: 0; }
 .exercise-breakdown span {
@@ -1242,6 +1244,9 @@ a.activity-item:focus-visible {
 .personal-breakdown div {
   display: grid;
   gap: 5px;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
   padding: 15px 11px;
   border-right: 1px solid var(--line);
 }
