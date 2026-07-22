@@ -180,7 +180,8 @@ h1 .logo-chella {
   border: 1px solid rgba(245,200,66,.4);
   border-radius: 50%;
   color: var(--lime);
-  font: 700 14px "Manrope", sans-serif;
+  font: 800 15px/1 "Manrope", sans-serif;
+  letter-spacing: -.03em;
 }
 .progress-track {
   height: 9px;
@@ -658,18 +659,73 @@ a.activity-item:focus-visible {
   stroke-width: 1.8;
 }
 .person-hero { padding: 46px 0 16px; }
+.person-hero > .eyebrow {
+  margin-bottom: 18px;
+}
+.person-identity {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+.person-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+}
 .person-avatar {
+  display: block;
   width: 74px;
   height: 74px;
-  margin-bottom: 28px;
   border-radius: 50%;
   object-fit: cover;
   object-position: center top;
   box-shadow: 0 0 0 7px rgba(255,255,255,.035);
 }
+.person-identity-copy {
+  min-width: 0;
+  flex: 1;
+}
 .person-hero h1 {
-  margin-bottom: 14px;
-  font-size: clamp(48px, 14vw, 76px);
+  margin: 0 0 8px;
+  font-size: clamp(36px, 10vw, 64px);
+  line-height: .95;
+}
+.person-identity-copy .hero-copy {
+  margin: 0;
+}
+.person-rank-tile {
+  display: grid;
+  gap: 8px;
+  flex-shrink: 0;
+  min-width: 84px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(245,200,66,.1), transparent), var(--surface);
+  text-align: right;
+  justify-items: end;
+}
+.person-rank-tile .label {
+  margin: 0;
+  color: var(--quiet);
+  font-size: 8px;
+  letter-spacing: .12em;
+}
+.person-rank-tile strong {
+  color: var(--lime);
+  font: 800 28px/1 "Manrope", sans-serif;
+  letter-spacing: -.04em;
+}
+.person-rank-tile .rank-hash {
+  margin-right: 1px;
+  font-weight: 400;
+}
+.person-rank-tile.is-out {
+  border-color: rgba(255,45,120,.35);
+  background: linear-gradient(145deg, rgba(255,45,120,.12), transparent), var(--surface);
+}
+.person-rank-tile.is-out strong {
+  color: var(--pink);
 }
 .participation-card {
   display: grid;
@@ -741,6 +797,24 @@ a.activity-item:focus-visible {
   font-weight: 700;
   letter-spacing: .13em;
 }
+.person-total-line {
+  margin: 0;
+  color: var(--muted);
+  font: 700 15px/1.35 "DM Sans", sans-serif;
+  letter-spacing: -.01em;
+}
+.person-total-line strong {
+  margin: 0 4px 0 0;
+  color: var(--ink);
+  font: 800 42px/1 "Manrope", sans-serif;
+  letter-spacing: -.055em;
+  vertical-align: -4px;
+}
+.person-total-line #person-sessions {
+  color: var(--ink);
+  font: 800 22px/1 "Manrope", sans-serif;
+  letter-spacing: -.03em;
+}
 .personal-goal {
   display: grid;
   gap: 4px;
@@ -748,7 +822,8 @@ a.activity-item:focus-visible {
 }
 .personal-goal strong {
   color: var(--lime);
-  font: 400 30px/1 "Abril Fatface", serif;
+  font: 800 36px/1 "Manrope", sans-serif;
+  letter-spacing: -.05em;
 }
 .personal-goal span {
   color: var(--quiet);
@@ -803,7 +878,7 @@ a.activity-item:focus-visible {
 }
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 12px 0;
   border: 1px solid var(--line);
   border-radius: 17px;
@@ -811,7 +886,7 @@ a.activity-item:focus-visible {
 .stat-grid > div {
   display: grid;
   gap: 8px;
-  padding: 16px 8px;
+  padding: 16px 10px;
   border-right: 1px solid var(--line);
   align-content: start;
 }
@@ -929,7 +1004,8 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 }
 .log-success strong {
   color: var(--ink);
-  font: 400 72px/1 "Abril Fatface", serif;
+  font: 800 64px/1 "Manrope", sans-serif;
+  letter-spacing: -.06em;
 }
 .log-success > span {
   margin-top: 7px;
@@ -1132,7 +1208,8 @@ input:focus, select:focus {
   border-radius: 0;
   background: transparent;
   color: var(--ink);
-  font: 400 62px/1 "Abril Fatface", serif;
+  font: 800 56px/1 "Manrope", sans-serif;
+  letter-spacing: -.06em;
   text-align: right;
   appearance: textfield;
 }
@@ -1181,7 +1258,8 @@ input:focus, select:focus {
   text-align: center;
 }
 .slider-value output {
-  font: 400 56px/1 "Abril Fatface", serif;
+  font: 800 52px/1 "Manrope", sans-serif;
+  letter-spacing: -.05em;
   color: var(--lime);
 }
 .slider-value span {

@@ -579,6 +579,25 @@ function renderPersonPage() {
   backButton.hidden = false;
   $("#person-avatar").src = person.image;
   $("#person-avatar").alt = `${person.name} profile photo`;
+  const rankTile = $("#person-rank-tile");
+  const rankBadge = $("#person-rank");
+  const rankLabel =
+    personStats.status === "out"
+      ? "OUT"
+      : personStats.status === "unknown"
+        ? ""
+        : rank
+          ? `#${rank}`
+          : "";
+  if (personStats.status === "out") {
+    rankBadge.textContent = "OUT";
+  } else if (rank) {
+    rankBadge.innerHTML = `<span class="rank-hash">#</span>${rank}`;
+  } else {
+    rankBadge.textContent = "—";
+  }
+  rankTile.hidden = !rankLabel;
+  rankTile.classList.toggle("is-out", personStats.status === "out");
   $("#person-name").textContent = person.name;
   $("#person-summary").textContent =
     personStats.status === "out"
@@ -608,6 +627,7 @@ function renderPersonPage() {
   $("#person-plank-minutes").textContent = durationNumber.format(plankMinutes);
   $("#person-other-days").textContent = number.format(fullOtherDays);
   $("#person-sessions").textContent = number.format(personStats.sessions);
+  $("#person-sessions-label").textContent = personStats.sessions === 1 ? "session" : "sessions";
   $("#person-avg-pushups").textContent = number.format(
     Math.round(averageFor("pushups", personStats.metrics.pushups)),
   );
@@ -620,8 +640,6 @@ function renderPersonPage() {
   $("#person-avg-other").textContent = number.format(
     Math.round(averageFor("other", personStats.metrics.other)),
   );
-  $("#person-rank").textContent =
-    personStats.status === "out" ? "OUT" : personStats.status === "unknown" ? "—" : rank ? `#${rank}` : "—";
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   $("#person-activity-list").innerHTML = history.length
     ? historyByDate

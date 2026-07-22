@@ -15,8 +15,8 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=54" />
-    <script src="./app.js?v=51" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=61" />
+    <script src="./app.js?v=54" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -123,10 +123,20 @@
 
       <main id="person-page" hidden>
         <section class="person-hero">
-          <img class="person-avatar" id="person-avatar" src="" alt="" />
-          <p class="eyebrow">PERSONAL PROGRESS</p>
-          <h1 id="person-name"></h1>
-          <p class="hero-copy" id="person-summary"></p>
+          <p class="eyebrow">Progress report</p>
+          <div class="person-identity">
+            <div class="person-avatar-wrap">
+              <img class="person-avatar" id="person-avatar" src="" alt="" />
+            </div>
+            <div class="person-identity-copy">
+              <h1 id="person-name"></h1>
+              <p class="hero-copy" id="person-summary"></p>
+            </div>
+            <div class="person-rank-tile" id="person-rank-tile" hidden>
+              <span class="label">BRO RANK</span>
+              <strong id="person-rank">—</strong>
+            </div>
+          </div>
 
           <div class="participation-card" id="participation-card" hidden>
             <div>
@@ -144,8 +154,10 @@
             <div class="personal-total-row">
               <div>
                 <p class="label" id="person-total-label">TOTAL PUSH-UPS</p>
-                <strong id="person-total">0</strong>
-                <span>REPS</span>
+                <p class="person-total-line">
+                  <strong id="person-total">0</strong> reps over
+                  <span id="person-sessions">0</span> <span id="person-sessions-label">sessions</span>
+                </p>
               </div>
               <div class="personal-goal">
                 <strong id="person-goal-percent">0%</strong>
@@ -182,14 +194,6 @@
           </div>
 
           <div class="stat-grid">
-            <div>
-              <span>CREW RANK</span>
-              <strong id="person-rank">—</strong>
-            </div>
-            <div>
-              <span>SESSIONS</span>
-              <strong id="person-sessions">0</strong>
-            </div>
             <div>
               <span>AVG PUSHUPS</span>
               <strong id="person-avg-pushups">0</strong>
