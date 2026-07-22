@@ -1,4 +1,8 @@
 const GOAL_PER_PERSON = 10000;
+const CHALLENGE_START = "2026-07-14";
+const CHALLENGE_DAYS = 100;
+const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
+const FACT_ROTATE_MS = 5600;
 const DAILY_GOALS = {
   pushups: 100,
   squats: 100,
@@ -245,6 +249,125 @@ function escapeHtml(value) {
   return div.innerHTML;
 }
 
+function onTargetReps(asOf = new Date()) {
+  const start = new Date(`${CHALLENGE_START}T12:00:00`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + CHALLENGE_DAYS);
+  const now = new Date(asOf);
+  if (now <= start) return 0;
+  if (now >= end) return GOAL_PER_PERSON;
+  const elapsed = (now.getTime() - start.getTime()) / (end.getTime() - start.getTime());
+  return Math.round(elapsed * GOAL_PER_PERSON);
+}
+
+function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDelta, groupTarget }) {
+  const remaining = Math.max(0, goal - total);
+  const msLeft = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
+  const daysLeft = Math.floor(msLeft / 86400000);
+  const hoursLeft = Math.floor((msLeft % 86400000) / 3600000);
+  const pushupCals = Math.round(categoryTotals.pushups * 0.36);
+  const squatCals = Math.round(categoryTotals.squats * 0.42);
+  const plankMins = categoryTotals.planks / 60;
+  const plankCals = Math.round(plankMins * 3.5);
+  const burned = pushupCals + squatCals + plankCals;
+  const perPerson = participants.length ? Math.round(total / participants.length) : 0;
+  const dailyNeeded =
+    daysLeft > 0 && participants.length
+      ? Math.ceil(remaining / participants.length / daysLeft)
+      : 0;
+
+  return [
+    burned > 0
+      ? `Rough burn so far: ~${number.format(burned)} calories across push-ups, squats, and planks.`
+      : "Log the first set and the calorie counter starts talking trash.",
+    categoryTotals.pushups > 0
+      ? `${number.format(categoryTotals.pushups)} push-ups ≈ ${number.format(pushupCals)} calories. Chest taxes paid.`
+      : null,
+    categoryTotals.squats > 0
+      ? `${number.format(categoryTotals.squats)} squats ≈ ${number.format(squatCals)} calories. Knees filing a formal complaint.`
+      : null,
+    plankMins > 0
+      ? `${durationNumber.format(plankMins)} plank minutes ≈ ${number.format(plankCals)} calories of desert stillness.`
+      : null,
+    daysLeft > 0
+      ? `${daysLeft} days and ${hoursLeft} hours until Old-Chella check-in. The desert is patient. Your rotator cuff is not.`
+      : "Old-Chella is live. Get ripped or get roasted.",
+    goal > 0
+      ? `${number.format(remaining)} group reps left. That is ${number.format(Math.ceil(remaining / Math.max(participants.length, 1)))} each if everybody shows up.`
+      : null,
+    dailyNeeded > 0
+      ? `To finish on time: about ${number.format(dailyNeeded)} primary reps per in-bro per day.`
+      : null,
+    paceDelta > 0
+      ? `Crew is ${number.format(paceDelta)} ahead of pace. Do not get cute. Momentum is a gift.`
+      : paceDelta < 0
+        ? `Crew is ${number.format(Math.abs(paceDelta))} behind pace. The fix is boring and effective: today.`
+        : groupTarget > 0
+          ? `Right on pace at ${number.format(groupTarget)}. Keep the line green.`
+          : null,
+    participants.length
+      ? `${participants.length} bro${participants.length === 1 ? "" : "s"} in. Average haul: ${number.format(perPerson)}.`
+      : "Nobody has opted in yet. Be the first adult in the room.",
+    "After 40, muscle is a retirement account. Deposit daily.",
+    "In your 40s, consistency beats hero sets. Show up ugly. Leave better.",
+    "Recovery is training. Sleep is the illegal PED nobody tests for.",
+    "Push-ups after 40: fewer excuses, more elbows tucked, still no mercy.",
+    "Squats keep the engine. Desk chairs are the silent villain.",
+    "Planks: the meeting that actually makes you stronger.",
+    "Protein and patience. The desert will notice.",
+    "You are not fragile. You are under-repped.",
+    "The group chat can meme. Only the log counts.",
+    "Ten thousand each. One weekend. Zero good excuses left.",
+    "Strong at 40 looks like showing up when nobody is watching.",
+  ].filter(Boolean);
+}
+
+let rotatingFacts = [];
+let factSignature = "";
+let factIndex = 0;
+let factTimer = null;
+
+function showNextFact(animate = true) {
+  const el = $("#potential-copy");
+  if (!el || !rotatingFacts.length) return;
+  const next = rotatingFacts[factIndex % rotatingFacts.length];
+  factIndex += 1;
+  if (!animate) {
+    el.textContent = next;
+    return;
+  }
+  el.classList.add("is-fading");
+  window.setTimeout(() => {
+    el.textContent = next;
+    el.classList.remove("is-fading");
+  }, 220);
+}
+
+function startFactRotation(facts) {
+  const signature = facts.join("|");
+  rotatingFacts = facts;
+  if (!rotatingFacts.length) {
+    window.clearInterval(factTimer);
+    factTimer = null;
+    factSignature = "";
+    $("#potential-copy").textContent = "";
+    return;
+  }
+  if (signature === factSignature && factTimer) return;
+  factSignature = signature;
+  factIndex = 0;
+  showNextFact(false);
+  window.clearInterval(factTimer);
+  factTimer = window.setInterval(() => showNextFact(true), FACT_ROTATE_MS);
+}
+
+function formatPersonHeadline(name) {
+  const parts = String(name).trim().split(/\s+/);
+  if (parts.length < 2) return escapeHtml(name);
+  const initial = parts.pop();
+  return `${escapeHtml(parts.join(" "))}<span class="name-initial">${escapeHtml(initial)}</span>`;
+}
+
 function render() {
   const ranking = totalsByPerson().sort(
     (a, b) =>
@@ -258,6 +381,9 @@ function render() {
   const goal = participants.length * GOAL_PER_PERSON;
   const total = participants.reduce((sum, person) => sum + person.total, 0);
   const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
+  const groupTarget = participants.length * onTargetReps();
+  const targetPercent = goal ? Math.min(100, Math.round((groupTarget / goal) * 100)) : 0;
+  const paceDelta = total - groupTarget;
   const participantIds = new Set(participants.map((person) => person.id));
   const categoryTotals = activities
     .filter((activity) => participantIds.has(activity.personId))
@@ -279,14 +405,34 @@ function render() {
   $("#remaining-total").textContent = number.format(Math.max(0, goal - total));
   $("#goal-percent").textContent = `${percent}%`;
   $("#progress-fill").style.width = `${percent}%`;
+  $("#progress-target").style.width = `${targetPercent}%`;
+  $("#progress-pace").style.left = `${targetPercent}%`;
   $(".progress-track").setAttribute("aria-valuenow", String(total));
   $(".progress-track").setAttribute("aria-valuemax", String(goal));
+  $(".progress-track").setAttribute(
+    "aria-valuetext",
+    `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
+  );
   $("#pace-copy").textContent =
-    goal > 0 && total >= goal ? "Challenge complete!" : "Oldchella awaits";
-  $("#potential-copy").textContent =
-    participants.length === crew.length
-      ? "All nine said yes. The rotator cuffs have been notified."
-      : `If all ${crew.length} joined: ${number.format(crew.length * GOAL_PER_PERSON)} reps. The group chat chose mercy.`;
+    goal > 0 && total >= goal
+      ? "Challenge complete!"
+      : groupTarget <= 0
+        ? "Oldchella awaits"
+        : paceDelta === 0
+          ? `On pace (${number.format(groupTarget)})`
+          : paceDelta > 0
+            ? `${number.format(paceDelta)} ahead of pace`
+            : `${number.format(Math.abs(paceDelta))} behind pace`;
+  startFactRotation(
+    buildRotatingFacts({
+      total,
+      goal,
+      participants,
+      categoryTotals,
+      paceDelta,
+      groupTarget,
+    }),
+  );
 
   $("#leaderboard").innerHTML = ranking
     .map(
@@ -535,12 +681,10 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const personId = currentPersonId();
   const dashboard = $("#dashboard-page");
   const personPage = $("#person-page");
-  const backButton = $("#back-button");
 
   if (!personId) {
     dashboard.hidden = false;
     personPage.hidden = true;
-    backButton.hidden = true;
     return;
   }
 
@@ -580,6 +724,9 @@ function renderPersonPage({ skipScroll = false } = {}) {
     return days ? value / days : 0;
   };
   const personalPercent = Math.round((personStats.total / GOAL_PER_PERSON) * 100);
+  const targetReps = onTargetReps();
+  const targetPercent = Math.round((targetReps / GOAL_PER_PERSON) * 100);
+  const paceDelta = personStats.total - targetReps;
   const plankMinutes = personStats.metrics.planks / 60;
   const fullOtherDays = new Set(
     history
@@ -593,7 +740,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
 
   dashboard.hidden = true;
   personPage.hidden = false;
-  backButton.hidden = false;
   $("#person-avatar").src = person.image;
   $("#person-avatar").alt = `${person.name} profile photo`;
   const rankTile = $("#person-rank-tile");
@@ -615,7 +761,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   }
   rankTile.hidden = !rankLabel;
   rankTile.classList.toggle("is-out", personStats.status === "out");
-  $("#person-name").textContent = person.name;
+  $("#person-name").innerHTML = formatPersonHeadline(person.name);
   $("#person-summary").textContent =
     personStats.status === "out"
       ? `${person.name.split(" ")[0]} is sitting this challenge out.`
@@ -638,7 +784,21 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-goal-percent").textContent = `${personalPercent}%`;
   $("#person-goal-current").textContent = number.format(personStats.total);
   $("#person-progress-fill").style.width = `${Math.min(100, personalPercent)}%`;
+  $("#person-progress-target").style.width = `${Math.min(100, targetPercent)}%`;
+  $("#person-progress-pace").style.left = `${Math.min(100, targetPercent)}%`;
   $(".personal-progress-track").setAttribute("aria-valuenow", String(personStats.total));
+  $(".personal-progress-track").setAttribute(
+    "aria-valuetext",
+    `${number.format(personStats.total)} of ${number.format(GOAL_PER_PERSON)}, on-target pace ${number.format(targetReps)}`,
+  );
+  $("#person-pace-copy").textContent =
+    targetReps <= 0
+      ? ""
+      : paceDelta === 0
+        ? ` · on pace (${number.format(targetReps)})`
+        : paceDelta > 0
+          ? ` · ${number.format(paceDelta)} ahead of pace`
+          : ` · ${number.format(Math.abs(paceDelta))} behind pace`;
   $("#person-pushups-total").textContent = number.format(personStats.metrics.pushups);
   $("#person-squats-total").textContent = number.format(personStats.metrics.squats);
   $("#person-plank-minutes").textContent = durationNumber.format(plankMinutes);
@@ -1032,7 +1192,21 @@ $("#leaderboard").addEventListener("click", (event) => {
   if (row) window.location.hash = `/person/${row.dataset.personId}`;
 });
 
-$("#back-button").addEventListener("click", () => {
+function tickOldchellaCountdown() {
+  const diff = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
+  const days = $("#nav-cd-days");
+  const hours = $("#nav-cd-hours");
+  const mins = $("#nav-cd-mins");
+  const secs = $("#nav-cd-secs");
+  if (!days || !hours || !mins || !secs) return;
+  days.textContent = String(Math.floor(diff / 86400000)).padStart(3, "0");
+  hours.textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2, "0");
+  mins.textContent = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
+  secs.textContent = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+}
+
+$("#ripped-home-link").addEventListener("click", (event) => {
+  event.preventDefault();
   window.location.hash = "";
 });
 
@@ -1041,3 +1215,5 @@ window.addEventListener("hashchange", renderPersonPage);
 updateExerciseFields();
 render();
 loadSharedState();
+tickOldchellaCountdown();
+window.setInterval(tickOldchellaCountdown, 1000);

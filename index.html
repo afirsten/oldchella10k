@@ -12,31 +12,65 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=62" />
-    <script src="./app.js?v=55" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=81" />
+    <script src="./app.js?v=63" defer></script>
   </head>
   <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <button class="back-button" id="back-button" type="button" aria-label="Back to Ripped-Chella home" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-6h6v6" />
-          </svg>
-          <span class="compact-wordmark ripped-wordmark" aria-hidden="true">
-            <span class="wordmark-base">RIPPED-</span><span class="wordmark-accent">CHELLA</span>
+    <nav class="site-nav" aria-label="Site">
+      <a
+        class="nav-home"
+        href="#/"
+        id="ripped-home-link"
+        aria-current="page"
+        aria-label="Ripped-Chella home"
+      >
+        <span class="compact-wordmark ripped-wordmark">
+          <span class="wordmark-base">RIPPED-</span><span class="wordmark-accent">CHELLA</span>
+        </span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="https://goingtoliveforever.com#dates">Dates</a></li>
+        <li><a href="https://goingtoliveforever.com#place">The Place</a></li>
+        <li><a href="https://goingtoliveforever.com#roster">Roster</a></li>
+        <li><a href="https://goingtoliveforever.com#payment">Payment</a></li>
+        <li><a href="https://goingtoliveforever.com#flights">Flights</a></li>
+        <li><a href="https://goingtoliveforever.com#area">The Area</a></li>
+        <li><a href="https://goingtoliveforever.com#trips">Past Trips</a></li>
+      </ul>
+      <a
+        class="nav-countdown"
+        href="https://goingtoliveforever.com/"
+        aria-label="Old-Chella countdown — open Going To Live Forever"
+      >
+        <span class="nav-countdown-label">OLD-CHELLA</span>
+        <span class="nav-countdown-clock">
+          <span class="cd-unit">
+            <span class="cd-num" id="nav-cd-days">---</span>
+            <span class="cd-label">Days</span>
           </span>
-        </button>
-        <a class="brand brand-back" href="https://goingtoliveforever.com" aria-label="Back to Oldchella">
-          <span class="brand-prefix">Back to</span>
-          <span class="compact-wordmark oldchella-wordmark">
-            <span class="wordmark-base">OLD-</span><span class="wordmark-accent">CHELLA</span>
+          <span class="cd-sep" aria-hidden="true">:</span>
+          <span class="cd-unit">
+            <span class="cd-num" id="nav-cd-hours">--</span>
+            <span class="cd-label">Hours</span>
           </span>
-        </a>
-      </header>
+          <span class="cd-sep" aria-hidden="true">:</span>
+          <span class="cd-unit">
+            <span class="cd-num" id="nav-cd-mins">--</span>
+            <span class="cd-label">Mins</span>
+          </span>
+          <span class="cd-sep" aria-hidden="true">:</span>
+          <span class="cd-unit">
+            <span class="cd-num" id="nav-cd-secs">--</span>
+            <span class="cd-label">Secs</span>
+          </span>
+        </span>
+      </a>
+    </nav>
 
+    <div class="app-shell">
       <main id="dashboard-page">
         <section class="hero">
           <p class="eyebrow">ROAD TO JOSHUA TREE · OCT 22–25</p>
@@ -62,7 +96,9 @@
               aria-valuemax="10000"
               aria-valuenow="0"
             >
+              <div class="progress-target" id="progress-target" aria-hidden="true"></div>
               <div class="progress-fill" id="progress-fill"></div>
+              <span class="progress-pace" id="progress-pace" aria-hidden="true"></span>
             </div>
             <div class="goal-meta">
               <span><strong id="remaining-total">0</strong> reps to go</span>
@@ -127,14 +163,14 @@
           <div class="person-identity">
             <div class="person-avatar-wrap">
               <img class="person-avatar" id="person-avatar" src="" alt="" />
+              <div class="person-rank-badge" id="person-rank-tile" hidden>
+                <span class="label">BRO RANK</span>
+                <strong id="person-rank">—</strong>
+              </div>
             </div>
             <div class="person-identity-copy">
               <h1 id="person-name"></h1>
               <p class="hero-copy" id="person-summary"></p>
-            </div>
-            <div class="person-rank-tile" id="person-rank-tile" hidden>
-              <span class="label">BRO RANK</span>
-              <strong id="person-rank">—</strong>
             </div>
           </div>
 
@@ -164,10 +200,23 @@
                 <span>OF 10K GOAL</span>
               </div>
             </div>
-            <div class="personal-progress-track" role="progressbar" aria-label="Personal 10K progress" aria-valuemin="0" aria-valuemax="10000" aria-valuenow="0">
+            <div
+              class="personal-progress-track"
+              role="progressbar"
+              id="person-progress-track"
+              aria-label="Personal 10K progress"
+              aria-valuemin="0"
+              aria-valuemax="10000"
+              aria-valuenow="0"
+            >
+              <div class="personal-progress-target" id="person-progress-target" aria-hidden="true"></div>
               <div id="person-progress-fill"></div>
+              <span class="personal-progress-pace" id="person-progress-pace" aria-hidden="true"></span>
             </div>
-            <p class="personal-goal-copy"><span id="person-goal-current">0</span> of 10,000 complete</p>
+            <p class="personal-goal-copy">
+              <span id="person-goal-current">0</span> of 10,000 complete
+              <span id="person-pace-copy"></span>
+            </p>
           </div>
 
           <div class="personal-breakdown">
