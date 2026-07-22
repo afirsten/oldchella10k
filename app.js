@@ -295,8 +295,9 @@ function onTargetReps(asOf = new Date()) {
   const now = new Date(asOf);
   if (now <= start) return 0;
   if (now >= end) return GOAL_PER_PERSON;
-  const elapsed = (now.getTime() - start.getTime()) / (end.getTime() - start.getTime());
-  return Math.round(elapsed * GOAL_PER_PERSON);
+  const daysElapsed = Math.floor((now.getTime() - start.getTime()) / 86400000);
+  const dailyTarget = GOAL_PER_PERSON / CHALLENGE_DAYS;
+  return Math.min(GOAL_PER_PERSON, daysElapsed * dailyTarget);
 }
 
 function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDelta, groupTarget }) {
