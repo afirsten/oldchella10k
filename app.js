@@ -152,6 +152,12 @@ function formatActivityAmount(activity) {
   return number.format(reps);
 }
 
+function formatActivityLead(activity) {
+  const amount = formatActivityAmount(activity);
+  if (activityExercise(activity) === "planks") return `+${amount} MIN`;
+  return `+${amount}`;
+}
+
 function formatPlankMinutes(seconds) {
   return durationNumber.format((Number(seconds) || 0) / 60);
 }
@@ -718,7 +724,7 @@ function render() {
                 <span>${formatDate(activity.createdAt)}</span>
               </div>
               <div class="activity-meta">
-                <p><span class="activity-reps">+${formatActivityAmount(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
               </div>
             </a>
           `;
@@ -1247,7 +1253,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       <article class="activity-item is-editable${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p><span class="activity-reps">+${formatActivityAmount(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
                           ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
                         </div>
                         <button
