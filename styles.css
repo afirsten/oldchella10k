@@ -869,6 +869,17 @@ h1 .logo-chella {
 .history-day-breakdown-card .daily-pulse.is-compact {
   margin: 0;
   padding: 12px 10px 10px;
+  border-color: rgba(201,179,255,.4);
+  background:
+    linear-gradient(160deg, rgba(201,179,255,.14), transparent 48%),
+    var(--surface-raised, #1c1410);
+  box-shadow: 0 18px 44px rgba(0,0,0,.55);
+}
+.history-day-breakdown-card .daily-pulse.is-compact.is-complete {
+  border-color: rgba(76,223,138,.5);
+  background:
+    linear-gradient(160deg, rgba(76,223,138,.14), transparent 48%),
+    var(--surface-raised, #1c1410);
 }
 .history-day-breakdown-card .daily-pulse.is-compact .daily-goals-card-head {
   margin-bottom: 10px;
@@ -879,6 +890,7 @@ h1 .logo-chella {
 }
 .history-day-breakdown-card .daily-pulse.is-compact .daily-pulse-track {
   height: 6px;
+  background: rgba(255,255,255,.1);
 }
 .history-date-divider:hover .history-day-breakdown-card,
 .history-day-breakdown:focus-visible .history-day-breakdown-card,
