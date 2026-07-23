@@ -1090,11 +1090,16 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const personPage = $("#person-page");
 
   if (!personId) {
+    const returningHome = wasShowingPersonPage;
+    wasShowingPersonPage = false;
     dashboard.hidden = false;
     personPage.hidden = true;
     updateQuickAddButton();
+    if (returningHome) nestleReadyToGoUnit({ force: true });
     return;
   }
+
+  wasShowingPersonPage = true;
 
   const person = getPerson(personId);
   const allStats = totalsByPerson();
@@ -1930,6 +1935,30 @@ function isCookiedVisitor() {
   }
 }
 
+let wasShowingPersonPage = Boolean(parsePersonRoute());
+let homeNestleDone = false;
+
+function nestleReadyToGoUnit({ force = false } = {}) {
+  if (currentPersonId() || !isCookiedVisitor()) return;
+  if (!force && homeNestleDone) return;
+  const target = $("#hero-quick-add");
+  if (!target || target.hidden) return;
+  homeNestleDone = true;
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const run = () => {
+    if (currentPersonId() || target.hidden) return;
+    const navHeight = $(".site-nav")?.offsetHeight || 64;
+    const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - navHeight - 12);
+    if (Math.abs(window.scrollY - top) < 6) return;
+    window.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+  };
+
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(run);
+  });
+}
+
 function rulesShouldStartCollapsed() {
   try {
     const saved = localStorage.getItem(RULES_COLLAPSE_KEY);
@@ -1967,6 +1996,7 @@ function initRulesCollapse() {
 updateExerciseFields();
 initRulesCollapse();
 render();
+nestleReadyToGoUnit();
 loadSharedState();
 tickOldchellaCountdown();
 window.setInterval(tickOldchellaCountdown, 1000);
