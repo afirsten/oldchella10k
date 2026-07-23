@@ -237,11 +237,11 @@ function pickDailyMotivation(seed = localDateValue(), personId = "") {
   return motivationPicks.get(key);
 }
 
-function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId = "") {
+function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId = "", options = {}) {
+  const compact = Boolean(options.compact);
   const { totals, percents, complete } = dayGoalProgress(dayActivities);
   const { lines } = dayGoalProgressLines(dayActivities);
   const boardScore = Math.round((percents.pushups + percents.squats + percents.planks) / 3);
-  const motivation = pickDailyMotivation(dateKey, personId);
   const meters = [
     {
       key: "pushups",
@@ -269,8 +269,20 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
     },
   ];
 
+  const quote = compact
+    ? ""
+    : (() => {
+        const motivation = pickDailyMotivation(dateKey, personId);
+        return `
+          <blockquote class="daily-pulse-quote">
+            <p>“${escapeHtml(motivation.quote)}”</p>
+            <cite>— ${escapeHtml(motivation.by)}</cite>
+          </blockquote>
+        `;
+      })();
+
   return `
-    <div class="daily-goals-card daily-pulse${complete ? " is-complete" : ""}" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
+    <div class="daily-goals-card daily-pulse${compact ? " is-compact" : ""}${complete ? " is-complete" : ""}" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
       <div class="daily-goals-card-head">
         <p class="label">DAILY PULSE</p>
         <span class="daily-goals-complete">${complete ? "BOARD CLEARED" : `${boardScore}% LOCKED IN`}</span>
@@ -292,10 +304,7 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
           )
           .join("")}
       </div>
-      <blockquote class="daily-pulse-quote">
-        <p>“${escapeHtml(motivation.quote)}”</p>
-        <cite>— ${escapeHtml(motivation.by)}</cite>
-      </blockquote>
+      ${quote}
     </div>
   `;
 }
@@ -306,8 +315,7 @@ function dayGoalBreakdown(dayActivities) {
     <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
       <span class="history-day-breakdown-inline">${escapeHtml(lines.join(" / "))}</span>
       <span class="history-day-breakdown-card" role="tooltip">
-        <span class="label">DAILY GOAL</span>
-        ${lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+        ${dayGoalSummaryCard(dayActivities, "", "", { compact: true })}
       </span>
     </span>
   `;

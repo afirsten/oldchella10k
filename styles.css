@@ -855,36 +855,30 @@ h1 .logo-chella {
   top: calc(100% + 10px);
   right: 0;
   z-index: 8;
-  display: grid;
-  gap: 8px;
-  width: min(240px, 78vw);
-  padding: 14px 15px;
-  border: 1px solid rgba(245,200,66,.28);
-  border-radius: 14px;
-  background:
-    linear-gradient(160deg, rgba(245,200,66,.08), transparent 42%),
-    var(--surface-raised);
+  width: min(280px, 82vw);
+  padding: 0;
+  border: 0;
+  background: transparent;
   box-shadow: 0 16px 40px rgba(0,0,0,.45);
-  color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .02em;
-  line-height: 1.35;
-  text-align: left;
-  text-transform: none;
+  border-radius: 12px;
   opacity: 0;
   pointer-events: none;
   transform: translateY(4px);
   transition: opacity 140ms ease, transform 140ms ease;
 }
-.history-day-breakdown-card .label {
-  margin: 0 0 2px;
-  color: var(--lime);
-  font-size: 9px;
-  letter-spacing: .12em;
+.history-day-breakdown-card .daily-pulse.is-compact {
+  margin: 0;
+  padding: 12px 10px 10px;
 }
-.history-day-breakdown-card > span:not(.label) {
-  color: var(--ink);
+.history-day-breakdown-card .daily-pulse.is-compact .daily-goals-card-head {
+  margin-bottom: 10px;
+}
+.history-day-breakdown-card .daily-pulse.is-compact .daily-pulse-meters {
+  gap: 8px;
+  padding: 0 2px;
+}
+.history-day-breakdown-card .daily-pulse.is-compact .daily-pulse-track {
+  height: 6px;
 }
 .history-date-divider:hover .history-day-breakdown-card,
 .history-day-breakdown:focus-visible .history-day-breakdown-card,
