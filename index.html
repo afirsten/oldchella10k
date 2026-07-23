@@ -15,8 +15,9 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=112" />
-    <script src="./app.js?v=84" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=138" />
+    <script src="./vendor/confetti.browser.min.js"></script>
+    <script src="./app.js?v=103" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -88,6 +89,46 @@
             </button>
           </div>
 
+          <aside class="rules-card" id="rules-card" aria-labelledby="rules-heading">
+            <button
+              class="rules-toggle"
+              id="rules-toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="rules-panel"
+            >
+              <span class="rules-toggle-copy">
+                <span class="label">OUR GOAL</span>
+                <span class="rules-toggle-title" id="rules-heading">Bank 10k pushups EACH… before Old-Chella</span>
+              </span>
+              <span class="rules-chevron" aria-hidden="true"></span>
+            </button>
+            <div class="rules-panel" id="rules-panel">
+              <p class="rules-copy">
+                Each day, clear all 3 goals. Push-ups are what really count towards the 10k.
+                <strong>Nursing an injury, log a workout as “Other”. If you give your workout 100%… you still chalk up your reps.</strong>
+              </p>
+              <div class="rules-daily" aria-label="Daily goals">
+                <div class="is-pushups">
+                  <strong>100</strong>
+                  <span>PUSH-UPS</span>
+                </div>
+                <div class="is-squats">
+                  <strong>100</strong>
+                  <span>SQUATS</span>
+                </div>
+                <div class="is-planks">
+                  <strong>4 × 1min</strong>
+                  <span>PLANK</span>
+                </div>
+                <div class="is-other">
+                  <strong>WORKOUTS</strong>
+                  <span>BONUS</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+
           <div class="goal-card">
             <div class="goal-card__top">
               <div>
@@ -136,7 +177,7 @@
               <div>
                 <span>PLANKS</span>
                 <strong id="planks-total">0</strong>
-                <small>SEC</small>
+                <small>MIN</small>
               </div>
               <div>
                 <span>OTHER</span>
@@ -205,10 +246,10 @@
           <div class="personal-total">
             <div class="personal-total-row">
               <div>
-                <p class="label" id="person-total-label">TOTAL PUSH-UPS</p>
+                <p class="label" id="person-total-label">PUSH-UP COUNT</p>
                 <p class="person-total-line">
-                  <strong id="person-total">0</strong> reps over
-                  <span id="person-sessions">0</span> <span id="person-sessions-label">sessions</span>
+                  <strong id="person-total">0</strong> reps in
+                  <span id="person-sessions">0</span> <span id="person-sessions-label">days</span>
                 </p>
               </div>
               <div class="personal-goal">
@@ -239,41 +280,22 @@
             <div>
               <span>PUSH-UPS</span>
               <strong id="person-pushups-total">0</strong>
-              <small>REPS</small>
+              <span class="daily-avg">DAILY AVG <strong id="person-avg-pushups">0</strong></span>
             </div>
             <div>
               <span>SQUATS</span>
               <strong id="person-squats-total">0</strong>
-              <small>REPS</small>
+              <span class="daily-avg">DAILY AVG <strong id="person-avg-squats">0</strong></span>
             </div>
             <div>
               <span>PLANKS</span>
               <strong id="person-plank-minutes">0</strong>
-              <small>MIN</small>
+              <span class="daily-avg">DAILY AVG <strong id="person-avg-planks">0</strong></span>
             </div>
             <div>
-              <span>OTHER</span>
+              <span>WORKOUTS</span>
               <strong id="person-other-days">0</strong>
-              <small>100% DAYS</small>
-            </div>
-          </div>
-
-          <div class="stat-grid">
-            <div>
-              <span>AVG PUSHUPS</span>
-              <strong id="person-avg-pushups">0</strong>
-            </div>
-            <div>
-              <span>AVG SQUATS</span>
-              <strong id="person-avg-squats">0</strong>
-            </div>
-            <div>
-              <span>AVG PLANKING</span>
-              <strong id="person-avg-planks">0</strong>
-            </div>
-            <div>
-              <span>AVG OTHER</span>
-              <strong id="person-avg-other">0</strong>
+              <span class="daily-avg">DAILY AVG <strong id="person-avg-other">0</strong></span>
             </div>
           </div>
 
@@ -314,15 +336,8 @@
           Workout date
           <input id="activity-date-input" name="activityDate" type="date" required />
         </label>
-        <div class="daily-goals-card" id="log-daily-goal">
-          <div class="daily-goals-card-head">
-            <p class="label">DAILY GOAL</p>
-            <span class="daily-goals-complete" id="log-daily-goal-complete" hidden>Complete</span>
-          </div>
-          <div class="daily-goals-progress" id="log-daily-goal-lines"></div>
-        </div>
         <div class="exercise-picker">
-          <span>What did you do?</span>
+          <span>What did you do? Switch types to log more than one.</span>
           <div class="exercise-tabs" role="tablist" aria-label="Workout type" data-active="pushups">
             <button type="button" role="tab" data-exercise="pushups" aria-selected="true" class="is-selected">PUSH-UPS</button>
             <button type="button" role="tab" data-exercise="squats" aria-selected="false">SQUATS</button>
@@ -349,12 +364,11 @@
               name="reps"
               type="number"
               inputmode="numeric"
-              min="1"
+              min="0"
               max="1000"
               step="1"
               value="0"
               aria-label="Activity amount"
-              required
             />
             <span id="amount-unit">REPS</span>
           </div>
@@ -372,6 +386,7 @@
           </div>
           <input id="other-slider" type="range" min="0" max="100" step="1" value="50" aria-label="Percent of daily goal" />
         </div>
+        <p class="log-form-error" id="log-form-error" hidden role="alert"></p>
         <button class="submit-button" type="submit">ADD TO THE TOTAL</button>
       </form>
       <div class="log-success" id="log-success" hidden>
@@ -399,7 +414,7 @@
     </dialog>
 
     <dialog class="pin-dialog" id="pin-dialog">
-      <form id="pin-form" method="dialog">
+      <form id="pin-form">
         <div class="dialog-heading">
           <div>
             <p class="eyebrow">PROTECTED CHANGE</p>

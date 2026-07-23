@@ -294,14 +294,139 @@ h1 .logo-chella {
 .hero-copy {
   grid-column: 1 / -1;
   width: 100%;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
   color: var(--muted);
   font-size: 16px;
   line-height: 1.55;
 }
+.hero .rules-card,
 .hero .goal-card {
   grid-column: 1 / -1;
 }
+.rules-card {
+  margin-bottom: 18px;
+  padding: 6px 8px 8px;
+  border: 1px dashed rgba(201,179,255,.38);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(201,179,255,.07), transparent 62%);
+  box-shadow: none;
+}
+.rules-card:not(.is-collapsed) {
+  border-style: solid;
+  border-color: rgba(201,179,255,.28);
+  background:
+    linear-gradient(160deg, rgba(201,179,255,.1), transparent 48%),
+    rgba(18, 10, 8, .55);
+}
+.rules-toggle {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 10px 10px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rules-toggle:hover,
+.rules-toggle:focus-visible {
+  background: rgba(201,179,255,.08);
+  outline: none;
+}
+.rules-toggle-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.rules-card .label {
+  margin: 0;
+  color: var(--lavender);
+}
+.rules-toggle-title {
+  display: block;
+  color: var(--ink);
+  font: 400 clamp(22px, 5.2vw, 30px)/1.08 "Abril Fatface", serif;
+  letter-spacing: -.02em;
+}
+.rules-chevron {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-top: 4px;
+  border: 1px solid rgba(201,179,255,.35);
+  border-radius: 50%;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9b3ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 6-6 6 6'/%3E%3C/svg%3E")
+      center / 14px 14px no-repeat,
+    rgba(201,179,255,.08);
+  transform: none;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.rules-card:not(.is-collapsed) .rules-chevron {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9b3ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 10 6 6 6-6'/%3E%3C/svg%3E")
+      center / 14px 14px no-repeat,
+    rgba(201,179,255,.08);
+}
+.rules-panel {
+  display: grid;
+  gap: 0;
+  padding: 0 10px 8px;
+}
+.rules-card.is-collapsed .rules-panel {
+  display: none;
+}
+.rules-card.is-collapsed {
+  padding-bottom: 8px;
+}
+.rules-copy {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.rules-copy strong {
+  display: inline;
+  color: var(--ink);
+  font-weight: 700;
+}
+.rules-daily {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.rules-daily > div {
+  display: grid;
+  gap: 6px;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 14px 8px;
+  border-right: 1px solid var(--line);
+}
+.rules-daily > div:last-child { border-right: 0; }
+.rules-daily strong {
+  color: var(--ink);
+  font: 800 18px/1 "Manrope", sans-serif;
+  letter-spacing: -.03em;
+}
+.rules-daily span {
+  color: var(--quiet);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.rules-daily .is-pushups strong { color: var(--pink); }
+.rules-daily .is-squats strong { color: var(--terra); }
+.rules-daily .is-planks strong { color: var(--lime); }
+.rules-daily .is-other strong { color: var(--green); }
 .goal-card {
   overflow: hidden;
   padding: 24px;
@@ -535,6 +660,9 @@ h1 .logo-chella {
 
 .section { padding: 36px 0 10px; }
 .section-heading { margin-bottom: 20px; }
+.history-day > .daily-goals-card {
+  margin-top: 2px;
+}
 .section-heading h2, .dialog-heading h2 {
   margin: 0;
   font: 800 26px/1 "Manrope", sans-serif;
@@ -1247,46 +1375,37 @@ a.activity-item:focus-visible {
   place-content: center;
   justify-items: center;
   text-align: center;
-  padding: 15px 11px;
+  padding: 15px 11px 13px;
   border-right: 1px solid var(--line);
 }
 .personal-breakdown div:last-child { border-right: 0; }
 .personal-breakdown span,
 .personal-breakdown small {
   color: var(--quiet);
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: .08em;
 }
-.personal-breakdown strong {
-  font: 800 17px "Manrope", sans-serif;
-  letter-spacing: -.03em;
-}
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 12px 0;
-  border: 1px solid var(--line);
-  border-radius: 17px;
-}
-.stat-grid > div {
-  display: grid;
-  gap: 8px;
-  padding: 16px 10px;
-  border-right: 1px solid var(--line);
-  align-content: start;
-}
-.stat-grid > div:last-child { border-right: 0; }
-.stat-grid > div > span {
-  color: var(--quiet);
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  white-space: nowrap;
-}
-.stat-grid strong {
-  font: 800 16px/1 "Manrope", sans-serif;
+.personal-breakdown > div > strong {
+  font: 800 28px/1 "Manrope", sans-serif;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+}
+.personal-breakdown .daily-avg {
+  display: inline-flex;
+  gap: .35em;
+  align-items: baseline;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+.personal-breakdown .daily-avg strong {
+  color: var(--ink);
+  font: 800 13px/1 "Manrope", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
 }
 .person-log-button {
   display: flex;
@@ -1375,16 +1494,10 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   overflow: hidden;
   pointer-events: none;
 }
-.success-confetti i {
-  position: absolute;
-  top: 38%;
-  left: 50%;
-  width: 7px;
-  height: 11px;
-  border-radius: 2px;
-  background: var(--confetti);
-  opacity: 0;
-  animation: confetti-pop 950ms cubic-bezier(.16,.8,.3,1) var(--delay) forwards;
+.success-confetti canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .success-check {
   display: grid;
@@ -1422,8 +1535,13 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   font-size: 13px;
 }
 .pin-dialog {
+  z-index: 40;
   margin: auto;
   border-radius: 24px;
+}
+.pin-dialog::backdrop {
+  z-index: 39;
+  background: rgba(0,0,0,.78);
 }
 #pin-form {
   display: grid;
@@ -1441,6 +1559,16 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   margin: -4px 0 0;
   color: var(--pink);
   font-size: 12px;
+}
+.log-form-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(232, 72, 117, 0.12);
+  color: var(--pink);
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
 }
 .pin-help {
   margin: -4px 0 0;
@@ -1478,34 +1606,140 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   color-scheme: dark;
 }
 .daily-goals-card {
-  padding: 14px 15px;
+  padding: 16px 16px 14px;
   border: 1px solid rgba(245,200,66,.28);
-  border-radius: 14px;
+  border-radius: 16px;
   background:
-    linear-gradient(160deg, rgba(245,200,66,.08), transparent 42%),
+    linear-gradient(160deg, rgba(245,200,66,.1), transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(255,45,120,.08), transparent 42%),
     var(--surface);
 }
+.daily-goals-card.daily-pulse {
+  padding: 14px 12px 12px;
+  border: 1px solid rgba(201,179,255,.28);
+  border-radius: 12px;
+  background:
+    linear-gradient(160deg, rgba(201,179,255,.1), transparent 48%),
+    rgba(18, 10, 8, .55);
+  box-shadow: none;
+}
 .daily-goals-card.is-complete {
+  border-color: rgba(76,223,138,.45);
+  background:
+    linear-gradient(160deg, rgba(76,223,138,.12), transparent 42%),
+    var(--surface);
+}
+.daily-goals-card.daily-pulse.is-complete {
   border-color: rgba(76,223,138,.4);
   background:
-    linear-gradient(160deg, rgba(76,223,138,.1), transparent 42%),
-    var(--surface);
+    linear-gradient(160deg, rgba(76,223,138,.1), transparent 48%),
+    rgba(18, 10, 8, .55);
 }
 .daily-goals-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
+}
+.daily-pulse .daily-goals-card-head {
+  margin-bottom: 12px;
+  padding: 0 4px;
 }
 .daily-goals-card .label {
   margin: 0;
 }
+.daily-pulse .label {
+  color: var(--lavender);
+}
 .daily-goals-complete {
-  color: var(--green);
+  color: var(--lime);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.daily-pulse .daily-goals-complete {
+  color: var(--lavender);
+}
+.daily-goals-card.is-complete .daily-goals-complete {
+  color: var(--green);
+}
+.daily-pulse-meters {
+  display: grid;
+  gap: 11px;
+  padding: 0 4px;
+}
+.daily-pulse-row {
+  display: grid;
+  gap: 6px;
+}
+.daily-pulse-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.daily-pulse-meta span {
+  color: var(--quiet);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .1em;
+}
+.daily-pulse-meta strong {
+  color: var(--ink);
+  font: 700 12px/1 "Manrope", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+.daily-pulse-track {
+  overflow: hidden;
+  height: 7px;
+  border-radius: 99px;
+  background: rgba(255,255,255,.06);
+}
+.daily-pulse-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--terra), var(--lime));
+  transition: width 420ms ease;
+}
+.daily-pulse-row.is-pushups .daily-pulse-track i {
+  background: linear-gradient(90deg, #ff2d78, #ff6b9d);
+}
+.daily-pulse-row.is-squats .daily-pulse-track i {
+  background: linear-gradient(90deg, var(--terra), #f0a06a);
+}
+.daily-pulse-row.is-planks .daily-pulse-track i {
+  background: linear-gradient(90deg, #d4a017, var(--lime));
+}
+.daily-pulse-row.is-other .daily-pulse-track i {
+  background: linear-gradient(90deg, #2f9e63, var(--green));
+}
+.daily-pulse-quote {
+  margin: 12px 4px 0;
+  padding: 12px 12px 10px;
+  border-radius: 10px;
+  background: rgba(201,179,255,.06);
+}
+.daily-pulse-quote p {
+  margin: 0;
+  color: var(--ink);
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 18px;
+  line-height: 1.35;
+  letter-spacing: .01em;
+}
+.daily-pulse-quote cite {
+  display: block;
+  margin-top: 8px;
+  color: var(--lavender);
+  font: 700 10px/1 "Manrope", sans-serif;
+  font-style: normal;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
 .daily-goals-progress {
@@ -1540,7 +1774,11 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   box-shadow: inset 0 1px rgba(255,160,80,.04);
 }
 .exercise-tabs button {
+  display: inline-flex;
   height: 40px;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
   padding: 0 4px;
   border: 0;
   border-radius: 999px;
@@ -1550,6 +1788,14 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   letter-spacing: .05em;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.exercise-tabs button.has-value::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234cdf8a' stroke-width='3.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 13 4 4L19 7'/%3E%3C/svg%3E")
+    center / 12px 12px no-repeat;
 }
 .exercise-tabs button:hover {
   color: var(--muted);
@@ -1573,6 +1819,22 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   background: rgba(76,223,138,.14);
   box-shadow: inset 0 0 0 1px rgba(76,223,138,.5);
   color: var(--green);
+}
+.exercise-tabs button.has-value:not(.is-selected)[data-exercise="pushups"] {
+  color: var(--pink);
+  box-shadow: inset 0 0 0 1px rgba(255,45,120,.28);
+}
+.exercise-tabs button.has-value:not(.is-selected)[data-exercise="squats"] {
+  color: var(--terra);
+  box-shadow: inset 0 0 0 1px rgba(232,118,58,.3);
+}
+.exercise-tabs button.has-value:not(.is-selected)[data-exercise="planks"] {
+  color: var(--lime);
+  box-shadow: inset 0 0 0 1px rgba(245,200,66,.3);
+}
+.exercise-tabs button.has-value:not(.is-selected)[data-exercise="other"] {
+  color: var(--green);
+  box-shadow: inset 0 0 0 1px rgba(76,223,138,.28);
 }
 .exercise-tabs[data-active="pushups"] {
   border-color: rgba(255,45,120,.28);
@@ -1806,19 +2068,7 @@ input:focus, select:focus {
   from { opacity: 1; }
   to { opacity: 0; }
 }
-@keyframes confetti-pop {
-  0% {
-    opacity: 1;
-    transform: translate(-50%,0) rotate(0);
-  }
-  75% { opacity: 1; }
-  100% {
-    opacity: 0;
-    transform: translate(calc(-50% + var(--x)), var(--y)) rotate(var(--r));
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .success-confetti i { animation: none; }
   #log-dialog[open]:not(.is-closing),
   #log-dialog[open]:not(.is-closing)::backdrop,
   #log-dialog.is-closing,
@@ -1845,11 +2095,22 @@ input:focus, select:focus {
   .hero-quick-add {
     width: 100%;
     min-width: 0;
-    margin-bottom: 24px;
+    margin-bottom: 18px;
     align-self: stretch;
   }
   .quick-add-button {
     width: 100%;
+  }
+  .rules-card {
+    padding: 6px 6px 8px;
+  }
+  .rules-daily {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rules-daily > div:nth-child(2) { border-right: 0; }
+  .rules-daily > div:nth-child(1),
+  .rules-daily > div:nth-child(2) {
+    border-bottom: 1px solid var(--line);
   }
 }
 @media (min-width: 700px) {

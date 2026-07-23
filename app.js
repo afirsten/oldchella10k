@@ -12,6 +12,7 @@ const STORAGE_KEY = "oldchella-10k-activities-v3";
 const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
+const RULES_COLLAPSE_KEY = "rippedchella-rules-collapsed-v1";
 
 const crew = [
   { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
@@ -138,9 +139,21 @@ function exerciseName(activity) {
 }
 
 function exerciseUnit(activity) {
-  if (activityExercise(activity) === "planks") return "SEC";
+  if (activityExercise(activity) === "planks") return "MIN";
   if (activityExercise(activity) === "other") return "% GOAL";
   return "REPS";
+}
+
+function formatActivityAmount(activity) {
+  const reps = Number(activity.reps) || 0;
+  if (activityExercise(activity) === "planks") {
+    return durationNumber.format(reps / 60);
+  }
+  return number.format(reps);
+}
+
+function formatPlankMinutes(seconds) {
+  return durationNumber.format((Number(seconds) || 0) / 60);
 }
 
 function dayGoalProgress(dayActivities) {
@@ -194,39 +207,110 @@ function dayGoalProgressLines(dayActivities) {
   };
 }
 
-function dayGoalBreakdown(dayActivities) {
+const DAILY_MOTIVATION = [
+  { quote: "The moment you give up is the moment you let someone else win.", by: "Kobe Bryant" },
+  { quote: "Job’s not finished.", by: "Kobe Bryant" },
+  { quote: "I’ve failed over and over and over again in my life. And that is why I succeed.", by: "Michael Jordan" },
+  { quote: "Some people want it to happen, some wish it would happen, others make it happen.", by: "Michael Jordan" },
+  { quote: "Never die easy. Cross that white line and make them tackle you.", by: "Walter Payton" },
+  { quote: "When you’re good at something, you’ll tell everyone. When you’re great at something, they’ll tell you.", by: "Walter Payton" },
+  { quote: "Don’t count the days; make the days count.", by: "Muhammad Ali" },
+  { quote: "He who is not courageous enough to take risks will accomplish nothing in life.", by: "Muhammad Ali" },
+  { quote: "A champion is defined not by their wins but by how they can recover when they fall.", by: "Serena Williams" },
+  { quote: "I don’t like to lose at anything.", by: "Serena Williams" },
+  { quote: "I didn’t come this far to only come this far.", by: "Tom Brady" },
+  { quote: "You have to believe in what you’re doing.", by: "Magic Johnson" },
+  { quote: "The greatest thing about tomorrow is I will be better than I am today.", by: "Tiger Woods" },
+  { quote: "Concentration and mental toughness are the margins of victory.", by: "Bill Russell" },
+  { quote: "Excellence is not a singular act but a habit.", by: "Shaquille O’Neal" },
+  { quote: "You miss 100% of the shots you don’t take.", by: "Wayne Gretzky" },
+];
+
+const motivationPicks = new Map();
+
+function pickDailyMotivation(seed = localDateValue(), personId = "") {
+  const key = `${personId || "_"}:${seed}`;
+  if (!motivationPicks.has(key)) {
+    const index = Math.floor(Math.random() * DAILY_MOTIVATION.length);
+    motivationPicks.set(key, DAILY_MOTIVATION[index]);
+  }
+  return motivationPicks.get(key);
+}
+
+function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId = "") {
+  const { totals, percents, complete } = dayGoalProgress(dayActivities);
   const { lines } = dayGoalProgressLines(dayActivities);
+  const boardScore = Math.round((percents.pushups + percents.squats + percents.planks) / 3);
+  const motivation = pickDailyMotivation(dateKey, personId);
+  const meters = [
+    {
+      key: "pushups",
+      label: "PUSH-UPS",
+      value: `${number.format(totals.pushups)} / ${number.format(DAILY_GOALS.pushups)}`,
+      percent: percents.pushups,
+    },
+    {
+      key: "squats",
+      label: "SQUATS",
+      value: `${number.format(totals.squats)} / ${number.format(DAILY_GOALS.squats)}`,
+      percent: percents.squats,
+    },
+    {
+      key: "planks",
+      label: "PLANK",
+      value: `${number.format(totals.planks)} / ${number.format(DAILY_GOALS.planks)} SEC`,
+      percent: percents.planks,
+    },
+    {
+      key: "other",
+      label: "WORKOUTS",
+      value: `${number.format(totals.other)}% BONUS`,
+      percent: percents.other,
+    },
+  ];
+
   return `
-    <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${lines.join(", ")}">
-      <span class="history-day-breakdown-inline">${lines.join(" / ")}</span>
-      <span class="history-day-breakdown-card" role="tooltip">
-        <span class="label">DAILY GOAL</span>
-        ${lines.map((line) => `<span>${line}</span>`).join("")}
-      </span>
-    </span>
+    <div class="daily-goals-card daily-pulse${complete ? " is-complete" : ""}" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
+      <div class="daily-goals-card-head">
+        <p class="label">DAILY PULSE</p>
+        <span class="daily-goals-complete">${complete ? "BOARD CLEARED" : `${boardScore}% LOCKED IN`}</span>
+      </div>
+      <div class="daily-pulse-meters">
+        ${meters
+          .map(
+            (meter) => `
+              <div class="daily-pulse-row is-${meter.key}">
+                <div class="daily-pulse-meta">
+                  <span>${meter.label}</span>
+                  <strong>${escapeHtml(meter.value)}</strong>
+                </div>
+                <div class="daily-pulse-track" aria-hidden="true">
+                  <i style="width:${meter.percent}%"></i>
+                </div>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+      <blockquote class="daily-pulse-quote">
+        <p>“${escapeHtml(motivation.quote)}”</p>
+        <cite>— ${escapeHtml(motivation.by)}</cite>
+      </blockquote>
+    </div>
   `;
 }
 
-function updateLogDailyGoalCard() {
-  const linesEl = $("#log-daily-goal-lines");
-  const completeEl = $("#log-daily-goal-complete");
-  const card = $("#log-daily-goal");
-  if (!linesEl || !completeEl || !card) return;
-  const personId = $("#person-input")?.value;
-  const dateKey = $("#activity-date-input")?.value;
-  if (!personId || !dateKey) {
-    linesEl.innerHTML = "";
-    completeEl.hidden = true;
-    card.classList.remove("is-complete");
-    return;
-  }
-  const dayActivities = activities.filter(
-    (activity) => activity.personId === personId && activityDateKey(activity) === dateKey,
-  );
-  const { lines, complete } = dayGoalProgressLines(dayActivities);
-  linesEl.innerHTML = lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("");
-  completeEl.hidden = !complete;
-  card.classList.toggle("is-complete", complete);
+function dayGoalBreakdown(dayActivities) {
+  const { lines } = dayGoalProgressLines(dayActivities);
+  return `
+    <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
+      <span class="history-day-breakdown-inline">${escapeHtml(lines.join(" / "))}</span>
+      <span class="history-day-breakdown-card" role="tooltip">
+        <span class="label">DAILY GOAL</span>
+        ${lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+      </span>
+    </span>
+  `;
 }
 
 function exerciseIcon(activity) {
@@ -367,15 +451,15 @@ function activityCallout(activity) {
   if (!person) return null;
   const first = person.name.split(" ")[0];
   const exercise = activityExercise(activity);
-  const amount = number.format(activity.reps);
+  const amount = formatActivityAmount(activity);
   const label = exerciseName(activity);
   const seed = String(activity.id || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
 
   if (exercise === "planks") {
     const lines = [
-      `Fresh drop: ${first} just locked in ${amount} seconds of plank.`,
-      `${first} banked ${amount} plank seconds. Desert stillness unlocked.`,
-      `+${amount} plank seconds from ${first}. Core tax collected.`,
+      `Fresh drop: ${first} just locked in ${amount} min of plank.`,
+      `${first} banked ${amount} plank minutes. Desert stillness unlocked.`,
+      `+${amount} plank minutes from ${first}. Core tax collected.`,
     ];
     return lines[seed % lines.length];
   }
@@ -520,7 +604,7 @@ function render() {
   $("#goal-target").textContent = number.format(goal);
   $("#pushups-total").textContent = number.format(categoryTotals.pushups);
   $("#squats-total").textContent = number.format(categoryTotals.squats);
-  $("#planks-total").textContent = number.format(categoryTotals.planks);
+  $("#planks-total").textContent = formatPlankMinutes(categoryTotals.planks);
   $("#other-total").textContent = number.format(categoryTotals.other);
   $("#crew-status-total").textContent = `${participants.length} / ${optedOut.length}`;
   $("#remaining-total").textContent = number.format(Math.max(0, goal - total));
@@ -593,7 +677,7 @@ function render() {
               <small>SQUAT</small>
             </span>
             <span>
-              <strong>${number.format(person.metrics.planks)}</strong>
+              <strong>${formatPlankMinutes(person.metrics.planks)}</strong>
               <small>PLANK</small>
             </span>
             <span class="${person.primaryType === "other" ? "is-primary" : ""}">
@@ -626,7 +710,7 @@ function render() {
                 <span>${formatDate(activity.createdAt)}</span>
               </div>
               <div class="activity-meta">
-                <p><span class="activity-reps">+${number.format(activity.reps)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                <p><span class="activity-reps">+${formatActivityAmount(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
               </div>
             </a>
           `;
@@ -644,7 +728,24 @@ function formatDate(value) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function clearLogFormError() {
+  const el = $("#log-form-error");
+  if (!el) return;
+  el.hidden = true;
+  el.textContent = "";
+}
+
+function showLogFormError(message) {
+  const el = $("#log-form-error");
+  if (!el || !dialog.open || $("#log-form").hidden) return false;
+  el.hidden = false;
+  el.textContent = message;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  return true;
+}
+
 function showToast(message) {
+  if (showLogFormError(message)) return;
   const toast = $("#toast");
   toast.textContent = message;
   toast.classList.add("is-visible");
@@ -832,7 +933,110 @@ function closePinPrompt(value = null) {
   if (resolve) resolve(value);
 }
 
+async function ensureApiAvailable() {
+  if (apiAvailable) return true;
+  return loadSharedState();
+}
+
+function parseLocalActivityFields(body) {
+  const exercise = typeof body.exercise === "string" ? body.exercise : "";
+  const reps = Number(body.reps);
+  const otherActivity =
+    typeof body.otherActivity === "string" ? body.otherActivity.trim() : "";
+  const activityDate = typeof body.activityDate === "string" ? body.activityDate : "";
+  const parsedActivityDate = new Date(`${activityDate}T12:00:00.000Z`);
+  const allowed = new Set(["pushups", "squats", "planks", "other"]);
+
+  if (!allowed.has(exercise)) throw new ApiError("Choose a valid activity type.", 400);
+  if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
+    throw new ApiError("Activity amount must be from 1 to 1,000.", 400);
+  }
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(activityDate) ||
+    Number.isNaN(parsedActivityDate.getTime()) ||
+    parsedActivityDate.toISOString().slice(0, 10) !== activityDate
+  ) {
+    throw new ApiError("Choose a valid workout date.", 400);
+  }
+  if (activityDate > new Date().toISOString().slice(0, 10)) {
+    throw new ApiError("Workout dates cannot be in the future.", 400);
+  }
+  if (exercise === "other" && (!otherActivity || otherActivity.length > 50)) {
+    throw new ApiError("Describe the other activity in 50 characters or fewer.", 400);
+  }
+
+  return {
+    exercise,
+    reps,
+    otherActivity: exercise === "other" ? otherActivity : "",
+    percent: exercise === "other" ? reps : null,
+    createdAt: parsedActivityDate.toISOString(),
+  };
+}
+
+/** Local-only mutations when the shared API is offline. Session memory only — refresh resets. */
+function demoRequest(path, method, personId, body) {
+  if (path === "/api/participation" && method === "PUT") {
+    const status = body.status === "out" ? "out" : "in";
+    participation[personId] = status;
+    return { status };
+  }
+
+  if (path !== "/api/activities") {
+    throw new ApiError("Unsupported demo action.", 400);
+  }
+
+  if (method === "DELETE") {
+    const activityId = typeof body.activityId === "string" ? body.activityId : "";
+    const index = activities.findIndex(
+      (activity) => activity.id === activityId && activity.personId === personId,
+    );
+    if (index < 0) throw new ApiError("That activity could not be found.", 404);
+    activities.splice(index, 1);
+    return { deletedActivityId: activityId };
+  }
+
+  const fields = parseLocalActivityFields(body);
+
+  if (method === "PUT") {
+    const activityId = typeof body.activityId === "string" ? body.activityId : "";
+    const index = activities.findIndex(
+      (activity) => activity.id === activityId && activity.personId === personId,
+    );
+    if (index < 0) throw new ApiError("That activity could not be found.", 404);
+    const activity = {
+      ...activities[index],
+      ...fields,
+      id: activityId,
+      personId,
+      note: activities[index].note || "",
+      loggedAt: activities[index].loggedAt || new Date().toISOString(),
+    };
+    activities[index] = activity;
+    participation[personId] = "in";
+    return { activity, status: "in" };
+  }
+
+  if (method === "POST") {
+    const activity = {
+      id: crypto.randomUUID(),
+      personId,
+      note: "",
+      ...fields,
+      loggedAt: new Date().toISOString(),
+    };
+    participation[personId] = "in";
+    return { activity, status: "in" };
+  }
+
+  throw new ApiError("Unsupported demo action.", 400);
+}
+
 async function protectedRequest(path, method, personId, body) {
+  if (!(await ensureApiAvailable())) {
+    return demoRequest(path, method, personId, body);
+  }
+
   let pin = storedPin(personId);
   let pinError = "";
 
@@ -960,11 +1164,10 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const showProgress = history.length > 0 || personStats.status === "in";
   $(".personal-total").hidden = !showProgress;
   $(".personal-breakdown").hidden = !showProgress;
-  $(".stat-grid").hidden = !showProgress;
   $("#person-log-button").hidden = personStats.status !== "in";
   $("#person-total").textContent = number.format(personStats.total);
   $("#person-total-label").textContent =
-    personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "TOTAL PUSH-UPS";
+    personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "PUSH-UP COUNT";
   $("#person-goal-percent").textContent = `${personalPercent}%`;
   $("#person-goal-current").textContent = number.format(personStats.total);
   $("#person-progress-fill").style.width = `${Math.min(100, personalPercent)}%`;
@@ -988,7 +1191,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-plank-minutes").textContent = durationNumber.format(plankMinutes);
   $("#person-other-days").textContent = number.format(fullOtherDays);
   $("#person-sessions").textContent = number.format(personStats.sessions);
-  $("#person-sessions-label").textContent = personStats.sessions === 1 ? "session" : "sessions";
+  $("#person-sessions-label").textContent = personStats.sessions === 1 ? "day" : "days";
   $("#person-avg-pushups").textContent = number.format(
     Math.round(averageFor("pushups", personStats.metrics.pushups)),
   );
@@ -1002,11 +1205,21 @@ function renderPersonPage({ skipScroll = false } = {}) {
     Math.round(averageFor("other", personStats.metrics.other)),
   );
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
-  $("#person-activity-list").innerHTML = history.length
-    ? historyByDate
-        .map(
-          (group) => `
-            <div class="history-day">
+  const todayKey = localDateValue();
+  const historyGroups = [...historyByDate];
+  if (showProgress && !historyGroups.some((group) => group.dateKey === todayKey)) {
+    historyGroups.unshift({
+      dateKey: todayKey,
+      date: new Date(`${todayKey}T12:00:00`),
+      activities: [],
+    });
+  }
+  $("#person-activity-list").innerHTML = historyGroups.length
+    ? historyGroups
+        .map((group) => {
+          const isToday = group.dateKey === todayKey;
+          return `
+            <div class="history-day${isToday ? " is-today" : ""}">
               <div class="history-date-divider">
                 ${dayGoalCheck(dayGoalProgress(group.activities).complete)}
                 <span class="history-day-date">${group.date.toLocaleDateString("en-US", {
@@ -1015,8 +1228,9 @@ function renderPersonPage({ skipScroll = false } = {}) {
                   day: "numeric",
                 })}</span>
                 <span class="history-day-rule" aria-hidden="true"></span>
-                ${dayGoalBreakdown(group.activities)}
+                ${isToday ? "" : dayGoalBreakdown(group.activities)}
               </div>
+              ${isToday ? dayGoalSummaryCard(group.activities, group.dateKey, personId) : ""}
               <div class="history-day-activities">
                 ${group.activities
                   .map((activity) => {
@@ -1025,7 +1239,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       <article class="activity-item is-editable${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p><span class="activity-reps">+${number.format(activity.reps)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p><span class="activity-reps">+${formatActivityAmount(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
                           ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
                         </div>
                         <button
@@ -1048,8 +1262,8 @@ function renderPersonPage({ skipScroll = false } = {}) {
                 ADD REPS TO THIS DAY
               </button>
             </div>
-          `,
-        )
+          `;
+        })
         .join("")
     : '<div class="empty-state">No sessions yet. Time to get on the board.</div>';
 
@@ -1080,10 +1294,96 @@ const personInput = $("#person-input");
 const exerciseInput = $("#exercise-input");
 const exerciseButtons = [...document.querySelectorAll("[data-exercise]")];
 const quickButtons = [...document.querySelectorAll("[data-increment]")];
+const EXERCISE_ORDER = ["pushups", "squats", "planks", "other"];
+
+function emptyLogDrafts() {
+  return {
+    pushups: { reps: 0 },
+    squats: { reps: 0 },
+    planks: { reps: 0 },
+    other: { reps: 0, otherActivity: "" },
+  };
+}
+
+let logDrafts = emptyLogDrafts();
 
 function setAmount(value) {
   const amount = Math.max(0, Math.min(1000, Math.round(Number(value) || 0)));
   $("#reps-input").value = amount;
+}
+
+function readCurrentExerciseDraft() {
+  const exercise = exerciseInput.value;
+  const reps = Math.max(0, Math.min(1000, Math.round(Number($("#reps-input").value) || 0)));
+  if (exercise === "other") {
+    return {
+      reps: Math.max(0, Math.min(100, reps)),
+      otherActivity: $("#other-input").value.trim(),
+    };
+  }
+  return { reps };
+}
+
+function saveCurrentDraft() {
+  if (editingActivityId) return;
+  logDrafts[exerciseInput.value] = readCurrentExerciseDraft();
+  syncDraftTabIndicators();
+  updateAddSubmitLabel();
+}
+
+function draftEntries() {
+  return EXERCISE_ORDER.map((exercise) => {
+    const draft = logDrafts[exercise];
+    const reps = Number(draft?.reps) || 0;
+    if (!Number.isInteger(reps) || reps < 1 || reps > 1000) return null;
+    if (exercise === "other") {
+      const otherActivity = (draft.otherActivity || "").trim();
+      if (!otherActivity) return { exercise, reps, otherActivity: "", invalid: "name" };
+      return { exercise, reps, otherActivity };
+    }
+    return { exercise, reps, otherActivity: "" };
+  }).filter(Boolean);
+}
+
+function syncDraftTabIndicators() {
+  exerciseButtons.forEach((button) => {
+    const exercise = button.dataset.exercise;
+    const draft = logDrafts[exercise];
+    const hasValue = Number(draft?.reps) > 0;
+    button.classList.toggle("has-value", hasValue);
+    if (hasValue) {
+      button.setAttribute("data-draft", String(draft.reps));
+      button.title = `${draft.reps} ready to add`;
+    } else {
+      button.removeAttribute("data-draft");
+      button.removeAttribute("title");
+    }
+  });
+}
+
+function updateAddSubmitLabel() {
+  const submitButton = $("#log-form .submit-button");
+  if (!submitButton) return;
+  if (editingActivityId) {
+    submitButton.textContent = "SAVE CHANGES";
+    return;
+  }
+  const count = draftEntries().filter((entry) => !entry.invalid).length;
+  submitButton.textContent = count > 1 ? `ADD ${count} ACTIVITIES` : "ADD TO THE TOTAL";
+}
+
+function applyDraftToFields(exercise) {
+  const draft = logDrafts[exercise] || { reps: 0, otherActivity: "" };
+  if (exercise === "other") {
+    $("#other-input").value = draft.otherActivity || "";
+    const percent = Math.max(0, Math.min(100, Number(draft.reps) || 0));
+    $("#other-slider").value = percent;
+    setAmount(percent);
+    $("#other-percent").textContent = `${percent}%`;
+    $(".slider-value span").textContent = `= ${percent}% bonus effort added`;
+  } else {
+    setAmount(draft.reps || 0);
+  }
 }
 
 function updateExerciseFields({ keepAmount = false } = {}) {
@@ -1107,17 +1407,19 @@ function updateExerciseFields({ keepAmount = false } = {}) {
   $("#amount-unit").textContent = settings.unit;
   $("#reps-input").setAttribute("aria-label", settings.label);
   $("#other-field").hidden = exercise !== "other";
-  $("#other-input").required = exercise === "other";
+  $("#other-input").required = false;
   $("#counter-field").hidden = exercise === "other";
   $("#other-slider-field").hidden = exercise !== "other";
   quickButtons.forEach((button, index) => {
-    button.dataset.increment = settings.quick[index] || 0;
-    button.textContent = `+${settings.quick[index] || 0}`;
+    const amount = settings.quick[index] || 0;
+    button.hidden = !amount;
+    button.dataset.increment = amount;
+    button.textContent = `+${amount}`;
   });
   if (exercise === "other") {
     const percent = keepAmount
       ? Math.max(0, Math.min(100, Number($("#reps-input").value) || 0))
-      : Number($("#other-slider").value);
+      : 0;
     $("#other-slider").value = percent;
     setAmount(percent);
     $("#other-percent").textContent = `${percent}%`;
@@ -1125,12 +1427,17 @@ function updateExerciseFields({ keepAmount = false } = {}) {
   } else if (!keepAmount) {
     setAmount(0);
   }
+  syncDraftTabIndicators();
+  updateAddSubmitLabel();
 }
 
 exerciseButtons.forEach((button) => {
   button.addEventListener("click", () => {
+    if (button.dataset.exercise === exerciseInput.value) return;
+    saveCurrentDraft();
     exerciseInput.value = button.dataset.exercise;
-    updateExerciseFields();
+    applyDraftToFields(exerciseInput.value);
+    updateExerciseFields({ keepAmount: true });
   });
 });
 
@@ -1153,11 +1460,13 @@ function openLogDialog(personId, options = {}) {
   const activity = options.activity || null;
   const activityDate = options.activityDate || localDateValue();
   editingActivityId = activity?.id || null;
+  logDrafts = emptyLogDrafts();
 
   window.clearTimeout(logSuccessTimer);
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-form").reset();
+  clearLogFormError();
 
   personInput.value = personId;
   const person = getPerson(personId);
@@ -1166,7 +1475,6 @@ function openLogDialog(personId, options = {}) {
   $("#activity-date-input").max = localDateValue();
   $("#activity-date-input").value = activityDate;
   $("#log-dialog-title").textContent = activity ? "+ Edit reps" : "+ Add reps";
-  $("#log-form .submit-button").textContent = activity ? "SAVE CHANGES" : "ADD TO THE TOTAL";
 
   if (activity) {
     exerciseInput.value = activityExercise(activity);
@@ -1174,10 +1482,11 @@ function openLogDialog(personId, options = {}) {
     setAmount(activity.reps);
     updateExerciseFields({ keepAmount: true });
   } else {
+    exerciseInput.value = "pushups";
     updateExerciseFields();
   }
+  updateAddSubmitLabel();
 
-  updateLogDailyGoalCard();
   dialog.classList.remove("is-closing");
   logDialogClosing = false;
   dialog.showModal();
@@ -1212,31 +1521,88 @@ function closeLogDialog() {
   });
 }
 
-function showLogSuccess(personId, reps, exercise) {
+function fireLogConfetti() {
+  if (typeof confetti !== "function") return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const host = $("#success-confetti");
+  host.replaceChildren();
+  const canvas = document.createElement("canvas");
+  host.appendChild(canvas);
+  const fire = confetti.create(canvas, { resize: true, useWorker: true });
+  const colors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1", "#c9b3ff"];
+
+  fire({
+    particleCount: 70,
+    spread: 68,
+    startVelocity: 42,
+    gravity: 1.05,
+    ticks: 200,
+    origin: { x: 0.5, y: 0.55 },
+    colors,
+  });
+  fire({
+    particleCount: 28,
+    angle: 60,
+    spread: 48,
+    startVelocity: 36,
+    origin: { x: 0.12, y: 0.7 },
+    colors,
+  });
+  fire({
+    particleCount: 28,
+    angle: 120,
+    spread: 48,
+    startVelocity: 36,
+    origin: { x: 0.88, y: 0.7 },
+    colors,
+  });
+}
+
+function showLogSuccess(personId, entries) {
   const person = getPerson(personId);
-  const unit = exercise === "planks" ? "SECONDS" : exercise === "other" ? "% GOAL" : "REPS";
-  const confettiColors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1"];
+  const list = Array.isArray(entries) ? entries : [entries];
   window.clearTimeout(logSuccessTimer);
-  $("#success-confetti").innerHTML = Array.from({ length: 20 }, (_, index) => {
-    const direction = index % 2 === 0 ? -1 : 1;
-    const distance = 45 + ((index * 37) % 180);
-    const drop = 110 + ((index * 29) % 150);
-    const rotation = direction * (160 + ((index * 47) % 300));
-    const delay = (index % 5) * 35;
-    return `<i style="--x:${direction * distance}px;--y:${drop}px;--r:${rotation}deg;--delay:${delay}ms;--confetti:${confettiColors[index % confettiColors.length]}"></i>`;
-  }).join("");
-  $("#success-amount").textContent = `+${number.format(reps)}`;
-  $("#success-unit").textContent = unit;
-  $("#success-copy").textContent = `Added to ${person.name.split(" ")[0]}’s personal progress.`;
+
+  if (list.length === 1) {
+    const entry = list[0];
+    const amount =
+      entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
+    const unit = entry.exercise === "planks" ? "MIN" : entry.exercise === "other" ? "% GOAL" : "REPS";
+    $("#success-amount").textContent = `+${amount}`;
+    $("#success-unit").textContent = unit;
+    $("#success-copy").textContent = `Added to ${person.name.split(" ")[0]}’s personal progress.`;
+  } else {
+    $("#success-amount").textContent = `+${list.length}`;
+    $("#success-unit").textContent = "ACTIVITIES";
+    $("#success-copy").textContent = list
+      .map((entry) => {
+        const label =
+          entry.exercise === "pushups"
+            ? "push-ups"
+            : entry.exercise === "squats"
+              ? "squats"
+              : entry.exercise === "planks"
+                ? "plank"
+                : entry.otherActivity || "other";
+        const amount =
+          entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
+        const unit = entry.exercise === "planks" ? "min" : "";
+        return `+${amount}${unit ? ` ${unit}` : ""} ${label}`;
+      })
+      .join(" · ");
+  }
+
   $("#log-form").hidden = true;
   $("#log-success").hidden = false;
   if (!dialog.open) dialog.showModal();
+  fireLogConfetti();
 
   logSuccessTimer = window.setTimeout(() => {
     closeLogDialog().then(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
-  }, 1400);
+  }, 1800);
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
@@ -1296,25 +1662,36 @@ pinDialog.addEventListener("click", (event) => {
 quickButtons.forEach((button) => {
   button.addEventListener("click", () => {
     setAmount(Number($("#reps-input").value) + Number(button.dataset.increment));
+    saveCurrentDraft();
   });
 });
 
-$("#reps-input").addEventListener("blur", (event) => setAmount(event.currentTarget.value));
-$("#activity-date-input").addEventListener("change", () => updateLogDailyGoalCard());
+$("#reps-input").addEventListener("input", () => {
+  saveCurrentDraft();
+});
+$("#reps-input").addEventListener("blur", (event) => {
+  setAmount(event.currentTarget.value);
+  saveCurrentDraft();
+});
+$("#activity-date-input").addEventListener("change", () => {
+  saveCurrentDraft();
+});
+$("#other-input").addEventListener("input", () => {
+  saveCurrentDraft();
+});
 $("#other-slider").addEventListener("input", (event) => {
   const percent = Number(event.currentTarget.value);
   setAmount(percent);
   $("#other-percent").textContent = `${percent}%`;
   $(".slider-value span").textContent = `= ${percent}% bonus effort added`;
+  saveCurrentDraft();
 });
 
 $("#log-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  const reps = Number($("#reps-input").value);
-  const exercise = exerciseInput.value;
-  if (!Number.isInteger(reps) || reps < 1 || reps > 1000) return;
   const personId = personInput.value;
+  clearLogFormError();
   if (personId !== currentPersonId()) {
     closeLogDialog();
     showToast("Open a participant profile before adding activity.");
@@ -1325,30 +1702,85 @@ $("#log-form").addEventListener("submit", async (event) => {
   const activityId = editingActivityId;
   submitButton.disabled = true;
   try {
-    const result = await protectedRequest(
-      "/api/activities",
-      activityId ? "PUT" : "POST",
-      personId,
-      {
+    if (activityId) {
+      const reps = Number($("#reps-input").value);
+      const exercise = exerciseInput.value;
+      if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
+        showToast("Enter an amount from 1 to 1,000.");
+        return;
+      }
+      if (exercise === "other" && !$("#other-input").value.trim()) {
+        showToast("Name your other activity.");
+        return;
+      }
+      const result = await protectedRequest("/api/activities", "PUT", personId, {
         activityId,
         exercise,
         otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
         reps,
         activityDate: $("#activity-date-input").value,
-      },
-    );
-    if (!result) return;
+      });
+      if (!result) return;
 
-    if (activityId) {
       const index = activities.findIndex((entry) => entry.id === activityId);
       if (index >= 0) activities[index] = result.activity;
       else activities.push(result.activity);
-    } else {
-      activities.push(result.activity);
+      participation[personId] = result.status;
+      editingActivityId = null;
+      showLogSuccess(personId, [{ exercise, reps, otherActivity: result.activity.otherActivity || "" }]);
+      render();
+      return;
     }
-    participation[personId] = result.status;
-    editingActivityId = null;
-    showLogSuccess(personId, reps, exercise);
+
+    saveCurrentDraft();
+    const entries = draftEntries();
+    const missingName = entries.find((entry) => entry.invalid === "name");
+    if (missingName) {
+      exerciseInput.value = "other";
+      applyDraftToFields("other");
+      updateExerciseFields({ keepAmount: true });
+      showToast("Name your other activity.");
+      $("#other-input").focus();
+      return;
+    }
+    const toAdd = entries.filter((entry) => !entry.invalid);
+    if (!toAdd.length) {
+      showToast("Add an amount for at least one workout type.");
+      return;
+    }
+
+    const activityDate = $("#activity-date-input").value;
+    const added = [];
+    try {
+      for (const entry of toAdd) {
+        const result = await protectedRequest("/api/activities", "POST", personId, {
+          exercise: entry.exercise,
+          otherActivity: entry.otherActivity,
+          reps: entry.reps,
+          activityDate,
+        });
+        if (!result) {
+          if (added.length) {
+            render();
+            showToast(
+              added.length === 1
+                ? "Saved 1 activity. Remaining entries were not added."
+                : `Saved ${added.length} activities. Remaining entries were not added.`,
+            );
+          }
+          return;
+        }
+        activities.push(result.activity);
+        participation[personId] = result.status;
+        added.push(entry);
+      }
+    } catch (error) {
+      if (added.length) render();
+      throw error;
+    }
+
+    logDrafts = emptyLogDrafts();
+    showLogSuccess(personId, added);
     render();
   } catch (error) {
     showToast(error.message || "Activity could not be saved.");
@@ -1393,7 +1825,7 @@ $("#person-activity-list").addEventListener("click", async (event) => {
     if (!activity || !personId || activity.personId !== personId) return;
     if (
       !window.confirm(
-        `Delete this ${number.format(activity.reps)} ${exerciseUnit(activity).toLowerCase()} ${exerciseName(activity).toLowerCase()} entry?`,
+        `Delete this ${formatActivityAmount(activity)} ${exerciseUnit(activity).toLowerCase()} ${exerciseName(activity).toLowerCase()} entry?`,
       )
     ) {
       return;
@@ -1473,7 +1905,53 @@ $("#ripped-home-link").addEventListener("click", (event) => {
 
 window.addEventListener("hashchange", renderPersonPage);
 
+function isCookiedVisitor() {
+  try {
+    if (localStorage.getItem(LAST_PERSON_KEY)) return true;
+    if (localStorage.getItem(STORAGE_KEY) || localStorage.getItem(STATUS_KEY)) return true;
+    if (localStorage.getItem(RULES_COLLAPSE_KEY) !== null) return true;
+    return crew.some((person) => Boolean(storedPin(person.id)));
+  } catch {
+    return false;
+  }
+}
+
+function rulesShouldStartCollapsed() {
+  try {
+    const saved = localStorage.getItem(RULES_COLLAPSE_KEY);
+    if (saved === "1") return true;
+    if (saved === "0") return false;
+    return isCookiedVisitor();
+  } catch {
+    return false;
+  }
+}
+
+function setRulesCollapsed(collapsed) {
+  const card = $("#rules-card");
+  const toggle = $("#rules-toggle");
+  if (!card || !toggle) return;
+  card.classList.toggle("is-collapsed", collapsed);
+  toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+  toggle.setAttribute("aria-label", collapsed ? "Expand our goal" : "Collapse our goal");
+  try {
+    localStorage.setItem(RULES_COLLAPSE_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Preference is optional if storage is blocked.
+  }
+}
+
+function initRulesCollapse() {
+  const toggle = $("#rules-toggle");
+  if (!toggle) return;
+  setRulesCollapsed(rulesShouldStartCollapsed());
+  toggle.addEventListener("click", () => {
+    setRulesCollapsed(!$("#rules-card")?.classList.contains("is-collapsed"));
+  });
+}
+
 updateExerciseFields();
+initRulesCollapse();
 render();
 loadSharedState();
 tickOldchellaCountdown();
