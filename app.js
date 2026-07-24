@@ -1463,6 +1463,8 @@ exerciseButtons.forEach((button) => {
 const dialog = $("#log-dialog");
 const pinDialog = $("#pin-dialog");
 let logSuccessTimer = null;
+let fireworksTimer = null;
+let fireworksInterval = null;
 let editingActivityId = null;
 let logDialogClosing = false;
 
@@ -1481,9 +1483,10 @@ function openLogDialog(personId, options = {}) {
   editingActivityId = activity?.id || null;
   logDrafts = emptyLogDrafts();
 
-  window.clearTimeout(logSuccessTimer);
+  clearLogCelebrations();
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
+  $("#log-success").classList.remove("is-board-cleared");
   $("#log-form").reset();
   clearLogFormError();
 
@@ -1515,7 +1518,7 @@ function closeLogDialog() {
   if (!dialog.open || logDialogClosing) return Promise.resolve();
   logDialogClosing = true;
   editingActivityId = null;
-  window.clearTimeout(logSuccessTimer);
+  clearLogCelebrations();
   dialog.classList.add("is-closing");
 
   return new Promise((resolve) => {
@@ -1528,6 +1531,7 @@ function closeLogDialog() {
       if (dialog.open) dialog.close();
       logDialogClosing = false;
       $("#log-success").hidden = true;
+      $("#log-success").classList.remove("is-board-cleared");
       $("#log-form").hidden = false;
       resolve();
     };
@@ -1540,15 +1544,38 @@ function closeLogDialog() {
   });
 }
 
-function fireLogConfetti() {
-  if (typeof confetti !== "function") return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+function personDayActivities(personId, dateKey) {
+  return activities.filter(
+    (activity) => activity.personId === personId && activityDateKey(activity) === dateKey,
+  );
+}
+
+function personDayComplete(personId, dateKey) {
+  return dayGoalProgress(personDayActivities(personId, dateKey)).complete;
+}
+
+function clearLogCelebrations() {
+  window.clearTimeout(logSuccessTimer);
+  window.clearTimeout(fireworksTimer);
+  window.clearInterval(fireworksInterval);
+  logSuccessTimer = null;
+  fireworksTimer = null;
+  fireworksInterval = null;
+}
+
+function createLogCelebrationFire() {
+  if (typeof confetti !== "function") return null;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
 
   const host = $("#success-confetti");
   host.replaceChildren();
   const canvas = document.createElement("canvas");
   host.appendChild(canvas);
-  const fire = confetti.create(canvas, { resize: true, useWorker: true });
+  return confetti.create(canvas, { resize: true, useWorker: true });
+}
+
+function fireLogConfetti(fire = createLogCelebrationFire()) {
+  if (!fire) return null;
   const colors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1", "#c9b3ff"];
 
   fire({
@@ -1576,13 +1603,45 @@ function fireLogConfetti() {
     origin: { x: 0.88, y: 0.7 },
     colors,
   });
+  return fire;
 }
 
-function showLogSuccess(personId, entries) {
-  const person = getPerson(personId);
-  const list = Array.isArray(entries) ? entries : [entries];
-  window.clearTimeout(logSuccessTimer);
+function fireLogFireworks(fire) {
+  if (!fire) return;
+  const colors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1", "#c9b3ff", "#4cdf8a"];
+  const duration = 2200;
+  const end = Date.now() + duration;
 
+  fireworksInterval = window.setInterval(() => {
+    if (Date.now() > end) {
+      window.clearInterval(fireworksInterval);
+      fireworksInterval = null;
+      return;
+    }
+    fire({
+      particleCount: 42,
+      startVelocity: 30,
+      spread: 360,
+      ticks: 75,
+      gravity: 0.95,
+      origin: { x: 0.12 + Math.random() * 0.22, y: Math.random() * 0.32 },
+      colors,
+    });
+    fire({
+      particleCount: 42,
+      startVelocity: 30,
+      spread: 360,
+      ticks: 75,
+      gravity: 0.95,
+      origin: { x: 0.66 + Math.random() * 0.22, y: Math.random() * 0.32 },
+      colors,
+    });
+  }, 260);
+}
+
+function fillNormalLogSuccess(personId, list) {
+  const person = getPerson(personId);
+  $("#success-eyebrow").textContent = "ACTIVITY ADDED";
   if (list.length === 1) {
     const entry = list[0];
     const amount =
@@ -1591,37 +1650,62 @@ function showLogSuccess(personId, entries) {
     $("#success-amount").textContent = `+${amount}`;
     $("#success-unit").textContent = unit;
     $("#success-copy").textContent = `Added to ${person.name.split(" ")[0]}’s personal progress.`;
+    return;
+  }
+  $("#success-amount").textContent = `+${list.length}`;
+  $("#success-unit").textContent = "ACTIVITIES";
+  $("#success-copy").textContent = list
+    .map((entry) => {
+      const label =
+        entry.exercise === "pushups"
+          ? "push-ups"
+          : entry.exercise === "squats"
+            ? "squats"
+            : entry.exercise === "planks"
+              ? "plank"
+              : entry.otherActivity || "other";
+      const amount =
+        entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
+      const unit = entry.exercise === "planks" ? "min" : "";
+      return `+${amount}${unit ? ` ${unit}` : ""} ${label}`;
+    })
+    .join(" · ");
+}
+
+function showLogSuccess(personId, entries, options = {}) {
+  const list = Array.isArray(entries) ? entries : [entries];
+  const boardCleared = Boolean(options.boardCleared);
+  clearLogCelebrations();
+
+  const success = $("#log-success");
+  success.classList.toggle("is-board-cleared", boardCleared);
+
+  if (boardCleared) {
+    $("#success-eyebrow").textContent = "BOARD CLEARED";
+    $("#success-amount").textContent = "LET'S F@#%!ING GO!";
+    $("#success-unit").textContent = "PUSH · SQUAT · PLANK";
+    $("#success-copy").textContent =
+      list.length === 1
+        ? "Daily goals locked in. Absolute menace."
+        : `${list.length} activities in — daily goals locked in.`;
   } else {
-    $("#success-amount").textContent = `+${list.length}`;
-    $("#success-unit").textContent = "ACTIVITIES";
-    $("#success-copy").textContent = list
-      .map((entry) => {
-        const label =
-          entry.exercise === "pushups"
-            ? "push-ups"
-            : entry.exercise === "squats"
-              ? "squats"
-              : entry.exercise === "planks"
-                ? "plank"
-                : entry.otherActivity || "other";
-        const amount =
-          entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
-        const unit = entry.exercise === "planks" ? "min" : "";
-        return `+${amount}${unit ? ` ${unit}` : ""} ${label}`;
-      })
-      .join(" · ");
+    fillNormalLogSuccess(personId, list);
   }
 
   $("#log-form").hidden = true;
-  $("#log-success").hidden = false;
+  success.hidden = false;
   if (!dialog.open) dialog.showModal();
-  fireLogConfetti();
+
+  const fire = fireLogConfetti();
+  if (boardCleared && fire) {
+    fireworksTimer = window.setTimeout(() => fireLogFireworks(fire), 650);
+  }
 
   logSuccessTimer = window.setTimeout(() => {
     closeLogDialog().then(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
-  }, 1800);
+  }, boardCleared ? 3600 : 1800);
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
@@ -1732,12 +1816,14 @@ $("#log-form").addEventListener("submit", async (event) => {
         showToast("Name your other activity.");
         return;
       }
+      const activityDate = $("#activity-date-input").value;
+      const wasComplete = personDayComplete(personId, activityDate);
       const result = await protectedRequest("/api/activities", "PUT", personId, {
         activityId,
         exercise,
         otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
         reps,
-        activityDate: $("#activity-date-input").value,
+        activityDate,
       });
       if (!result) return;
 
@@ -1746,7 +1832,12 @@ $("#log-form").addEventListener("submit", async (event) => {
       else activities.push(result.activity);
       participation[personId] = result.status;
       editingActivityId = null;
-      showLogSuccess(personId, [{ exercise, reps, otherActivity: result.activity.otherActivity || "" }]);
+      const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
+      showLogSuccess(
+        personId,
+        [{ exercise, reps, otherActivity: result.activity.otherActivity || "" }],
+        { boardCleared },
+      );
       render();
       return;
     }
@@ -1769,6 +1860,7 @@ $("#log-form").addEventListener("submit", async (event) => {
     }
 
     const activityDate = $("#activity-date-input").value;
+    const wasComplete = personDayComplete(personId, activityDate);
     const added = [];
     try {
       for (const entry of toAdd) {
@@ -1799,7 +1891,8 @@ $("#log-form").addEventListener("submit", async (event) => {
     }
 
     logDrafts = emptyLogDrafts();
-    showLogSuccess(personId, added);
+    const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
+    showLogSuccess(personId, added, { boardCleared });
     render();
   } catch (error) {
     showToast(error.message || "Activity could not be saved.");

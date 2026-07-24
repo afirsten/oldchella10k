@@ -15,9 +15,9 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=140" />
+    <link rel="stylesheet" href="./styles.css?v=142" />
     <script src="./vendor/confetti.browser.min.js"></script>
-    <script src="./app.js?v=106" defer></script>
+    <script src="./app.js?v=107" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -280,22 +280,34 @@
             <div>
               <span>PUSH-UPS</span>
               <strong id="person-pushups-total">0</strong>
-              <span class="daily-avg">DAILY AVG <strong id="person-avg-pushups">0</strong></span>
+              <span class="daily-avg">
+                <span class="daily-avg-label">DAILY AVG</span>
+                <strong id="person-avg-pushups">0</strong>
+              </span>
             </div>
             <div>
               <span>SQUATS</span>
               <strong id="person-squats-total">0</strong>
-              <span class="daily-avg">DAILY AVG <strong id="person-avg-squats">0</strong></span>
+              <span class="daily-avg">
+                <span class="daily-avg-label">DAILY AVG</span>
+                <strong id="person-avg-squats">0</strong>
+              </span>
             </div>
             <div>
               <span>PLANKS</span>
               <strong id="person-plank-minutes">0</strong>
-              <span class="daily-avg">DAILY AVG <strong id="person-avg-planks">0</strong></span>
+              <span class="daily-avg">
+                <span class="daily-avg-label">DAILY AVG</span>
+                <strong id="person-avg-planks">0</strong>
+              </span>
             </div>
             <div>
               <span>WORKOUTS</span>
               <strong id="person-other-days">0</strong>
-              <span class="daily-avg">DAILY AVG <strong id="person-avg-other">0</strong></span>
+              <span class="daily-avg">
+                <span class="daily-avg-label">DAILY AVG</span>
+                <strong id="person-avg-other">0</strong>
+              </span>
             </div>
           </div>
 
@@ -391,8 +403,8 @@
       </form>
       <div class="log-success" id="log-success" hidden>
         <div class="success-confetti" id="success-confetti" aria-hidden="true"></div>
-        <div class="success-check" aria-hidden="true">✓</div>
-        <p>ACTIVITY ADDED</p>
+        <div class="success-check" id="success-check" aria-hidden="true">✓</div>
+        <p id="success-eyebrow">ACTIVITY ADDED</p>
         <strong id="success-amount">+0</strong>
         <span id="success-unit">REPS</span>
         <small id="success-copy">Added to your personal progress.</small>

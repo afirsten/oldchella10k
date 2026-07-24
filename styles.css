@@ -1398,14 +1398,23 @@ a.activity-item:focus-visible {
   letter-spacing: -.04em;
 }
 .personal-breakdown .daily-avg {
-  display: inline-flex;
-  gap: .35em;
-  align-items: baseline;
-  margin-top: 4px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: .06em;
+}
+.personal-breakdown .daily-avg-label {
+  color: var(--quiet);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
 }
 .personal-breakdown .daily-avg strong {
   color: var(--ink);
@@ -1539,6 +1548,42 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   margin-top: 28px;
   color: var(--muted);
   font-size: 13px;
+}
+.log-success.is-board-cleared {
+  min-height: 470px;
+  padding-inline: 20px;
+}
+.log-success.is-board-cleared .success-check {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 18px;
+  border-color: var(--pink);
+  color: var(--lime);
+  font-size: 34px;
+  animation: board-clear-pop 520ms cubic-bezier(.16,.9,.3,1);
+}
+.log-success.is-board-cleared #success-eyebrow {
+  margin-bottom: 12px;
+  color: var(--lavender);
+  font-size: 11px;
+  letter-spacing: .16em;
+}
+.log-success.is-board-cleared #success-amount {
+  max-width: 11ch;
+  color: var(--lime);
+  font-size: clamp(30px, 9vw, 52px);
+  line-height: 1.02;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+}
+.log-success.is-board-cleared #success-unit {
+  margin-top: 12px;
+  color: var(--pink);
+  font-size: 10px;
+  letter-spacing: .14em;
+}
+.log-success.is-board-cleared #success-copy {
+  margin-top: 22px;
 }
 .pin-dialog {
   z-index: 40;
@@ -2074,7 +2119,13 @@ input:focus, select:focus {
   from { opacity: 1; }
   to { opacity: 0; }
 }
+@keyframes board-clear-pop {
+  0% { opacity: 0; transform: scale(.55); }
+  55% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
 @media (prefers-reduced-motion: reduce) {
+  .log-success.is-board-cleared .success-check { animation: none; }
   #log-dialog[open]:not(.is-closing),
   #log-dialog[open]:not(.is-closing)::backdrop,
   #log-dialog.is-closing,
