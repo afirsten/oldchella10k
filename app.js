@@ -1548,6 +1548,7 @@ function openLogDialog(personId, options = {}) {
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-success").classList.remove("is-board-cleared");
+  $("#log-success").style.minHeight = "";
   $("#log-form").reset();
   clearLogFormError();
 
@@ -1593,6 +1594,7 @@ function closeLogDialog() {
       logDialogClosing = false;
       $("#log-success").hidden = true;
       $("#log-success").classList.remove("is-board-cleared");
+      $("#log-success").style.minHeight = "";
       $("#log-form").hidden = false;
       resolve();
     };
@@ -1622,6 +1624,8 @@ function clearLogCelebrations() {
   logSuccessTimer = null;
   fireworksTimer = null;
   fireworksInterval = null;
+  dialog?.classList.remove("is-fireworks");
+  $("#log-success")?.classList.remove("is-fireworks");
 }
 
 function createLogCelebrationFire() {
@@ -1669,6 +1673,8 @@ function fireLogConfetti(fire = createLogCelebrationFire()) {
 
 function fireLogFireworks(fire) {
   if (!fire) return;
+  dialog.classList.add("is-fireworks");
+  $("#log-success")?.classList.add("is-fireworks");
   const colors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1", "#c9b3ff", "#4cdf8a"];
   const duration = 2200;
   const end = Date.now() + duration;
@@ -2182,7 +2188,11 @@ function showLogSuccess(personId, entries, options = {}) {
   const activityDate = options.activityDate || localDateValue();
   clearLogCelebrations();
 
+  const form = $("#log-form");
   const success = $("#log-success");
+  // Match the add-reps sheet height so success doesn't shrink the dialog.
+  const formHeight = form?.offsetHeight || 0;
+  success.style.minHeight = formHeight ? `${formHeight}px` : "";
   success.classList.toggle("is-board-cleared", boardCleared);
   pendingShareGoal = boardCleared ? { personId, activityDate } : null;
   pendingShareBlob = null;
@@ -2201,7 +2211,7 @@ function showLogSuccess(personId, entries, options = {}) {
     fillNormalLogSuccess(personId, list);
   }
 
-  $("#log-form").hidden = true;
+  form.hidden = true;
   success.hidden = false;
   if (!dialog.open) dialog.showModal();
 
