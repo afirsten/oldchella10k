@@ -1720,8 +1720,9 @@ function revealDailyPulseAfterLog() {
     if (pendingPulseReveal?.boardCleared) pulse.classList.add("is-board-burst");
     window.setTimeout(() => {
       pulse.classList.remove("is-revealing", "is-animating", "is-board-burst");
+      fills.forEach((fill) => fill.classList.remove("is-maxed"));
       pendingPulseReveal = null;
-    }, reduceMotion ? 0 : 1600);
+    }, reduceMotion ? 0 : 3400);
   };
 
   if (reduceMotion) {
@@ -1775,7 +1776,7 @@ function showLogSuccess(personId, entries, options = {}) {
     closeLogDialog().then(() => {
       scrollPersonLogButtonIntoView();
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 480);
+      window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
     });
   }, boardCleared ? 3600 : 1800);
 }

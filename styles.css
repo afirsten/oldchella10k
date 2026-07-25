@@ -1761,36 +1761,57 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   will-change: transform, opacity;
 }
 .history-day.is-today .daily-pulse.is-revealing:not(.is-compact) {
-  opacity: .55;
-  transform: translateY(32px);
+  opacity: .45;
+  transform: translateY(40px);
 }
 .history-day.is-today .daily-pulse.is-revealing.is-animating:not(.is-compact) {
   opacity: 1;
   transform: translateY(0);
   transition:
-    transform 720ms cubic-bezier(.16,.84,.3,1),
-    opacity 620ms ease;
+    transform 1100ms cubic-bezier(.16,.84,.3,1),
+    opacity 900ms ease;
+}
+.history-day.is-today .daily-pulse.is-animating .daily-pulse-track {
+  height: 10px;
+  transition: height 500ms ease;
 }
 .history-day.is-today .daily-pulse.is-animating .daily-pulse-track i {
-  transition: width 980ms cubic-bezier(.12,.8,.2,1);
+  transition: width 1600ms cubic-bezier(.12,.78,.18,1);
 }
 .history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-pushups .daily-pulse-track i {
-  transition-delay: 40ms;
+  transition-delay: 80ms;
 }
 .history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-squats .daily-pulse-track i {
-  transition-delay: 120ms;
+  transition-delay: 220ms;
 }
 .history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-planks .daily-pulse-track i {
-  transition-delay: 200ms;
+  transition-delay: 360ms;
 }
 .history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-other .daily-pulse-track i {
-  transition-delay: 280ms;
+  transition-delay: 500ms;
+}
+.daily-pulse-row:has(.daily-pulse-track i.is-maxed) .daily-pulse-meta strong {
+  animation: pulse-meta-max 1400ms ease 1550ms both;
+}
+.daily-pulse-track:has(i.is-maxed) {
+  overflow: visible;
+  background: rgba(255,255,255,.12);
 }
 .daily-pulse-track i.is-maxed {
-  animation: pulse-bar-max 780ms cubic-bezier(.16,.9,.3,1) 900ms both;
+  position: relative;
+  animation: pulse-bar-max 1600ms cubic-bezier(.16,.9,.3,1) 1500ms both;
+}
+.daily-pulse-track i.is-maxed::after {
+  content: "";
+  position: absolute;
+  inset: -3px -4px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  opacity: 0;
+  animation: pulse-bar-shine 1200ms ease 1650ms both;
 }
 .daily-pulse.is-board-burst {
-  animation: pulse-board-burst 900ms ease 200ms both;
+  animation: pulse-board-burst 1800ms ease 400ms both;
 }
 .daily-pulse-row.is-pushups .daily-pulse-track i {
   background: linear-gradient(90deg, #ff2d78, #ff6b9d);
@@ -2161,21 +2182,79 @@ input:focus, select:focus {
   100% { opacity: 1; transform: scale(1); }
 }
 @keyframes pulse-bar-max {
-  0% { filter: brightness(1); box-shadow: none; }
-  35% {
-    filter: brightness(1.45);
-    box-shadow: 0 0 14px rgba(245, 200, 66, .55);
+  0% {
+    filter: brightness(1);
+    box-shadow: none;
+    transform: scaleY(1);
   }
-  100% { filter: brightness(1.08); box-shadow: 0 0 8px rgba(76, 223, 138, .35); }
+  18% {
+    filter: brightness(1.7);
+    box-shadow:
+      0 0 0 2px rgba(255,255,255,.35),
+      0 0 22px rgba(245,200,66,.75);
+    transform: scaleY(1.85);
+  }
+  42% {
+    filter: brightness(1.35);
+    box-shadow:
+      0 0 0 1px rgba(76,223,138,.45),
+      0 0 18px rgba(76,223,138,.55);
+    transform: scaleY(1.35);
+  }
+  68% {
+    filter: brightness(1.55);
+    box-shadow: 0 0 20px rgba(245,200,66,.5);
+    transform: scaleY(1.55);
+  }
+  100% {
+    filter: brightness(1.12);
+    box-shadow: 0 0 10px rgba(76,223,138,.4);
+    transform: scaleY(1);
+  }
+}
+@keyframes pulse-bar-shine {
+  0% { opacity: 0; transform: translateX(-120%); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(120%); }
+}
+@keyframes pulse-meta-max {
+  0% { color: var(--ink); text-shadow: none; transform: scale(1); }
+  35% {
+    color: var(--lime);
+    text-shadow: 0 0 12px rgba(76,223,138,.55);
+    transform: scale(1.08);
+  }
+  100% {
+    color: var(--ink);
+    text-shadow: none;
+    transform: scale(1);
+  }
 }
 @keyframes pulse-board-burst {
-  0% { box-shadow: 0 0 0 rgba(76,223,138,0); }
-  40% { box-shadow: 0 0 28px rgba(76,223,138,.35); }
-  100% { box-shadow: 0 0 0 rgba(76,223,138,0); }
+  0% {
+    border-color: rgba(201,179,255,.28);
+    box-shadow: 0 0 0 rgba(76,223,138,0);
+  }
+  30% {
+    border-color: rgba(76,223,138,.75);
+    box-shadow:
+      0 0 0 1px rgba(76,223,138,.35),
+      0 0 36px rgba(76,223,138,.45);
+  }
+  65% {
+    border-color: rgba(245,200,66,.55);
+    box-shadow: 0 0 28px rgba(245,200,66,.35);
+  }
+  100% {
+    border-color: rgba(76,223,138,.4);
+    box-shadow: 0 0 0 rgba(76,223,138,0);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .log-success.is-board-cleared .success-check { animation: none; }
   .daily-pulse-track i.is-maxed,
+  .daily-pulse-track i.is-maxed::after,
+  .daily-pulse-row:has(.daily-pulse-track i.is-maxed) .daily-pulse-meta strong,
   .daily-pulse.is-board-burst { animation: none; }
   .history-day.is-today .daily-pulse.is-revealing:not(.is-compact),
   .history-day.is-today .daily-pulse.is-revealing.is-animating:not(.is-compact) {
@@ -2183,6 +2262,7 @@ input:focus, select:focus {
     transform: none;
     transition: none;
   }
+  .history-day.is-today .daily-pulse.is-animating .daily-pulse-track,
   .history-day.is-today .daily-pulse.is-animating .daily-pulse-track i {
     transition: none;
   }
