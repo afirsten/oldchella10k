@@ -1199,9 +1199,19 @@ function renderPersonPage({ skipScroll = false } = {}) {
     button.classList.toggle("is-selected", button.dataset.participation === personStats.status);
   });
   const showProgress = history.length > 0 || personStats.status === "in";
+  const todayKey = localDateValue();
   $(".personal-total").hidden = !showProgress;
   $(".personal-breakdown").hidden = !showProgress;
   $("#person-log-button").hidden = personStats.status !== "in";
+  const todayComplete = personDayComplete(personId, todayKey);
+  const personShare = $("#person-share-whatsapp");
+  if (personShare) {
+    personShare.hidden = !(personStats.status === "in" && todayComplete);
+    personShare.dataset.personId = personId;
+    personShare.dataset.date = todayKey;
+    personShare.disabled = false;
+    personShare.textContent = "Share to WhatsApp";
+  }
   $("#person-total").textContent = number.format(personStats.total);
   $("#person-total-label").textContent =
     personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "PUSH-UP COUNT";
@@ -1242,7 +1252,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
     Math.round(averageFor("other", personStats.metrics.other)),
   );
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
-  const todayKey = localDateValue();
   const historyGroups = [...historyByDate];
   if (showProgress && !historyGroups.some((group) => group.dateKey === todayKey)) {
     historyGroups.unshift({
@@ -1703,7 +1712,9 @@ function fillNormalLogSuccess(personId, list) {
 }
 
 function scrollPersonLogButtonIntoView() {
-  const button = $("#person-log-button");
+  const share = $("#person-share-whatsapp");
+  const button =
+    share && !share.hidden ? share : $("#person-log-button");
   if (!button || button.hidden) {
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
@@ -2192,7 +2203,9 @@ function showLogSuccess(personId, entries, options = {}) {
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
 document.addEventListener("click", async (event) => {
-  const shareButton = event.target.closest(".daily-pulse-share, #share-whatsapp-button");
+  const shareButton = event.target.closest(
+    ".daily-pulse-share, #share-whatsapp-button, #person-share-whatsapp",
+  );
   if (!shareButton) return;
   const personId = shareButton.dataset.personId || pendingShareGoal?.personId;
   const activityDate = shareButton.dataset.date || pendingShareGoal?.activityDate;

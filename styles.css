@@ -1439,6 +1439,11 @@ a.activity-item:focus-visible {
   letter-spacing: .1em;
   cursor: pointer;
 }
+.person-share-whatsapp {
+  width: 100%;
+  max-width: none;
+  margin-top: 10px;
+}
 .person-log-label {
   font-weight: 800;
 }
