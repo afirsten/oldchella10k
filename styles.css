@@ -1752,9 +1752,45 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 .daily-pulse-track i {
   display: block;
   height: 100%;
+  transform-origin: left center;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--terra), var(--lime));
-  transition: width 420ms ease;
+  transition: none;
+}
+.history-day.is-today .daily-pulse:not(.is-compact) {
+  will-change: transform, opacity;
+}
+.history-day.is-today .daily-pulse.is-revealing:not(.is-compact) {
+  opacity: .55;
+  transform: translateY(32px);
+}
+.history-day.is-today .daily-pulse.is-revealing.is-animating:not(.is-compact) {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    transform 720ms cubic-bezier(.16,.84,.3,1),
+    opacity 620ms ease;
+}
+.history-day.is-today .daily-pulse.is-animating .daily-pulse-track i {
+  transition: width 980ms cubic-bezier(.12,.8,.2,1);
+}
+.history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-pushups .daily-pulse-track i {
+  transition-delay: 40ms;
+}
+.history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-squats .daily-pulse-track i {
+  transition-delay: 120ms;
+}
+.history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-planks .daily-pulse-track i {
+  transition-delay: 200ms;
+}
+.history-day.is-today .daily-pulse.is-animating .daily-pulse-row.is-other .daily-pulse-track i {
+  transition-delay: 280ms;
+}
+.daily-pulse-track i.is-maxed {
+  animation: pulse-bar-max 780ms cubic-bezier(.16,.9,.3,1) 900ms both;
+}
+.daily-pulse.is-board-burst {
+  animation: pulse-board-burst 900ms ease 200ms both;
 }
 .daily-pulse-row.is-pushups .daily-pulse-track i {
   background: linear-gradient(90deg, #ff2d78, #ff6b9d);
@@ -2124,8 +2160,32 @@ input:focus, select:focus {
   55% { opacity: 1; transform: scale(1.12); }
   100% { opacity: 1; transform: scale(1); }
 }
+@keyframes pulse-bar-max {
+  0% { filter: brightness(1); box-shadow: none; }
+  35% {
+    filter: brightness(1.45);
+    box-shadow: 0 0 14px rgba(245, 200, 66, .55);
+  }
+  100% { filter: brightness(1.08); box-shadow: 0 0 8px rgba(76, 223, 138, .35); }
+}
+@keyframes pulse-board-burst {
+  0% { box-shadow: 0 0 0 rgba(76,223,138,0); }
+  40% { box-shadow: 0 0 28px rgba(76,223,138,.35); }
+  100% { box-shadow: 0 0 0 rgba(76,223,138,0); }
+}
 @media (prefers-reduced-motion: reduce) {
   .log-success.is-board-cleared .success-check { animation: none; }
+  .daily-pulse-track i.is-maxed,
+  .daily-pulse.is-board-burst { animation: none; }
+  .history-day.is-today .daily-pulse.is-revealing:not(.is-compact),
+  .history-day.is-today .daily-pulse.is-revealing.is-animating:not(.is-compact) {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .history-day.is-today .daily-pulse.is-animating .daily-pulse-track i {
+    transition: none;
+  }
   #log-dialog[open]:not(.is-closing),
   #log-dialog[open]:not(.is-closing)::backdrop,
   #log-dialog.is-closing,

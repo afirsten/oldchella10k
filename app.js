@@ -111,6 +111,7 @@ function loadActivities() {
 let activities = loadActivities();
 let participation = {};
 let apiAvailable = false;
+let pendingPulseReveal = null;
 try {
   participation = JSON.parse(localStorage.getItem(STATUS_KEY) || "{}");
 } catch {
@@ -248,6 +249,8 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
   const { totals, percents, complete } = dayGoalProgress(dayActivities);
   const { lines } = dayGoalProgressLines(dayActivities);
   const boardScore = Math.round((percents.pushups + percents.squats + percents.planks) / 3);
+  const fromPercents =
+    !compact && pendingPulseReveal?.previousPercents ? pendingPulseReveal.previousPercents : null;
   const meters = [
     {
       key: "pushups",
@@ -287,27 +290,31 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
         `;
       })();
 
+  const revealClass = fromPercents ? " is-revealing" : "";
+
   return `
-    <div class="daily-goals-card daily-pulse${compact ? " is-compact" : ""}${complete ? " is-complete" : ""}" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
+    <div class="daily-goals-card daily-pulse${compact ? " is-compact" : ""}${complete ? " is-complete" : ""}${revealClass}" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
       <div class="daily-goals-card-head">
         <p class="label">DAILY PULSE</p>
         <span class="daily-goals-complete">${complete ? "BOARD CLEARED" : `${boardScore}% LOCKED IN`}</span>
       </div>
       <div class="daily-pulse-meters">
         ${meters
-          .map(
-            (meter) => `
+          .map((meter) => {
+            const to = meter.percent;
+            const from = fromPercents ? Math.min(to, Number(fromPercents[meter.key]) || 0) : to;
+            return `
               <div class="daily-pulse-row is-${meter.key}">
                 <div class="daily-pulse-meta">
                   <span>${meter.label}</span>
                   <strong>${escapeHtml(meter.value)}</strong>
                 </div>
                 <div class="daily-pulse-track" aria-hidden="true">
-                  <i style="width:${meter.percent}%"></i>
+                  <i style="width:${from}%" data-from="${from}" data-to="${to}"></i>
                 </div>
               </div>
-            `,
-          )
+            `;
+          })
           .join("")}
       </div>
       ${quote}
@@ -1672,6 +1679,69 @@ function fillNormalLogSuccess(personId, list) {
     .join(" · ");
 }
 
+function scrollPersonLogButtonIntoView() {
+  const button = $("#person-log-button");
+  if (!button || button.hidden) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const navHeight = $(".site-nav")?.offsetHeight || 64;
+  const top = Math.max(0, button.getBoundingClientRect().top + window.scrollY - navHeight - 10);
+  window.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+}
+
+function revealDailyPulseAfterLog() {
+  const pulse = $(".history-day.is-today .daily-pulse:not(.is-compact)");
+  if (!pulse) {
+    pendingPulseReveal = null;
+    return;
+  }
+
+  const fills = [...pulse.querySelectorAll(".daily-pulse-track i")];
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  fills.forEach((fill) => {
+    const from = Number(fill.dataset.from) || 0;
+    fill.style.width = `${from}%`;
+  });
+
+  pulse.classList.add("is-revealing");
+  // Force layout so the slide/fill transitions run from the starting state.
+  void pulse.offsetWidth;
+
+  const run = () => {
+    pulse.classList.add("is-animating");
+    fills.forEach((fill) => {
+      const to = Number(fill.dataset.to) || 0;
+      fill.style.width = `${to}%`;
+      fill.classList.toggle("is-maxed", to >= 100);
+    });
+    if (pendingPulseReveal?.boardCleared) pulse.classList.add("is-board-burst");
+    window.setTimeout(() => {
+      pulse.classList.remove("is-revealing", "is-animating", "is-board-burst");
+      pendingPulseReveal = null;
+    }, reduceMotion ? 0 : 1600);
+  };
+
+  if (reduceMotion) {
+    run();
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(run);
+  });
+}
+
+function queuePulseReveal(personId, activityDate, boardCleared, previousPercents) {
+  pendingPulseReveal = {
+    personId,
+    activityDate,
+    boardCleared,
+    previousPercents: { ...previousPercents },
+  };
+}
+
 function showLogSuccess(personId, entries, options = {}) {
   const list = Array.isArray(entries) ? entries : [entries];
   const boardCleared = Boolean(options.boardCleared);
@@ -1703,7 +1773,9 @@ function showLogSuccess(personId, entries, options = {}) {
 
   logSuccessTimer = window.setTimeout(() => {
     closeLogDialog().then(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      scrollPersonLogButtonIntoView();
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 480);
     });
   }, boardCleared ? 3600 : 1800);
 }
@@ -1817,6 +1889,7 @@ $("#log-form").addEventListener("submit", async (event) => {
         return;
       }
       const activityDate = $("#activity-date-input").value;
+      const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
       const wasComplete = personDayComplete(personId, activityDate);
       const result = await protectedRequest("/api/activities", "PUT", personId, {
         activityId,
@@ -1833,6 +1906,7 @@ $("#log-form").addEventListener("submit", async (event) => {
       participation[personId] = result.status;
       editingActivityId = null;
       const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
+      queuePulseReveal(personId, activityDate, boardCleared, previousPercents);
       showLogSuccess(
         personId,
         [{ exercise, reps, otherActivity: result.activity.otherActivity || "" }],
@@ -1860,6 +1934,7 @@ $("#log-form").addEventListener("submit", async (event) => {
     }
 
     const activityDate = $("#activity-date-input").value;
+    const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
     const wasComplete = personDayComplete(personId, activityDate);
     const added = [];
     try {
@@ -1892,6 +1967,7 @@ $("#log-form").addEventListener("submit", async (event) => {
 
     logDrafts = emptyLogDrafts();
     const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
+    queuePulseReveal(personId, activityDate, boardCleared, previousPercents);
     showLogSuccess(personId, added, { boardCleared });
     render();
   } catch (error) {
