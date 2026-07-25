@@ -1984,7 +1984,7 @@ async function buildDailyGoalMetImage(personId, dateKey) {
   const dayActivities = personDayActivities(personId, dateKey);
   const { totals, percents } = dayGoalProgress(dayActivities);
   const width = 1080;
-  const height = 1350;
+  const height = 1450;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -1999,9 +1999,11 @@ async function buildDailyGoalMetImage(personId, dateKey) {
 
   // Card panel
   const cardX = 64;
-  const cardY = 96;
+  const cardY = 72;
+  const cardPad = 48;
+  const footerH = 118;
   const cardW = width - 128;
-  const cardH = height - 220;
+  const cardH = height - cardY - footerH;
   roundRectPath(ctx, cardX, cardY, cardW, cardH, 36);
   ctx.fillStyle = "rgba(18, 10, 8, 0.92)";
   ctx.fill();
@@ -2019,8 +2021,8 @@ async function buildDailyGoalMetImage(personId, dateKey) {
 
   // Avatar top-left
   const avatarSize = 132;
-  const avatarX = cardX + 48;
-  const avatarY = cardY + 48;
+  const avatarX = cardX + cardPad;
+  const avatarY = cardY + cardPad;
   try {
     const avatar = await loadShareImage(person.image);
     ctx.save();
@@ -2145,11 +2147,11 @@ async function buildDailyGoalMetImage(personId, dateKey) {
 
   // Challenge totals (personal breakdown)
   const stats = personChallengeStats(personId);
-  const statsX = cardX + 48;
-  const statsW = cardW - 96;
-  const statsTop = y + 170 + 40;
-  const statsBottom = cardY + cardH - 48;
-  const statsH = Math.max(240, statsBottom - statsTop);
+  const statsX = cardX + cardPad;
+  const statsW = cardW - cardPad * 2;
+  const statsTop = y + 170 + 36;
+  const statsBottom = cardY + cardH - cardPad;
+  const statsH = Math.max(0, statsBottom - statsTop);
   roundRectPath(ctx, statsX, statsTop, statsW, statsH, 28);
   ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
   ctx.fill();
@@ -2250,10 +2252,10 @@ async function buildDailyGoalMetImage(personId, dateKey) {
   ctx.fillStyle = "#7a5c48";
   ctx.font = "700 24px Manrope, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText(dateLabel.toUpperCase(), width / 2, height - 78);
+  ctx.fillText(dateLabel.toUpperCase(), width / 2, height - 70);
   ctx.fillStyle = "#c4a882";
   ctx.font = "700 26px Manrope, sans-serif";
-  ctx.fillText("rippedchella.vercel.app", width / 2, height - 42);
+  ctx.fillText("rippedchella.vercel.app", width / 2, height - 36);
   ctx.textAlign = "left";
 
   return new Promise((resolve, reject) => {
