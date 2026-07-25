@@ -1704,16 +1704,29 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 .daily-pulse-banner span {
   display: block;
 }
-.history-day.is-today .daily-pulse.is-revealing:not(.is-animating) .daily-pulse-banner {
+.daily-pulse-banner.is-entering {
+  max-height: 0;
+  margin: 0;
+  padding-block: 0;
+  overflow: hidden;
   opacity: 0;
-  transform: translateY(-8px);
+  border-color: transparent;
+  transform: translateY(-6px);
 }
-.history-day.is-today .daily-pulse.is-revealing.is-animating .daily-pulse-banner {
+.daily-pulse-banner.is-entering.is-in {
+  max-height: 48px;
+  margin-bottom: 12px;
+  padding-block: 11px;
   opacity: 1;
+  border-color: rgba(76,223,138,.5);
   transform: translateY(0);
   transition:
-    opacity 900ms ease 750ms,
-    transform 1000ms cubic-bezier(.16,.84,.3,1) 750ms;
+    max-height 900ms cubic-bezier(.16,.84,.3,1) 650ms,
+    margin 900ms ease 650ms,
+    padding 900ms ease 650ms,
+    opacity 850ms ease 750ms,
+    transform 900ms cubic-bezier(.16,.84,.3,1) 650ms,
+    border-color 0ms linear 650ms;
 }
 .daily-goals-card-head {
   display: flex;
@@ -2281,9 +2294,13 @@ input:focus, select:focus {
     transform: none;
     transition: none;
   }
-  .history-day.is-today .daily-pulse.is-revealing:not(.is-animating) .daily-pulse-banner,
-  .history-day.is-today .daily-pulse.is-revealing.is-animating .daily-pulse-banner {
+  .daily-pulse-banner.is-entering,
+  .daily-pulse-banner.is-entering.is-in {
+    max-height: none;
+    margin-bottom: 12px;
+    padding-block: 11px;
     opacity: 1;
+    border-color: rgba(76,223,138,.5);
     transform: none;
     transition: none;
   }

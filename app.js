@@ -291,8 +291,9 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
       })();
 
   const revealClass = fromPercents ? " is-revealing" : "";
+  // During post-submit reveal, inject the banner when animation starts so no blank gap sits empty.
   const banner =
-    complete && !compact
+    complete && !compact && !fromPercents
       ? `<div class="daily-pulse-banner" role="status"><span>Daily goal met</span></div>`
       : "";
 
@@ -1711,14 +1712,6 @@ function revealDailyPulseAfterLog() {
 
   if (showBanner) {
     pulse.classList.add("is-complete");
-    let banner = pulse.querySelector(".daily-pulse-banner");
-    if (!banner) {
-      banner = document.createElement("div");
-      banner.className = "daily-pulse-banner";
-      banner.setAttribute("role", "status");
-      banner.innerHTML = "<span>Daily goal met</span>";
-      pulse.insertBefore(banner, pulse.firstChild);
-    }
   }
 
   fills.forEach((fill) => {
@@ -1731,6 +1724,18 @@ function revealDailyPulseAfterLog() {
   void pulse.offsetWidth;
 
   const run = () => {
+    if (showBanner) {
+      let banner = pulse.querySelector(".daily-pulse-banner");
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.className = "daily-pulse-banner is-entering";
+        banner.setAttribute("role", "status");
+        banner.innerHTML = "<span>Daily goal met</span>";
+        pulse.insertBefore(banner, pulse.firstChild);
+        void banner.offsetWidth;
+      }
+      banner.classList.add("is-in");
+    }
     pulse.classList.add("is-animating");
     fills.forEach((fill) => {
       const to = Number(fill.dataset.to) || 0;
@@ -1740,6 +1745,8 @@ function revealDailyPulseAfterLog() {
     if (pendingPulseReveal?.boardCleared) pulse.classList.add("is-board-burst");
     window.setTimeout(() => {
       pulse.classList.remove("is-revealing", "is-animating", "is-board-burst");
+      const banner = pulse.querySelector(".daily-pulse-banner");
+      if (banner) banner.classList.remove("is-entering", "is-in");
       fills.forEach((fill) => fill.classList.remove("is-maxed"));
       pendingPulseReveal = null;
     }, reduceMotion ? 0 : 3400);
