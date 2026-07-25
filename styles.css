@@ -1930,6 +1930,7 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   gap: 4px;
   align-items: center;
   justify-content: center;
+  min-width: 0;
   padding: 0 4px;
   border: 0;
   border-radius: 999px;
@@ -1937,6 +1938,7 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   color: var(--quiet);
   font: 700 9px/1 "Manrope", sans-serif;
   letter-spacing: .05em;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
