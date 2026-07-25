@@ -1800,19 +1800,30 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   transition: none;
 }
 .history-day.is-today .daily-pulse:not(.is-compact) {
+  position: relative;
+  z-index: 1;
   overflow: hidden;
+  isolation: isolate;
   will-change: transform, opacity;
 }
 .history-day.is-today .daily-pulse.is-revealing:not(.is-compact) {
   opacity: .45;
+  /* Keep layout room for the visual slide so activity rows aren't covered. */
+  margin-bottom: 40px;
   transform: translateY(40px);
 }
 .history-day.is-today .daily-pulse.is-revealing.is-animating:not(.is-compact) {
   opacity: 1;
+  margin-bottom: 0;
   transform: translateY(0);
   transition:
     transform 1100ms cubic-bezier(.16,.84,.3,1),
+    margin-bottom 1100ms cubic-bezier(.16,.84,.3,1),
     opacity 900ms ease;
+}
+.history-day.is-today .history-day-activities {
+  position: relative;
+  z-index: 0;
 }
 .history-day.is-today .daily-pulse.is-animating .daily-pulse-track {
   height: 10px;
@@ -2293,6 +2304,7 @@ input:focus, select:focus {
   .history-day.is-today .daily-pulse.is-revealing:not(.is-compact),
   .history-day.is-today .daily-pulse.is-revealing.is-animating:not(.is-compact) {
     opacity: 1;
+    margin-bottom: 0;
     transform: none;
     transition: none;
   }
