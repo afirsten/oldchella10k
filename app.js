@@ -1203,15 +1203,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $(".personal-total").hidden = !showProgress;
   $(".personal-breakdown").hidden = !showProgress;
   $("#person-log-button").hidden = personStats.status !== "in";
-  const todayComplete = personDayComplete(personId, todayKey);
-  const personShare = $("#person-share-whatsapp");
-  if (personShare) {
-    personShare.hidden = !(personStats.status === "in" && todayComplete);
-    personShare.dataset.personId = personId;
-    personShare.dataset.date = todayKey;
-    personShare.disabled = false;
-    personShare.textContent = "Share to WhatsApp";
-  }
   $("#person-total").textContent = number.format(personStats.total);
   $("#person-total-label").textContent =
     personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "PUSH-UP COUNT";
@@ -1514,12 +1505,6 @@ function openLogDialog(personId, options = {}) {
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-success").classList.remove("is-board-cleared");
-  const shareButton = $("#share-whatsapp-button");
-  if (shareButton) {
-    shareButton.hidden = true;
-    shareButton.disabled = false;
-    shareButton.textContent = "Share to WhatsApp";
-  }
   $("#log-form").reset();
   clearLogFormError();
 
@@ -1565,12 +1550,6 @@ function closeLogDialog() {
       logDialogClosing = false;
       $("#log-success").hidden = true;
       $("#log-success").classList.remove("is-board-cleared");
-      const shareButton = $("#share-whatsapp-button");
-      if (shareButton) {
-        shareButton.hidden = true;
-        shareButton.disabled = false;
-        shareButton.textContent = "Share to WhatsApp";
-      }
       $("#log-form").hidden = false;
       resolve();
     };
@@ -1712,9 +1691,7 @@ function fillNormalLogSuccess(personId, list) {
 }
 
 function scrollPersonLogButtonIntoView() {
-  const share = $("#person-share-whatsapp");
-  const button =
-    share && !share.hidden ? share : $("#person-log-button");
+  const button = $("#person-log-button");
   if (!button || button.hidden) {
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
@@ -2098,10 +2075,7 @@ async function ensureDailyGoalShareBlob(personId, dateKey) {
 }
 
 async function shareDailyGoalMetToWhatsApp(personId, dateKey, buttonEl = null) {
-  const button =
-    buttonEl ||
-    $("#share-whatsapp-button") ||
-    document.querySelector(".daily-pulse-share");
+  const button = buttonEl || document.querySelector(".daily-pulse-share");
   if (button) {
     button.disabled = true;
     button.textContent = "Preparing…";
@@ -2158,7 +2132,6 @@ function showLogSuccess(personId, entries, options = {}) {
 
   const success = $("#log-success");
   success.classList.toggle("is-board-cleared", boardCleared);
-  const shareButton = $("#share-whatsapp-button");
   pendingShareGoal = boardCleared ? { personId, activityDate } : null;
   pendingShareBlob = null;
   pendingShareBlobPromise = null;
@@ -2171,15 +2144,9 @@ function showLogSuccess(personId, entries, options = {}) {
       list.length === 1
         ? "Daily goals locked in. Absolute menace."
         : `${list.length} activities in — daily goals locked in.`;
-    if (shareButton) {
-      shareButton.hidden = false;
-      shareButton.disabled = false;
-      shareButton.textContent = "Share to WhatsApp";
-    }
     ensureDailyGoalShareBlob(personId, activityDate).catch(() => {});
   } else {
     fillNormalLogSuccess(personId, list);
-    if (shareButton) shareButton.hidden = true;
   }
 
   $("#log-form").hidden = true;
@@ -2191,37 +2158,24 @@ function showLogSuccess(personId, entries, options = {}) {
     fireworksTimer = window.setTimeout(() => fireLogFireworks(fire), 650);
   }
 
-  // Keep board-clear open long enough to tap Share; pulse also keeps a Share CTA.
   logSuccessTimer = window.setTimeout(() => {
     closeLogDialog().then(() => {
       scrollPersonLogButtonIntoView();
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
     });
-  }, boardCleared ? 12000 : 1800);
+  }, boardCleared ? 4200 : 1800);
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
 document.addEventListener("click", async (event) => {
-  const shareButton = event.target.closest(
-    ".daily-pulse-share, #share-whatsapp-button, #person-share-whatsapp",
-  );
+  const shareButton = event.target.closest(".daily-pulse-share");
   if (!shareButton) return;
-  const personId = shareButton.dataset.personId || pendingShareGoal?.personId;
-  const activityDate = shareButton.dataset.date || pendingShareGoal?.activityDate;
+  const personId = shareButton.dataset.personId;
+  const activityDate = shareButton.dataset.date;
   if (!personId || !activityDate) return;
   pendingShareGoal = { personId, activityDate };
-  window.clearTimeout(logSuccessTimer);
-  const shared = await shareDailyGoalMetToWhatsApp(personId, activityDate, shareButton);
-  if (shareButton.id === "share-whatsapp-button") {
-    logSuccessTimer = window.setTimeout(() => {
-      closeLogDialog().then(() => {
-        scrollPersonLogButtonIntoView();
-        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
-      });
-    }, shared ? 900 : 10000);
-  }
+  await shareDailyGoalMetToWhatsApp(personId, activityDate, shareButton);
 });
 $("#quick-add-button").addEventListener("click", () => {
   const personId = rememberedPersonId();
