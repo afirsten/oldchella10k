@@ -3,6 +3,7 @@ const CHALLENGE_START = "2026-07-14";
 const CHALLENGE_DAYS = 100;
 const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
 const FACT_ROTATE_MS = 5600;
+const THEME_STORAGE_KEY = "rippedchella-theme-v1";
 const DAILY_GOALS = {
   pushups: 100,
   squats: 100,
@@ -13,6 +14,47 @@ const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
 const RULES_COLLAPSE_KEY = "rippedchella-rules-collapsed-v1";
+
+function getPreferredTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+  } catch {
+    /* ignore */
+  }
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  const toggle = document.getElementById("theme-toggle");
+  const icon =
+    document.getElementById("theme-toggle-icon") ||
+    toggle?.querySelector(".theme-toggle__icon");
+  const meta = document.getElementById("theme-color-meta");
+  const isDark = theme === "dark";
+  if (icon) icon.textContent = isDark ? "light_mode" : "dark_mode";
+  if (toggle) {
+    toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+  }
+  if (meta) meta.setAttribute("content", isDark ? "#120a06" : "#f3ebe0");
+}
+
+function initThemeToggle() {
+  const toggle = document.getElementById("theme-toggle");
+  if (!toggle) return;
+  applyTheme(getPreferredTheme());
+  toggle.addEventListener("click", () => {
+    const next =
+      document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+    applyTheme(next);
+  });
+}
 
 const crew = [
   { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
@@ -291,13 +333,14 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
       })();
 
   const revealClass = fromPercents ? " is-revealing" : "";
-  // Defer only the banner during post-submit reveal (avoids a blank gap). Share stays mounted whenever complete.
-  const banner =
-    complete && !compact && !fromPercents
-      ? `<div class="daily-pulse-banner" role="status"><span>Daily goal met</span></div>`
-      : "";
+  // During post-submit reveal, defer banner + share so the card keeps its pre-submit height,
+  // then inject them with the enter animation once the celebration starts.
+  const showCompleteChrome = complete && !compact && !fromPercents;
+  const banner = showCompleteChrome
+    ? `<div class="daily-pulse-banner" role="status"><span>Daily goal met</span></div>`
+    : "";
   const share =
-    complete && !compact && personId
+    showCompleteChrome && personId
       ? `<button type="button" class="share-whatsapp-button daily-pulse-share" data-person-id="${escapeHtml(personId)}" data-date="${escapeHtml(dateKey)}">Share to WhatsApp</button>`
       : "";
 
@@ -1719,6 +1762,10 @@ function revealDailyPulseAfterLog() {
     pulse.classList.add("is-complete");
   }
 
+  // Lock pre-celebration height so injecting banner/share at 0 doesn't jump layout early.
+  const lockedHeight = pulse.offsetHeight;
+  pulse.style.minHeight = `${lockedHeight}px`;
+
   fills.forEach((fill) => {
     const from = Number(fill.dataset.from) || 0;
     fill.style.width = `${from}%`;
@@ -1747,12 +1794,14 @@ function revealDailyPulseAfterLog() {
         const dateKey = pendingPulseReveal?.activityDate || localDateValue();
         share = document.createElement("button");
         share.type = "button";
-        share.className = "share-whatsapp-button daily-pulse-share";
+        share.className = "share-whatsapp-button daily-pulse-share is-entering";
         share.dataset.personId = personId;
         share.dataset.date = dateKey;
         share.textContent = "Share to WhatsApp";
         banner.insertAdjacentElement("afterend", share);
+        void share.offsetWidth;
       }
+      share.classList.add("is-in");
       pendingShareGoal = {
         personId: share.dataset.personId,
         activityDate: share.dataset.date,
@@ -1768,11 +1817,14 @@ function revealDailyPulseAfterLog() {
     if (pendingPulseReveal?.boardCleared) pulse.classList.add("is-board-burst");
     window.setTimeout(() => {
       pulse.classList.remove("is-revealing", "is-animating", "is-board-burst");
+      pulse.style.minHeight = "";
       const banner = pulse.querySelector(".daily-pulse-banner");
       if (banner) banner.classList.remove("is-entering", "is-in");
+      const share = pulse.querySelector(".daily-pulse-share");
+      if (share) share.classList.remove("is-entering", "is-in");
       fills.forEach((fill) => fill.classList.remove("is-maxed"));
       pendingPulseReveal = null;
-    }, reduceMotion ? 0 : 3400);
+    }, reduceMotion ? 0 : 4200);
   };
 
   if (reduceMotion) {
@@ -2559,6 +2611,7 @@ function initRulesCollapse() {
 }
 
 updateExerciseFields();
+initThemeToggle();
 initRulesCollapse();
 render();
 nestleReadyToGoUnit();
