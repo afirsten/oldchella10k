@@ -2011,6 +2011,58 @@ function buildDailyGoalShareCaption(personId, dateKey) {
   return `${first} cleared the board — ${number.format(totals.pushups)} push-ups, ${number.format(totals.squats)} squats, ${plankMin} min plank. rippedchella.vercel.app`;
 }
 
+let pendingShareGoal = null;
+let pendingShareBlob = null;
+let pendingShareBlobPromise = null;
+
+function downloadShareBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function openWhatsAppCaption(caption) {
+  const href = `https://wa.me/?text=${encodeURIComponent(caption)}`;
+  const link = document.createElement("a");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function ensureDailyGoalShareBlob(personId, dateKey) {
+  if (
+    pendingShareBlob &&
+    pendingShareGoal?.personId === personId &&
+    pendingShareGoal?.activityDate === dateKey
+  ) {
+    return pendingShareBlob;
+  }
+  if (
+    pendingShareBlobPromise &&
+    pendingShareGoal?.personId === personId &&
+    pendingShareGoal?.activityDate === dateKey
+  ) {
+    return pendingShareBlobPromise;
+  }
+  pendingShareBlobPromise = buildDailyGoalMetImage(personId, dateKey)
+    .then((blob) => {
+      pendingShareBlob = blob;
+      return blob;
+    })
+    .finally(() => {
+      pendingShareBlobPromise = null;
+    });
+  return pendingShareBlobPromise;
+}
+
 async function shareDailyGoalMetToWhatsApp(personId, dateKey) {
   const button = $("#share-whatsapp-button");
   if (button) {
@@ -2018,7 +2070,7 @@ async function shareDailyGoalMetToWhatsApp(personId, dateKey) {
     button.textContent = "Preparing…";
   }
   try {
-    const blob = await buildDailyGoalMetImage(personId, dateKey);
+    const blob = await ensureDailyGoalShareBlob(personId, dateKey);
     const file = new File([blob], `rippedchella-daily-goal-${dateKey}.png`, { type: "image/png" });
     const caption = buildDailyGoalShareCaption(personId, dateKey);
     const canShareFiles =
@@ -2031,22 +2083,28 @@ async function shareDailyGoalMetToWhatsApp(personId, dateKey) {
         title: "Daily goal met",
         text: caption,
       });
-      return;
+      return true;
     }
 
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
-    window.open(`https://wa.me/?text=${encodeURIComponent(caption)}`, "_blank", "noopener,noreferrer");
+    if (typeof navigator.share === "function") {
+      downloadShareBlob(blob, file.name);
+      try {
+        await navigator.share({ title: "Daily goal met", text: caption });
+        showToast("Image saved — attach the download in WhatsApp.");
+        return true;
+      } catch (error) {
+        if (error?.name === "AbortError") return false;
+      }
+    }
+
+    downloadShareBlob(blob, file.name);
+    openWhatsAppCaption(caption);
     showToast("Image saved — attach it in WhatsApp.");
+    return true;
   } catch (error) {
-    if (error?.name === "AbortError") return;
+    if (error?.name === "AbortError") return false;
     showToast(error.message || "Could not share to WhatsApp.");
+    return false;
   } finally {
     if (button) {
       button.disabled = false;
@@ -2054,8 +2112,6 @@ async function shareDailyGoalMetToWhatsApp(personId, dateKey) {
     }
   }
 }
-
-let pendingShareGoal = null;
 
 function showLogSuccess(personId, entries, options = {}) {
   const list = Array.isArray(entries) ? entries : [entries];
@@ -2067,6 +2123,8 @@ function showLogSuccess(personId, entries, options = {}) {
   success.classList.toggle("is-board-cleared", boardCleared);
   const shareButton = $("#share-whatsapp-button");
   pendingShareGoal = boardCleared ? { personId, activityDate } : null;
+  pendingShareBlob = null;
+  pendingShareBlobPromise = null;
 
   if (boardCleared) {
     $("#success-eyebrow").textContent = "BOARD CLEARED";
@@ -2081,6 +2139,8 @@ function showLogSuccess(personId, entries, options = {}) {
       shareButton.disabled = false;
       shareButton.textContent = "Share to WhatsApp";
     }
+    // Prefetch so the share tap keeps the user-gesture chain tight.
+    ensureDailyGoalShareBlob(personId, activityDate).catch(() => {});
   } else {
     fillNormalLogSuccess(personId, list);
     if (shareButton) shareButton.hidden = true;
@@ -2102,14 +2162,28 @@ function showLogSuccess(personId, entries, options = {}) {
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
     });
-  }, boardCleared ? 9000 : 1800);
+  }, boardCleared ? 14000 : 1800);
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
 $("#share-whatsapp-button")?.addEventListener("click", async () => {
   if (!pendingShareGoal) return;
   window.clearTimeout(logSuccessTimer);
-  await shareDailyGoalMetToWhatsApp(pendingShareGoal.personId, pendingShareGoal.activityDate);
+  const shared = await shareDailyGoalMetToWhatsApp(
+    pendingShareGoal.personId,
+    pendingShareGoal.activityDate,
+  );
+  if (!shared) {
+    // Keep sheet open if they canceled or share failed so they can retry.
+    logSuccessTimer = window.setTimeout(() => {
+      closeLogDialog().then(() => {
+        scrollPersonLogButtonIntoView();
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
+      });
+    }, 10000);
+    return;
+  }
   logSuccessTimer = window.setTimeout(() => {
     closeLogDialog().then(() => {
       scrollPersonLogButtonIntoView();

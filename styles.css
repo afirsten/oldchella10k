@@ -1550,20 +1550,23 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   font-size: 13px;
 }
 .log-success.is-board-cleared {
-  min-height: 470px;
-  padding-inline: 20px;
+  min-height: 0;
+  overflow: visible;
+  padding: 36px 20px calc(28px + env(safe-area-inset-bottom));
+  align-content: start;
+  gap: 0;
 }
 .log-success.is-board-cleared .success-check {
-  width: 72px;
-  height: 72px;
-  margin-bottom: 18px;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 12px;
   border-color: var(--pink);
   color: var(--lime);
-  font-size: 34px;
+  font-size: 28px;
   animation: board-clear-pop 520ms cubic-bezier(.16,.9,.3,1);
 }
 .log-success.is-board-cleared #success-eyebrow {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   color: var(--lavender);
   font-size: 11px;
   letter-spacing: .16em;
@@ -1571,26 +1574,28 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 .log-success.is-board-cleared #success-amount {
   max-width: 11ch;
   color: var(--lime);
-  font-size: clamp(30px, 9vw, 52px);
+  font-size: clamp(26px, 7.5vw, 44px);
   line-height: 1.02;
   letter-spacing: -.045em;
   text-wrap: balance;
 }
 .log-success.is-board-cleared #success-unit {
-  margin-top: 12px;
+  margin-top: 10px;
   color: var(--pink);
   font-size: 10px;
   letter-spacing: .14em;
 }
 .log-success.is-board-cleared #success-copy {
-  margin-top: 22px;
+  margin-top: 14px;
 }
 .share-whatsapp-button {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: min(100%, 280px);
-  margin-top: 22px;
+  margin-top: 18px;
   padding: 14px 18px;
   border: 0;
   border-radius: 999px;
