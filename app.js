@@ -291,9 +291,14 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
       })();
 
   const revealClass = fromPercents ? " is-revealing" : "";
+  const banner =
+    complete && !compact
+      ? `<div class="daily-pulse-banner" role="status"><span>Daily goal met</span></div>`
+      : "";
 
   return `
     <div class="daily-goals-card daily-pulse${compact ? " is-compact" : ""}${complete ? " is-complete" : ""}${revealClass}" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
+      ${banner}
       <div class="daily-goals-card-head">
         <p class="label">DAILY PULSE</p>
         <span class="daily-goals-complete">${complete ? "BOARD CLEARED" : `${boardScore}% LOCKED IN`}</span>
@@ -1700,6 +1705,21 @@ function revealDailyPulseAfterLog() {
 
   const fills = [...pulse.querySelectorAll(".daily-pulse-track i")];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const showBanner = Boolean(
+    pendingPulseReveal?.boardCleared || pulse.classList.contains("is-complete"),
+  );
+
+  if (showBanner) {
+    pulse.classList.add("is-complete");
+    let banner = pulse.querySelector(".daily-pulse-banner");
+    if (!banner) {
+      banner = document.createElement("div");
+      banner.className = "daily-pulse-banner";
+      banner.setAttribute("role", "status");
+      banner.innerHTML = "<span>Daily goal met</span>";
+      pulse.insertBefore(banner, pulse.firstChild);
+    }
+  }
 
   fills.forEach((fill) => {
     const from = Number(fill.dataset.from) || 0;
