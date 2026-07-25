@@ -1910,6 +1910,50 @@ function loadShareImage(src) {
   });
 }
 
+function drawCoverImage(ctx, image, x, y, size) {
+  const srcW = image.naturalWidth || image.width;
+  const srcH = image.naturalHeight || image.height;
+  if (!srcW || !srcH) return;
+  const side = Math.min(srcW, srcH);
+  const sx = (srcW - side) / 2;
+  const sy = (srcH - side) / 2;
+  ctx.drawImage(image, sx, sy, side, side, x, y, size, size);
+}
+
+function personChallengeStats(personId) {
+  const personStats = totalsByPerson().find((entry) => entry.id === personId);
+  const history = activities.filter((activity) => activity.personId === personId);
+  const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
+  history.forEach((activity) => {
+    sessionDays[activityExercise(activity)].add(activity.createdAt.slice(0, 10));
+  });
+  const averageFor = (exercise, value) => {
+    const days = sessionDays[exercise].size;
+    return days ? value / days : 0;
+  };
+  const metrics = personStats?.metrics || { pushups: 0, squats: 0, planks: 0, other: 0 };
+  const plankMinutes = metrics.planks / 60;
+  const fullOtherDays = new Set(
+    history
+      .filter(
+        (activity) =>
+          activityExercise(activity) === "other" &&
+          Number(activity.percent ?? activity.reps) >= 100,
+      )
+      .map((activity) => activity.createdAt.slice(0, 10)),
+  ).size;
+  return {
+    pushups: metrics.pushups,
+    squats: metrics.squats,
+    plankMinutes,
+    workouts: fullOtherDays,
+    avgPushups: Math.round(averageFor("pushups", metrics.pushups)),
+    avgSquats: Math.round(averageFor("squats", metrics.squats)),
+    avgPlanks: averageFor("planks", plankMinutes),
+    avgOther: Math.round(averageFor("other", metrics.other)),
+  };
+}
+
 function roundRectPath(ctx, x, y, width, height, radius) {
   const r = Math.min(radius, width / 2, height / 2);
   ctx.beginPath();
@@ -1984,7 +2028,7 @@ async function buildDailyGoalMetImage(personId, dateKey) {
     ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
     ctx.closePath();
     ctx.clip();
-    ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
+    drawCoverImage(ctx, avatar, avatarX, avatarY, avatarSize);
     ctx.restore();
   } catch {
     ctx.beginPath();
@@ -2098,6 +2142,104 @@ async function buildDailyGoalMetImage(personId, dateKey) {
   ctx.fillStyle = "#c9b3ff";
   ctx.font = "700 22px Manrope, sans-serif";
   ctx.fillText(`— ${motivation.by.toUpperCase()}`, cardX + 72, y + 148);
+
+  // Challenge totals (personal breakdown)
+  const stats = personChallengeStats(personId);
+  const statsX = cardX + 48;
+  const statsW = cardW - 96;
+  const statsTop = y + 170 + 40;
+  const statsBottom = cardY + cardH - 48;
+  const statsH = Math.max(240, statsBottom - statsTop);
+  roundRectPath(ctx, statsX, statsTop, statsW, statsH, 28);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(122, 92, 72, 0.4)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const cols = [
+    {
+      label: "PUSH-UPS",
+      value: number.format(stats.pushups),
+      avg: number.format(stats.avgPushups),
+    },
+    {
+      label: "SQUATS",
+      value: number.format(stats.squats),
+      avg: number.format(stats.avgSquats),
+    },
+    {
+      label: "PLANKS",
+      value: durationNumber.format(stats.plankMinutes),
+      unit: "MIN",
+      avg: durationNumber.format(stats.avgPlanks),
+    },
+    {
+      label: "WORKOUTS",
+      value: number.format(stats.workouts),
+      avg: number.format(stats.avgOther),
+    },
+  ];
+  const colW = statsW / cols.length;
+  const labelY = statsTop + statsH * 0.18;
+  const valueY = statsTop + statsH * 0.42;
+  const ruleY = statsTop + statsH * 0.58;
+  const avgLabelY = statsTop + statsH * 0.72;
+  const avgValueY = statsTop + statsH * 0.88;
+
+  cols.forEach((col, index) => {
+    const left = statsX + colW * index;
+    const cx = left + colW / 2;
+    if (index > 0) {
+      ctx.beginPath();
+      ctx.moveTo(left, statsTop + 28);
+      ctx.lineTo(left, statsTop + statsH - 28);
+      ctx.strokeStyle = "rgba(122, 92, 72, 0.4)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#7a5c48";
+    ctx.font = "700 20px Manrope, sans-serif";
+    ctx.fillText(col.label, cx, labelY);
+
+    ctx.fillStyle = "#fdf0e0";
+    ctx.font = "800 52px Manrope, sans-serif";
+    if (col.unit) {
+      const valueWidth = ctx.measureText(col.value).width;
+      ctx.font = "800 22px Manrope, sans-serif";
+      const unitWidth = ctx.measureText(col.unit).width;
+      const totalWidth = valueWidth + 10 + unitWidth;
+      const startX = cx - totalWidth / 2;
+      ctx.textAlign = "left";
+      ctx.font = "800 52px Manrope, sans-serif";
+      ctx.fillText(col.value, startX, valueY);
+      ctx.fillStyle = "#7a5c48";
+      ctx.font = "800 22px Manrope, sans-serif";
+      ctx.fillText(col.unit, startX + valueWidth + 10, valueY + 6);
+      ctx.textAlign = "center";
+    } else {
+      ctx.fillText(col.value, cx, valueY);
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(left + 28, ruleY);
+    ctx.lineTo(left + colW - 28, ruleY);
+    ctx.strokeStyle = "rgba(122, 92, 72, 0.35)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#7a5c48";
+    ctx.font = "700 18px Manrope, sans-serif";
+    ctx.fillText("DAILY AVG", cx, avgLabelY);
+    ctx.fillStyle = "#fdf0e0";
+    ctx.font = "800 34px Manrope, sans-serif";
+    ctx.fillText(col.avg, cx, avgValueY);
+  });
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
 
   // Footer
   const dateLabel = new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", {
