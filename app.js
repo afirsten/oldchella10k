@@ -1269,7 +1269,8 @@ function renderPersonPage({ skipScroll = false } = {}) {
           : ` · ${number.format(Math.abs(paceDelta))} behind pace`;
   $("#person-pushups-total").textContent = number.format(personStats.metrics.pushups);
   $("#person-squats-total").textContent = number.format(personStats.metrics.squats);
-  $("#person-plank-minutes").textContent = durationNumber.format(plankMinutes);
+  $("#person-plank-minutes").innerHTML =
+    `${durationNumber.format(plankMinutes)}<span class="stat-unit">MIN</span>`;
   $("#person-other-days").textContent = number.format(fullOtherDays);
   $("#person-sessions").textContent = number.format(personStats.sessions);
   $("#person-sessions-label").textContent = personStats.sessions === 1 ? "day" : "days";
@@ -1388,8 +1389,24 @@ function emptyLogDrafts() {
 let logDrafts = emptyLogDrafts();
 
 function setAmount(value) {
-  const amount = Math.max(0, Math.min(1000, Math.round(Number(value) || 0)));
-  $("#reps-input").value = amount;
+  const max = exerciseInput.value === "other" ? 100 : 1000;
+  const amount = Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
+  const input = $("#reps-input");
+  input.value = amount;
+  if (exerciseInput.value === "other") {
+    input.style.width = `${Math.max(1, String(amount).length)}ch`;
+  } else {
+    input.style.width = "";
+  }
+  const minus = $("#amount-minus");
+  const plus = $("#amount-plus");
+  if (minus) minus.disabled = amount <= 0;
+  if (plus) plus.disabled = amount >= max;
+}
+
+function nudgeAmount(delta) {
+  setAmount(Number($("#reps-input").value) + delta);
+  saveCurrentDraft();
 }
 
 function readCurrentExerciseDraft() {
@@ -1456,23 +1473,17 @@ function applyDraftToFields(exercise) {
   const draft = logDrafts[exercise] || { reps: 0, otherActivity: "" };
   if (exercise === "other") {
     $("#other-input").value = draft.otherActivity || "";
-    const percent = Math.max(0, Math.min(100, Number(draft.reps) || 0));
-    $("#other-slider").value = percent;
-    setAmount(percent);
-    $("#other-percent").textContent = `${percent}%`;
-    $(".slider-value span").textContent = `= ${percent}% bonus effort added`;
-  } else {
-    setAmount(draft.reps || 0);
   }
+  setAmount(draft.reps || 0);
 }
 
 function updateExerciseFields({ keepAmount = false } = {}) {
   const exercise = exerciseInput.value;
   const settings = {
-    pushups: { label: "Push-up reps", unit: "REPS", quick: [1, 5, 10, 25] },
-    squats: { label: "Squat reps", unit: "REPS", quick: [1, 5, 10, 25] },
-    planks: { label: "Plank time", unit: "SECONDS", quick: [1, 30, 60, 90] },
-    other: { label: "Daily goal", unit: "%", quick: [] },
+    pushups: { label: "Push-up reps", unit: "REPS", quick: [5, 10, 25, 50] },
+    squats: { label: "Squat reps", unit: "REPS", quick: [5, 10, 25, 50] },
+    planks: { label: "Plank time", unit: "SECONDS", quick: [30, 60, 90, 120] },
+    other: { label: "Percent of daily goal", unit: "% EFFORT", quick: [25, 50, 75, 100] },
   }[exercise];
 
   exerciseButtons.forEach((button) => {
@@ -1485,27 +1496,27 @@ function updateExerciseFields({ keepAmount = false } = {}) {
   const quickReps = $(".quick-reps");
   if (quickReps) quickReps.dataset.active = exercise;
   $("#amount-unit").textContent = settings.unit;
+  const amountValue = $(".amount-value");
+  if (amountValue) amountValue.classList.toggle("is-percent", exercise === "other");
+  const suffix = $("#amount-suffix");
+  if (suffix) {
+    suffix.hidden = exercise !== "other";
+    suffix.setAttribute("aria-hidden", exercise === "other" ? "false" : "true");
+  }
   $("#reps-input").setAttribute("aria-label", settings.label);
+  $("#reps-input").max = exercise === "other" ? "100" : "1000";
   $("#other-field").hidden = exercise !== "other";
   $("#other-input").required = false;
-  $("#counter-field").hidden = exercise === "other";
-  $("#other-slider-field").hidden = exercise !== "other";
   quickButtons.forEach((button, index) => {
     const amount = settings.quick[index] || 0;
     button.hidden = !amount;
     button.dataset.increment = amount;
-    button.textContent = `+${amount}`;
+    button.textContent = exercise === "other" ? `+${amount}%` : `+${amount}`;
   });
-  if (exercise === "other") {
-    const percent = keepAmount
-      ? Math.max(0, Math.min(100, Number($("#reps-input").value) || 0))
-      : 0;
-    $("#other-slider").value = percent;
-    setAmount(percent);
-    $("#other-percent").textContent = `${percent}%`;
-    $(".slider-value span").textContent = `= ${percent}% bonus effort added`;
-  } else if (!keepAmount) {
+  if (!keepAmount) {
     setAmount(0);
+  } else if (exercise === "other") {
+    setAmount($("#reps-input").value);
   }
   syncDraftTabIndicators();
   updateAddSubmitLabel();
@@ -1537,6 +1548,44 @@ function localDateValue(date = new Date()) {
   ].join("-");
 }
 
+function unlockLogDialogHeight() {
+  dialog.style.height = "";
+  dialog.style.minHeight = "";
+}
+
+function lockLogDialogHeight() {
+  const form = $("#log-form");
+  const success = $("#log-success");
+  const otherField = $("#other-field");
+  if (!form) return;
+
+  const formHidden = form.hidden;
+  const successHidden = success?.hidden;
+  const otherHidden = otherField?.hidden;
+
+  form.hidden = false;
+  if (success) success.hidden = true;
+  dialog.style.height = "auto";
+  dialog.style.minHeight = "";
+
+  let height = 0;
+  if (otherField) {
+    otherField.hidden = true;
+    height = Math.max(height, dialog.getBoundingClientRect().height);
+    otherField.hidden = false;
+    height = Math.max(height, dialog.getBoundingClientRect().height);
+    otherField.hidden = otherHidden;
+  } else {
+    height = dialog.getBoundingClientRect().height;
+  }
+
+  const locked = `${Math.ceil(height)}px`;
+  dialog.style.height = locked;
+  dialog.style.minHeight = locked;
+  form.hidden = formHidden;
+  if (success) success.hidden = successHidden;
+}
+
 function openLogDialog(personId, options = {}) {
   if (!personId) return;
   const activity = options.activity || null;
@@ -1545,10 +1594,10 @@ function openLogDialog(personId, options = {}) {
   logDrafts = emptyLogDrafts();
 
   clearLogCelebrations();
+  unlockLogDialogHeight();
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-success").classList.remove("is-board-cleared");
-  $("#log-success").style.minHeight = "";
   $("#log-form").reset();
   clearLogFormError();
 
@@ -1574,6 +1623,7 @@ function openLogDialog(personId, options = {}) {
   dialog.classList.remove("is-closing");
   logDialogClosing = false;
   dialog.showModal();
+  lockLogDialogHeight();
 }
 
 function closeLogDialog() {
@@ -1594,8 +1644,8 @@ function closeLogDialog() {
       logDialogClosing = false;
       $("#log-success").hidden = true;
       $("#log-success").classList.remove("is-board-cleared");
-      $("#log-success").style.minHeight = "";
       $("#log-form").hidden = false;
+      unlockLogDialogHeight();
       resolve();
     };
     const onEnd = (event) => {
@@ -2190,9 +2240,6 @@ function showLogSuccess(personId, entries, options = {}) {
 
   const form = $("#log-form");
   const success = $("#log-success");
-  // Match the add-reps sheet height so success doesn't shrink the dialog.
-  const formHeight = form?.offsetHeight || 0;
-  success.style.minHeight = formHeight ? `${formHeight}px` : "";
   success.classList.toggle("is-board-cleared", boardCleared);
   pendingShareGoal = boardCleared ? { personId, activityDate } : null;
   pendingShareBlob = null;
@@ -2213,7 +2260,10 @@ function showLogSuccess(personId, entries, options = {}) {
 
   form.hidden = true;
   success.hidden = false;
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) {
+    dialog.showModal();
+    lockLogDialogHeight();
+  }
 
   const fire = fireLogConfetti();
   if (boardCleared && fire) {
@@ -2299,6 +2349,9 @@ quickButtons.forEach((button) => {
   });
 });
 
+$("#amount-minus")?.addEventListener("click", () => nudgeAmount(-1));
+$("#amount-plus")?.addEventListener("click", () => nudgeAmount(1));
+
 $("#reps-input").addEventListener("input", () => {
   saveCurrentDraft();
 });
@@ -2310,13 +2363,6 @@ $("#activity-date-input").addEventListener("change", () => {
   saveCurrentDraft();
 });
 $("#other-input").addEventListener("input", () => {
-  saveCurrentDraft();
-});
-$("#other-slider").addEventListener("input", (event) => {
-  const percent = Number(event.currentTarget.value);
-  setAmount(percent);
-  $("#other-percent").textContent = `${percent}%`;
-  $(".slider-value span").textContent = `= ${percent}% bonus effort added`;
   saveCurrentDraft();
 });
 

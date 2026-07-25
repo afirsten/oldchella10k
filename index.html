@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=164" />
+    <link rel="stylesheet" href="./styles.css?v=177" />
     <script>
       (function () {
         try {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script src="./vendor/confetti.browser.min.js"></script>
-    <script src="./app.js?v=123" defer></script>
+    <script src="./app.js?v=134" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -332,7 +332,7 @@
             </div>
             <div>
               <span>PLANKS</span>
-              <strong id="person-plank-minutes">0</strong>
+              <strong id="person-plank-minutes">0<span class="stat-unit">MIN</span></strong>
               <span class="daily-avg">
                 <span class="daily-avg-label">DAILY AVG</span>
                 <strong id="person-avg-planks">0</strong>
@@ -368,6 +368,7 @@
     </div>
 
     <dialog id="log-dialog">
+      <div class="log-dialog-shell">
       <form id="log-form">
         <div class="sheet-handle" aria-hidden="true"></div>
         <div class="dialog-heading">
@@ -407,33 +408,47 @@
         </div>
         <div id="counter-field">
           <div class="amount-display">
-            <input
-              id="reps-input"
-              class="amount-input"
-              name="reps"
-              type="number"
-              inputmode="numeric"
-              min="0"
-              max="1000"
-              step="1"
-              value="0"
-              aria-label="Activity amount"
-            />
+            <div class="amount-stepper">
+              <button
+                class="amount-nudge"
+                id="amount-minus"
+                type="button"
+                aria-label="Decrease by 1"
+              >
+                <span class="amount-nudge__icon" aria-hidden="true">remove</span>
+              </button>
+              <div class="amount-value">
+                <input
+                  id="reps-input"
+                  class="amount-input"
+                  name="reps"
+                  type="number"
+                  inputmode="numeric"
+                  min="0"
+                  max="1000"
+                  step="1"
+                  value="0"
+                  aria-label="Activity amount"
+                />
+                <span class="amount-suffix" id="amount-suffix" hidden aria-hidden="true">%</span>
+              </div>
+              <button
+                class="amount-nudge"
+                id="amount-plus"
+                type="button"
+                aria-label="Increase by 1"
+              >
+                <span class="amount-nudge__icon" aria-hidden="true">add</span>
+              </button>
+            </div>
             <span id="amount-unit">REPS</span>
           </div>
           <div class="quick-reps" aria-label="Add amount" data-active="pushups">
-            <button type="button" data-increment="1">+1</button>
             <button type="button" data-increment="5">+5</button>
             <button type="button" data-increment="10">+10</button>
             <button type="button" data-increment="25">+25</button>
+            <button type="button" data-increment="50">+50</button>
           </div>
-        </div>
-        <div class="other-slider" id="other-slider-field" hidden>
-          <div class="slider-value">
-            <output id="other-percent">50%</output>
-            <span>= 50% bonus effort added</span>
-          </div>
-          <input id="other-slider" type="range" min="0" max="100" step="1" value="50" aria-label="Percent of daily goal" />
         </div>
         <p class="log-form-error" id="log-form-error" hidden role="alert"></p>
         <button class="submit-button" type="submit">ADD TO THE TOTAL</button>
@@ -445,6 +460,7 @@
         <strong id="success-amount">+0</strong>
         <span id="success-unit">REPS</span>
         <small id="success-copy">Added to your personal progress.</small>
+      </div>
       </div>
     </dialog>
 
