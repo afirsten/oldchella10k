@@ -1740,30 +1740,6 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   padding: 12px 16px;
   font-size: 12px;
 }
-.daily-pulse-share.is-entering {
-  max-height: 0;
-  margin: 0;
-  padding-block: 0;
-  overflow: hidden;
-  opacity: 0;
-  border: 0;
-  transform: translateY(-4px);
-  pointer-events: none;
-}
-.daily-pulse-share.is-entering.is-in {
-  max-height: 56px;
-  margin-bottom: 14px;
-  padding-block: 12px;
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-  transition:
-    max-height 900ms cubic-bezier(.16,.84,.3,1) 780ms,
-    margin 900ms ease 780ms,
-    padding 900ms ease 780ms,
-    opacity 850ms ease 880ms,
-    transform 900ms cubic-bezier(.16,.84,.3,1) 780ms;
-}
 .daily-pulse-banner.is-entering {
   max-height: 0;
   margin: 0;
@@ -2369,9 +2345,7 @@ input:focus, select:focus {
     transition: none;
   }
   .daily-pulse-banner.is-entering,
-  .daily-pulse-banner.is-entering.is-in,
-  .daily-pulse-share.is-entering,
-  .daily-pulse-share.is-entering.is-in {
+  .daily-pulse-banner.is-entering.is-in {
     max-height: none;
     margin-bottom: 12px;
     padding-block: 11px;
@@ -2379,13 +2353,6 @@ input:focus, select:focus {
     border-color: rgba(76,223,138,.5);
     transform: none;
     transition: none;
-    pointer-events: auto;
-  }
-  .daily-pulse-share.is-entering,
-  .daily-pulse-share.is-entering.is-in {
-    margin-bottom: 14px;
-    padding-block: 12px;
-    border: 0;
   }
   .history-day.is-today .daily-pulse.is-animating .daily-pulse-track,
   .history-day.is-today .daily-pulse.is-animating .daily-pulse-track i {
