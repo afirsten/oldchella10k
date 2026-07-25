@@ -1500,6 +1500,12 @@ function openLogDialog(personId, options = {}) {
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-success").classList.remove("is-board-cleared");
+  const shareButton = $("#share-whatsapp-button");
+  if (shareButton) {
+    shareButton.hidden = true;
+    shareButton.disabled = false;
+    shareButton.textContent = "Share to WhatsApp";
+  }
   $("#log-form").reset();
   clearLogFormError();
 
@@ -1545,6 +1551,12 @@ function closeLogDialog() {
       logDialogClosing = false;
       $("#log-success").hidden = true;
       $("#log-success").classList.remove("is-board-cleared");
+      const shareButton = $("#share-whatsapp-button");
+      if (shareButton) {
+        shareButton.hidden = true;
+        shareButton.disabled = false;
+        shareButton.textContent = "Share to WhatsApp";
+      }
       $("#log-form").hidden = false;
       resolve();
     };
@@ -1770,13 +1782,291 @@ function queuePulseReveal(personId, activityDate, boardCleared, previousPercents
   };
 }
 
+function loadShareImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Avatar could not be loaded."));
+    image.src = src;
+  });
+}
+
+function roundRectPath(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+}
+
+function drawShareBar(ctx, x, y, width, height, percent, colors) {
+  const radius = height / 2;
+  roundRectPath(ctx, x, y, width, height, radius);
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fill();
+  const fillWidth = Math.max(height, (width * Math.min(100, percent)) / 100);
+  const gradient = ctx.createLinearGradient(x, y, x + fillWidth, y);
+  gradient.addColorStop(0, colors[0]);
+  gradient.addColorStop(1, colors[1]);
+  roundRectPath(ctx, x, y, fillWidth, height, radius);
+  ctx.fillStyle = gradient;
+  ctx.fill();
+}
+
+async function buildDailyGoalMetImage(personId, dateKey) {
+  const person = getPerson(personId);
+  const dayActivities = personDayActivities(personId, dateKey);
+  const { totals, percents } = dayGoalProgress(dayActivities);
+  const width = 1080;
+  const height = 1350;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#1a0f0a");
+  bg.addColorStop(0.55, "#120a06");
+  bg.addColorStop(1, "#1c100c");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  // Card panel
+  const cardX = 64;
+  const cardY = 96;
+  const cardW = width - 128;
+  const cardH = height - 220;
+  roundRectPath(ctx, cardX, cardY, cardW, cardH, 36);
+  ctx.fillStyle = "rgba(18, 10, 8, 0.92)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(76, 223, 138, 0.45)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Soft lavender wash
+  const wash = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + 320);
+  wash.addColorStop(0, "rgba(201, 179, 255, 0.12)");
+  wash.addColorStop(1, "transparent");
+  roundRectPath(ctx, cardX, cardY, cardW, cardH, 36);
+  ctx.fillStyle = wash;
+  ctx.fill();
+
+  // Avatar top-left
+  const avatarSize = 132;
+  const avatarX = cardX + 48;
+  const avatarY = cardY + 48;
+  try {
+    const avatar = await loadShareImage(person.image);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
+    ctx.restore();
+  } catch {
+    ctx.beginPath();
+    ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+    ctx.fillStyle = "#2a160d";
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(245, 200, 66, 0.45)";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Name
+  ctx.fillStyle = "#fdf0e0";
+  ctx.font = "800 54px Manrope, sans-serif";
+  ctx.textBaseline = "middle";
+  ctx.fillText(person.name, avatarX + avatarSize + 36, avatarY + avatarSize / 2 - 12);
+  ctx.fillStyle = "#c9b3ff";
+  ctx.font = "700 24px Manrope, sans-serif";
+  ctx.fillText("BOARD CLEARED", avatarX + avatarSize + 36, avatarY + avatarSize / 2 + 34);
+
+  // Daily goal met banner
+  const bannerY = avatarY + avatarSize + 48;
+  const bannerH = 86;
+  roundRectPath(ctx, cardX + 48, bannerY, cardW - 96, bannerH, 22);
+  const bannerGrad = ctx.createLinearGradient(cardX + 48, bannerY, cardX + cardW - 48, bannerY);
+  bannerGrad.addColorStop(0, "rgba(76, 223, 138, 0.28)");
+  bannerGrad.addColorStop(0.55, "rgba(245, 200, 66, 0.14)");
+  bannerGrad.addColorStop(1, "rgba(76, 223, 138, 0.2)");
+  ctx.fillStyle = bannerGrad;
+  ctx.fill();
+  ctx.strokeStyle = "rgba(76, 223, 138, 0.5)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = "#b8f5c8";
+  ctx.font = "800 34px Manrope, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("DAILY GOAL MET", width / 2, bannerY + bannerH / 2 + 2);
+  ctx.textAlign = "left";
+
+  // Pulse header
+  let y = bannerY + bannerH + 56;
+  ctx.fillStyle = "#c9b3ff";
+  ctx.font = "800 26px Manrope, sans-serif";
+  ctx.fillText("DAILY PULSE", cardX + 48, y);
+  ctx.fillStyle = "#4cdf8a";
+  ctx.textAlign = "right";
+  ctx.fillText("BOARD CLEARED", cardX + cardW - 48, y);
+  ctx.textAlign = "left";
+
+  const rows = [
+    {
+      label: "PUSH-UPS",
+      value: `${number.format(totals.pushups)} / ${number.format(DAILY_GOALS.pushups)}`,
+      percent: percents.pushups,
+      colors: ["#ff2d78", "#ff6b9d"],
+    },
+    {
+      label: "SQUATS",
+      value: `${number.format(totals.squats)} / ${number.format(DAILY_GOALS.squats)}`,
+      percent: percents.squats,
+      colors: ["#e8763a", "#f0a06a"],
+    },
+    {
+      label: "PLANK",
+      value: `${number.format(totals.planks)} / ${number.format(DAILY_GOALS.planks)} SEC`,
+      percent: percents.planks,
+      colors: ["#d4a017", "#f5c842"],
+    },
+  ];
+
+  y += 48;
+  rows.forEach((row) => {
+    ctx.fillStyle = "#7a5c48";
+    ctx.font = "700 22px Manrope, sans-serif";
+    ctx.fillText(row.label, cardX + 48, y);
+    ctx.fillStyle = "#fdf0e0";
+    ctx.font = "700 28px Manrope, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(row.value, cardX + cardW - 48, y);
+    ctx.textAlign = "left";
+    drawShareBar(ctx, cardX + 48, y + 18, cardW - 96, 18, row.percent, row.colors);
+    y += 96;
+  });
+
+  // Quote block
+  y += 24;
+  roundRectPath(ctx, cardX + 48, y, cardW - 96, 170, 24);
+  ctx.fillStyle = "rgba(201, 179, 255, 0.06)";
+  ctx.fill();
+  const motivation = pickDailyMotivation(dateKey, personId);
+  ctx.fillStyle = "#fdf0e0";
+  ctx.font = "italic 300 36px 'Cormorant Garamond', Georgia, serif";
+  const quote = `“${motivation.quote}”`;
+  const maxQuoteWidth = cardW - 144;
+  const words = quote.split(" ");
+  let line = "";
+  let quoteY = y + 56;
+  words.forEach((word) => {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxQuoteWidth && line) {
+      ctx.fillText(line, cardX + 72, quoteY);
+      quoteY += 44;
+      line = word;
+    } else {
+      line = test;
+    }
+  });
+  if (line) ctx.fillText(line, cardX + 72, quoteY);
+  ctx.fillStyle = "#c9b3ff";
+  ctx.font = "700 22px Manrope, sans-serif";
+  ctx.fillText(`— ${motivation.by.toUpperCase()}`, cardX + 72, y + 148);
+
+  // Footer
+  const dateLabel = new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  ctx.fillStyle = "#7a5c48";
+  ctx.font = "700 24px Manrope, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(dateLabel.toUpperCase(), width / 2, height - 78);
+  ctx.fillStyle = "#c4a882";
+  ctx.font = "700 26px Manrope, sans-serif";
+  ctx.fillText("rippedchella.vercel.app", width / 2, height - 42);
+  ctx.textAlign = "left";
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) reject(new Error("Share image could not be created."));
+      else resolve(blob);
+    }, "image/png");
+  });
+}
+
+function buildDailyGoalShareCaption(personId, dateKey) {
+  const person = getPerson(personId);
+  const { totals } = dayGoalProgress(personDayActivities(personId, dateKey));
+  const first = person.name.split(" ")[0];
+  const plankMin = formatPlankMinutes(totals.planks);
+  return `${first} cleared the board — ${number.format(totals.pushups)} push-ups, ${number.format(totals.squats)} squats, ${plankMin} min plank. rippedchella.vercel.app`;
+}
+
+async function shareDailyGoalMetToWhatsApp(personId, dateKey) {
+  const button = $("#share-whatsapp-button");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Preparing…";
+  }
+  try {
+    const blob = await buildDailyGoalMetImage(personId, dateKey);
+    const file = new File([blob], `rippedchella-daily-goal-${dateKey}.png`, { type: "image/png" });
+    const caption = buildDailyGoalShareCaption(personId, dateKey);
+    const canShareFiles =
+      typeof navigator.share === "function" &&
+      (!navigator.canShare || navigator.canShare({ files: [file] }));
+
+    if (canShareFiles) {
+      await navigator.share({
+        files: [file],
+        title: "Daily goal met",
+        text: caption,
+      });
+      return;
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    window.open(`https://wa.me/?text=${encodeURIComponent(caption)}`, "_blank", "noopener,noreferrer");
+    showToast("Image saved — attach it in WhatsApp.");
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    showToast(error.message || "Could not share to WhatsApp.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Share to WhatsApp";
+    }
+  }
+}
+
+let pendingShareGoal = null;
+
 function showLogSuccess(personId, entries, options = {}) {
   const list = Array.isArray(entries) ? entries : [entries];
   const boardCleared = Boolean(options.boardCleared);
+  const activityDate = options.activityDate || localDateValue();
   clearLogCelebrations();
 
   const success = $("#log-success");
   success.classList.toggle("is-board-cleared", boardCleared);
+  const shareButton = $("#share-whatsapp-button");
+  pendingShareGoal = boardCleared ? { personId, activityDate } : null;
 
   if (boardCleared) {
     $("#success-eyebrow").textContent = "BOARD CLEARED";
@@ -1786,8 +2076,14 @@ function showLogSuccess(personId, entries, options = {}) {
       list.length === 1
         ? "Daily goals locked in. Absolute menace."
         : `${list.length} activities in — daily goals locked in.`;
+    if (shareButton) {
+      shareButton.hidden = false;
+      shareButton.disabled = false;
+      shareButton.textContent = "Share to WhatsApp";
+    }
   } else {
     fillNormalLogSuccess(personId, list);
+    if (shareButton) shareButton.hidden = true;
   }
 
   $("#log-form").hidden = true;
@@ -1799,16 +2095,29 @@ function showLogSuccess(personId, entries, options = {}) {
     fireworksTimer = window.setTimeout(() => fireLogFireworks(fire), 650);
   }
 
+  // Give time to tap Share on board-clear; normal success stays short.
   logSuccessTimer = window.setTimeout(() => {
     closeLogDialog().then(() => {
       scrollPersonLogButtonIntoView();
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
     });
-  }, boardCleared ? 3600 : 1800);
+  }, boardCleared ? 9000 : 1800);
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
+$("#share-whatsapp-button")?.addEventListener("click", async () => {
+  if (!pendingShareGoal) return;
+  window.clearTimeout(logSuccessTimer);
+  await shareDailyGoalMetToWhatsApp(pendingShareGoal.personId, pendingShareGoal.activityDate);
+  logSuccessTimer = window.setTimeout(() => {
+    closeLogDialog().then(() => {
+      scrollPersonLogButtonIntoView();
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
+    });
+  }, 1200);
+});
 $("#quick-add-button").addEventListener("click", () => {
   const personId = rememberedPersonId();
   if (personId) {
@@ -1938,7 +2247,7 @@ $("#log-form").addEventListener("submit", async (event) => {
       showLogSuccess(
         personId,
         [{ exercise, reps, otherActivity: result.activity.otherActivity || "" }],
-        { boardCleared },
+        { boardCleared, activityDate },
       );
       render();
       return;
@@ -1996,7 +2305,7 @@ $("#log-form").addEventListener("submit", async (event) => {
     logDrafts = emptyLogDrafts();
     const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
     queuePulseReveal(personId, activityDate, boardCleared, previousPercents);
-    showLogSuccess(personId, added, { boardCleared });
+    showLogSuccess(personId, added, { boardCleared, activityDate });
     render();
   } catch (error) {
     showToast(error.message || "Activity could not be saved.");
