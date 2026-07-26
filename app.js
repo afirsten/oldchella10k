@@ -1850,9 +1850,9 @@ function revealDailyPulseAfterLog() {
 
   const fills = [...pulse.querySelectorAll(".daily-pulse-track i")];
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const showBanner = Boolean(
-    pendingPulseReveal?.boardCleared || pulse.classList.contains("is-complete"),
-  );
+  const boardCleared = Boolean(pendingPulseReveal?.boardCleared);
+  const showPulseLfg = Boolean(boardCleared && pendingPulseReveal?.showPulseLfg);
+  const showBanner = Boolean(boardCleared || pulse.classList.contains("is-complete"));
 
   if (showBanner) {
     pulse.classList.add("is-complete");
@@ -1904,23 +1904,34 @@ function revealDailyPulseAfterLog() {
       };
       ensureDailyGoalShareBlob(share.dataset.personId, share.dataset.date).catch(() => {});
     }
+
+    if (showPulseLfg) {
+      playDailyPulseLfg(pulse);
+      window.setTimeout(() => {
+        const lfg = pulse.querySelector(".daily-pulse-lfg");
+        if (lfg) lfg.classList.add("is-out");
+      }, reduceMotion ? 0 : 2800);
+    }
+
     pulse.classList.add("is-animating");
     fills.forEach((fill) => {
       const to = Number(fill.dataset.to) || 0;
       fill.style.width = `${to}%`;
       fill.classList.toggle("is-maxed", to >= 100);
     });
-    if (pendingPulseReveal?.boardCleared) pulse.classList.add("is-board-burst");
+    if (boardCleared) pulse.classList.add("is-board-burst");
     window.setTimeout(() => {
-      pulse.classList.remove("is-revealing", "is-animating", "is-board-burst");
+      pulse.classList.remove("is-revealing", "is-animating", "is-board-burst", "is-lfg");
       pulse.style.minHeight = "";
       const banner = pulse.querySelector(".daily-pulse-banner");
       if (banner) banner.classList.remove("is-entering", "is-in");
       const share = pulse.querySelector(".daily-pulse-share");
       if (share) share.classList.remove("is-entering", "is-in");
+      const lfg = pulse.querySelector(".daily-pulse-lfg");
+      if (lfg) lfg.remove();
       fills.forEach((fill) => fill.classList.remove("is-maxed"));
       pendingPulseReveal = null;
-    }, reduceMotion ? 0 : 4200);
+    }, reduceMotion ? 0 : showPulseLfg ? 5600 : 4200);
   };
 
   if (reduceMotion) {
@@ -1932,12 +1943,81 @@ function revealDailyPulseAfterLog() {
   });
 }
 
-function queuePulseReveal(personId, activityDate, boardCleared, previousPercents) {
+function playDailyPulseLfg(pulse) {
+  if (!pulse) return;
+  pulse.classList.add("is-lfg");
+  let lfg = pulse.querySelector(".daily-pulse-lfg");
+  if (!lfg) {
+    lfg = document.createElement("div");
+    lfg.className = "daily-pulse-lfg";
+    lfg.setAttribute("role", "status");
+    lfg.innerHTML = `
+      <div class="daily-pulse-lfg__confetti" aria-hidden="true"></div>
+      <p class="daily-pulse-lfg__eyebrow">BOARD CLEARED</p>
+      <strong class="daily-pulse-lfg__amount">LET'S F@#%!ING GO!</strong>
+      <span class="daily-pulse-lfg__unit">PUSH · SQUAT · PLANK</span>
+    `;
+    pulse.appendChild(lfg);
+  }
+  void lfg.offsetWidth;
+  lfg.classList.add("is-in");
+  fireDailyPulseLfgConfetti(lfg.querySelector(".daily-pulse-lfg__confetti"));
+}
+
+function fireDailyPulseLfgConfetti(host) {
+  if (!host || typeof confetti !== "function") return null;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
+  host.replaceChildren();
+  const canvas = document.createElement("canvas");
+  host.appendChild(canvas);
+  const fire = confetti.create(canvas, { resize: true, useWorker: true });
+  const colors = ["#f5c842", "#ff2d78", "#e8763a", "#f8ede1", "#c9b3ff", "#4cdf8a"];
+  fire({
+    particleCount: 70,
+    spread: 72,
+    startVelocity: 34,
+    gravity: 1.05,
+    ticks: 180,
+    origin: { x: 0.5, y: 0.55 },
+    colors,
+  });
+  fire({
+    particleCount: 24,
+    angle: 60,
+    spread: 42,
+    startVelocity: 28,
+    origin: { x: 0.15, y: 0.7 },
+    colors,
+  });
+  fire({
+    particleCount: 24,
+    angle: 120,
+    spread: 42,
+    startVelocity: 28,
+    origin: { x: 0.85, y: 0.7 },
+    colors,
+  });
+  window.setTimeout(() => {
+    fire({
+      particleCount: 36,
+      spread: 360,
+      startVelocity: 26,
+      ticks: 90,
+      gravity: 0.95,
+      origin: { x: 0.5, y: 0.35 },
+      colors,
+    });
+  }, 520);
+  return fire;
+}
+
+function queuePulseReveal(personId, activityDate, boardCleared, previousPercents, options = {}) {
   pendingPulseReveal = {
     personId,
     activityDate,
     boardCleared,
     previousPercents: { ...previousPercents },
+    showPulseLfg: Boolean(options.showPulseLfg),
   };
 }
 
@@ -2498,13 +2578,16 @@ async function quickAddActivity(button) {
     activities.push(result.activity);
     participation[personId] = result.status;
     const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
-    queuePulseReveal(personId, activityDate, boardCleared, previousPercents);
+    queuePulseReveal(personId, activityDate, boardCleared, previousPercents, {
+      showPulseLfg: boardCleared,
+    });
     playQuickAddButtonSuccess(button, { boardCleared });
     render();
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.setTimeout(() => {
-      scrollDailyPulseIntoView();
+      if (boardCleared) scrollDailyPulseIntoView();
+      else scrollPersonLogButtonIntoView();
       window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 280);
     }, reduceMotion ? 60 : 420);
 
@@ -2515,7 +2598,7 @@ async function quickAddActivity(button) {
           entry.disabled = false;
         });
       },
-      reduceMotion ? 900 : boardCleared ? 2400 : 1800,
+      reduceMotion ? 900 : boardCleared ? 2800 : 1800,
     );
   } catch (error) {
     showToast(error.message || "Activity could not be saved.");
@@ -2575,7 +2658,10 @@ function fireQuickAddConfetti(host, { boardCleared = false } = {}) {
 function scrollDailyPulseIntoView() {
   const pulse =
     $(".history-day.is-today .daily-pulse:not(.is-compact)") || $(".history-day.is-today");
-  if (!pulse) return;
+  if (!pulse) {
+    scrollPersonLogButtonIntoView();
+    return;
+  }
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const navHeight = $(".site-nav")?.offsetHeight || 64;
   const top = Math.max(0, pulse.getBoundingClientRect().top + window.scrollY - navHeight - 12);

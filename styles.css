@@ -2016,6 +2016,7 @@ dialog[open] { animation: slide-up 250ms ease-out; }
     var(--surface);
 }
 .daily-goals-card.daily-pulse {
+  position: relative;
   padding: 14px 12px 12px;
   border: 1px solid rgba(201,179,255,.28);
   border-radius: 12px;
@@ -2023,6 +2024,76 @@ dialog[open] { animation: slide-up 250ms ease-out; }
     linear-gradient(160deg, rgba(201,179,255,.1), transparent 48%),
     var(--pulse-panel);
   box-shadow: none;
+  overflow: hidden;
+}
+.daily-pulse-lfg {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 18px;
+  background:
+    linear-gradient(160deg, rgba(76, 223, 138, 0.18), transparent 45%),
+    color-mix(in srgb, var(--pulse-panel) 92%, #050302);
+  text-align: center;
+  opacity: 0;
+  transform: scale(0.94);
+  pointer-events: none;
+}
+.daily-pulse-lfg.is-in {
+  opacity: 1;
+  transform: scale(1);
+  animation: daily-pulse-lfg-in 520ms cubic-bezier(.16,.9,.3,1) both;
+}
+.daily-pulse-lfg.is-out {
+  opacity: 0;
+  transform: scale(1.03);
+  transition: opacity 520ms ease, transform 520ms ease;
+  pointer-events: none;
+}
+.daily-pulse-lfg__confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.daily-pulse-lfg__confetti canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.daily-pulse-lfg__eyebrow {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: var(--lavender);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+}
+.daily-pulse-lfg__amount {
+  position: relative;
+  z-index: 1;
+  max-width: 11ch;
+  color: var(--lime);
+  font: 800 clamp(26px, 7vw, 42px)/1.02 "Manrope", sans-serif;
+  letter-spacing: -.045em;
+  text-wrap: balance;
+  animation: board-clear-pop 520ms cubic-bezier(.16,.9,.3,1);
+}
+.daily-pulse-lfg__unit {
+  position: relative;
+  z-index: 1;
+  color: var(--pink);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+}
+.daily-pulse.is-lfg {
+  min-height: 270px;
 }
 .daily-goals-card.is-complete {
   border-color: rgba(76,223,138,.45);
@@ -2632,6 +2703,11 @@ input:focus, select:focus {
   55% { opacity: 1; transform: scale(1.12); }
   100% { opacity: 1; transform: scale(1); }
 }
+@keyframes daily-pulse-lfg-in {
+  0% { opacity: 0; transform: scale(.9); }
+  60% { opacity: 1; transform: scale(1.03); }
+  100% { opacity: 1; transform: scale(1); }
+}
 @keyframes pulse-bar-max {
   0% {
     filter: brightness(1);
@@ -2692,6 +2768,8 @@ input:focus, select:focus {
 }
 @media (prefers-reduced-motion: reduce) {
   .log-success.is-board-cleared .success-check { animation: none; }
+  .daily-pulse-lfg.is-in { animation: none; }
+  .daily-pulse-lfg__amount { animation: none; }
   .daily-pulse-track i.is-maxed,
   .daily-pulse-track i.is-maxed::after,
   .daily-pulse-row:has(.daily-pulse-track i.is-maxed) .daily-pulse-meta strong,
