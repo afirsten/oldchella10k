@@ -1476,10 +1476,12 @@ a.activity-item:focus-visible {
 .personal-breakdown {
   display: grid;
   grid-template-columns: repeat(4,1fr);
-  margin-top: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 17px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
 }
 .personal-breakdown div {
   display: grid;
@@ -1487,7 +1489,7 @@ a.activity-item:focus-visible {
   place-content: center;
   justify-items: center;
   text-align: center;
-  padding: 15px 11px 13px;
+  padding: 4px 8px 2px;
   border-right: 1px solid var(--line);
 }
 .personal-breakdown div:last-child { border-right: 0; }
@@ -1555,6 +1557,117 @@ a.activity-item:focus-visible {
 }
 .person-log-label {
   font-weight: 800;
+}
+.person-quick-add {
+  margin-top: 0;
+  padding-top: 0;
+}
+.person-quick-add .section-heading {
+  justify-content: center;
+  margin-bottom: 8px;
+  text-align: center;
+}
+.person-quick-add .section-heading > div {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 14px;
+}
+.person-quick-add .section-heading .eyebrow {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.person-quick-add .section-heading > div::before,
+.person-quick-add .section-heading > div::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--line);
+}
+.person-quick-add-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.person-quick-add-grid button {
+  position: relative;
+  display: grid;
+  gap: 3px;
+  place-items: center;
+  min-height: 48px;
+  height: 48px;
+  padding: 6px 4px;
+  overflow: hidden;
+  border: 1px solid rgba(245, 200, 66, 0.35);
+  border-radius: 12px;
+  background:
+    linear-gradient(160deg, rgba(245, 200, 66, 0.14), transparent 48%),
+    var(--pulse-panel);
+  box-shadow: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, transform 180ms ease;
+}
+.person-quick-add-grid button strong {
+  position: relative;
+  z-index: 1;
+  color: var(--lime);
+  font: 800 15px/1 "Manrope", sans-serif;
+  letter-spacing: -.03em;
+}
+.person-quick-add-grid button span {
+  position: relative;
+  z-index: 1;
+  color: var(--quiet);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.person-quick-add-grid button:hover,
+.person-quick-add-grid button:focus-visible {
+  border-color: rgba(245, 200, 66, 0.55);
+  background:
+    linear-gradient(160deg, rgba(245, 200, 66, 0.22), transparent 48%),
+    var(--pulse-panel);
+  outline: none;
+}
+.person-quick-add-grid button:disabled:not(.is-success) {
+  opacity: 0.45;
+  cursor: wait;
+}
+.person-quick-add-grid button.is-success {
+  border-color: rgba(76, 223, 138, 0.55);
+  background:
+    linear-gradient(160deg, rgba(76, 223, 138, 0.18), transparent 48%),
+    var(--pulse-panel);
+  opacity: 1;
+  cursor: default;
+}
+.person-quick-add-grid button.is-success strong {
+  color: var(--green);
+  font-size: 18px;
+}
+.person-quick-add-grid button.is-success span {
+  color: var(--green);
+  letter-spacing: .1em;
+}
+.person-quick-add-grid button.is-board-cleared {
+  border-color: rgba(76, 223, 138, 0.7);
+  background:
+    linear-gradient(160deg, rgba(76, 223, 138, 0.28), rgba(245, 200, 66, 0.12) 55%, transparent 70%),
+    var(--pulse-panel);
+}
+.quick-add-confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.quick-add-confetti canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .fab {
@@ -1688,6 +1801,17 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .14em;
+}
+.log-success p.success-remaining {
+  margin: 22px 18px 0;
+  max-width: 16em;
+  color: var(--ink);
+  font: 800 22px/1.25 "Manrope", sans-serif;
+  letter-spacing: -.02em;
+  text-wrap: balance;
+}
+.log-success p.success-remaining[hidden] {
+  display: none !important;
 }
 .log-success strong {
   color: var(--ink);

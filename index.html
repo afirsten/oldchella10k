@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=177" />
+    <link rel="stylesheet" href="./styles.css?v=191" />
     <script>
       (function () {
         try {
@@ -33,7 +33,7 @@
       })();
     </script>
     <script src="./vendor/confetti.browser.min.js"></script>
-    <script src="./app.js?v=136" defer></script>
+    <script src="./app.js?v=141" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -311,40 +311,40 @@
               <span id="person-goal-current">0</span> of 10,000 complete
               <span id="person-pace-copy"></span>
             </p>
-          </div>
 
-          <div class="personal-breakdown">
-            <div>
-              <span>PUSH-UPS</span>
-              <strong id="person-pushups-total">0</strong>
-              <span class="daily-avg">
-                <span class="daily-avg-label">DAILY AVG</span>
-                <strong id="person-avg-pushups">0</strong>
-              </span>
-            </div>
-            <div>
-              <span>SQUATS</span>
-              <strong id="person-squats-total">0</strong>
-              <span class="daily-avg">
-                <span class="daily-avg-label">DAILY AVG</span>
-                <strong id="person-avg-squats">0</strong>
-              </span>
-            </div>
-            <div>
-              <span>PLANKS</span>
-              <strong id="person-plank-minutes">0<span class="stat-unit">MIN</span></strong>
-              <span class="daily-avg">
-                <span class="daily-avg-label">DAILY AVG</span>
-                <strong id="person-avg-planks">0</strong>
-              </span>
-            </div>
-            <div>
-              <span>WORKOUTS</span>
-              <strong id="person-other-days">0</strong>
-              <span class="daily-avg">
-                <span class="daily-avg-label">DAILY AVG</span>
-                <strong id="person-avg-other">0</strong>
-              </span>
+            <div class="personal-breakdown">
+              <div>
+                <span>PUSH-UPS</span>
+                <strong id="person-pushups-total">0</strong>
+                <span class="daily-avg">
+                  <span class="daily-avg-label">DAILY AVG</span>
+                  <strong id="person-avg-pushups">0</strong>
+                </span>
+              </div>
+              <div>
+                <span>SQUATS</span>
+                <strong id="person-squats-total">0</strong>
+                <span class="daily-avg">
+                  <span class="daily-avg-label">DAILY AVG</span>
+                  <strong id="person-avg-squats">0</strong>
+                </span>
+              </div>
+              <div>
+                <span>PLANKS</span>
+                <strong id="person-plank-minutes">0<span class="stat-unit">MIN</span></strong>
+                <span class="daily-avg">
+                  <span class="daily-avg-label">DAILY AVG</span>
+                  <strong id="person-avg-planks">0</strong>
+                </span>
+              </div>
+              <div>
+                <span>WORKOUTS</span>
+                <strong id="person-other-days">0</strong>
+                <span class="daily-avg">
+                  <span class="daily-avg-label">DAILY AVG</span>
+                  <strong id="person-avg-other">0</strong>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -352,6 +352,37 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
             <span class="person-log-label">ADD REPS FOR <span id="person-button-name"></span></span>
           </button>
+        </section>
+
+        <section class="section person-quick-add" id="person-quick-add" hidden>
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">QUICK ADD</p>
+            </div>
+          </div>
+          <div class="person-quick-add-grid" role="group" aria-label="Quick add presets">
+            <button type="button" data-quick-exercise="pushups" data-quick-reps="25">
+              <strong>+25</strong>
+              <span>PUSH-UPS</span>
+            </button>
+            <button type="button" data-quick-exercise="squats" data-quick-reps="25">
+              <strong>+25</strong>
+              <span>SQUATS</span>
+            </button>
+            <button type="button" data-quick-exercise="planks" data-quick-reps="60">
+              <strong>+1 MIN</strong>
+              <span>PLANK</span>
+            </button>
+            <button
+              type="button"
+              data-quick-exercise="other"
+              data-quick-reps="50"
+              data-quick-other="Workout"
+            >
+              <strong>+50%</strong>
+              <span>WORKOUT</span>
+            </button>
+          </div>
         </section>
 
         <section class="section">
@@ -459,6 +490,7 @@
         <p id="success-eyebrow">ACTIVITY ADDED</p>
         <strong id="success-amount">+0</strong>
         <span id="success-unit">REPS</span>
+        <p class="success-remaining" id="success-remaining" hidden></p>
         <small id="success-copy">Added to your personal progress.</small>
       </div>
       </div>

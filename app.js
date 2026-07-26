@@ -1156,7 +1156,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
     dashboard.hidden = false;
     personPage.hidden = true;
     updateQuickAddButton();
-    if (returningHome) nestleReadyToGoUnit({ force: true });
+    if (returningHome) scrollHomeToTop();
     return;
   }
 
@@ -1244,8 +1244,9 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const showProgress = history.length > 0 || personStats.status === "in";
   const todayKey = localDateValue();
   $(".personal-total").hidden = !showProgress;
-  $(".personal-breakdown").hidden = !showProgress;
   $("#person-log-button").hidden = personStats.status !== "in";
+  const quickAdd = $("#person-quick-add");
+  if (quickAdd) quickAdd.hidden = personStats.status !== "in";
   $("#person-total").textContent = number.format(personStats.total);
   $("#person-total-label").textContent =
     personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "PUSH-UP COUNT";
@@ -1756,7 +1757,7 @@ function fireLogFireworks(fire) {
   }, 260);
 }
 
-function fillNormalLogSuccess(personId, list) {
+function fillNormalLogSuccess(personId, list, activityDate = localDateValue()) {
   const person = getPerson(personId);
   $("#success-eyebrow").textContent = "ACTIVITY ADDED";
   if (list.length === 1) {
@@ -1767,26 +1768,65 @@ function fillNormalLogSuccess(personId, list) {
     $("#success-amount").textContent = `+${amount}`;
     $("#success-unit").textContent = unit;
     $("#success-copy").textContent = `Added to ${person.name.split(" ")[0]}’s personal progress.`;
+  } else {
+    $("#success-amount").textContent = `+${list.length}`;
+    $("#success-unit").textContent = "ACTIVITIES";
+    $("#success-copy").textContent = list
+      .map((entry) => {
+        const label =
+          entry.exercise === "pushups"
+            ? "push-ups"
+            : entry.exercise === "squats"
+              ? "squats"
+              : entry.exercise === "planks"
+                ? "plank"
+                : entry.otherActivity || "other";
+        const amount =
+          entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
+        const unit = entry.exercise === "planks" ? "min" : "";
+        return `+${amount}${unit ? ` ${unit}` : ""} ${label}`;
+      })
+      .join(" · ");
+  }
+  setSuccessRemainingMessage(personId, activityDate);
+}
+
+function dailyGoalRemainingParts(personId, dateKey) {
+  const { totals, complete } = dayGoalProgress(personDayActivities(personId, dateKey));
+  if (complete) return [];
+  const parts = [];
+  const pushLeft = Math.max(0, DAILY_GOALS.pushups - totals.pushups);
+  const squatLeft = Math.max(0, DAILY_GOALS.squats - totals.squats);
+  const plankLeft = Math.max(0, DAILY_GOALS.planks - totals.planks);
+  if (pushLeft) parts.push(`${number.format(pushLeft)} push-up${pushLeft === 1 ? "" : "s"}`);
+  if (squatLeft) parts.push(`${number.format(squatLeft)} squat${squatLeft === 1 ? "" : "s"}`);
+  if (plankLeft) {
+    if (plankLeft >= 60 && plankLeft % 60 === 0) {
+      const mins = plankLeft / 60;
+      parts.push(`${durationNumber.format(mins)} min plank`);
+    } else {
+      parts.push(`${number.format(plankLeft)} sec plank`);
+    }
+  }
+  return parts;
+}
+
+function setSuccessRemainingMessage(personId, dateKey, { boardCleared = false } = {}) {
+  const remaining = $("#success-remaining");
+  if (!remaining) return;
+  if (boardCleared) {
+    remaining.hidden = true;
+    remaining.textContent = "";
     return;
   }
-  $("#success-amount").textContent = `+${list.length}`;
-  $("#success-unit").textContent = "ACTIVITIES";
-  $("#success-copy").textContent = list
-    .map((entry) => {
-      const label =
-        entry.exercise === "pushups"
-          ? "push-ups"
-          : entry.exercise === "squats"
-            ? "squats"
-            : entry.exercise === "planks"
-              ? "plank"
-              : entry.otherActivity || "other";
-      const amount =
-        entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
-      const unit = entry.exercise === "planks" ? "min" : "";
-      return `+${amount}${unit ? ` ${unit}` : ""} ${label}`;
-    })
-    .join(" · ");
+  const parts = dailyGoalRemainingParts(personId, dateKey);
+  if (!parts.length) {
+    remaining.hidden = true;
+    remaining.textContent = "";
+    return;
+  }
+  remaining.hidden = false;
+  remaining.textContent = `${parts.join(" · ")} left today`;
 }
 
 function scrollPersonLogButtonIntoView() {
@@ -2397,9 +2437,10 @@ function showLogSuccess(personId, entries, options = {}) {
       list.length === 1
         ? "Daily goals locked in. Absolute menace."
         : `${list.length} activities in — daily goals locked in.`;
+    setSuccessRemainingMessage(personId, activityDate, { boardCleared: true });
     ensureDailyGoalShareBlob(personId, activityDate).catch(() => {});
   } else {
-    fillNormalLogSuccess(personId, list);
+    fillNormalLogSuccess(personId, list, activityDate);
   }
 
   form.hidden = true;
@@ -2420,10 +2461,133 @@ function showLogSuccess(personId, entries, options = {}) {
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
     });
-  }, boardCleared ? 4200 : 1800);
+  }, boardCleared ? 6300 : 2700);
 }
 
 $("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
+
+async function quickAddActivity(button) {
+  const personId = currentPersonId();
+  if (!personId || !button || button.classList.contains("is-success")) return;
+  const exercise = button.dataset.quickExercise;
+  const reps = Number(button.dataset.quickReps);
+  const otherActivity = button.dataset.quickOther || "";
+  if (!exercise || !Number.isInteger(reps) || reps < 1) return;
+
+  const activityDate = localDateValue();
+  const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
+  const wasComplete = personDayComplete(personId, activityDate);
+  const grid = button.closest(".person-quick-add-grid");
+  const buttons = grid ? [...grid.querySelectorAll("button")] : [button];
+  buttons.forEach((entry) => {
+    entry.disabled = true;
+  });
+  try {
+    const result = await protectedRequest("/api/activities", "POST", personId, {
+      exercise,
+      otherActivity: exercise === "other" ? otherActivity || "Workout" : "",
+      reps,
+      activityDate,
+    });
+    if (!result) {
+      buttons.forEach((entry) => {
+        entry.disabled = false;
+      });
+      return;
+    }
+    activities.push(result.activity);
+    participation[personId] = result.status;
+    const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
+    queuePulseReveal(personId, activityDate, boardCleared, previousPercents);
+    playQuickAddButtonSuccess(button, { boardCleared });
+    render();
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.setTimeout(() => {
+      scrollDailyPulseIntoView();
+      window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 280);
+    }, reduceMotion ? 60 : 420);
+
+    window.setTimeout(
+      () => {
+        clearQuickAddButtonSuccess(button);
+        buttons.forEach((entry) => {
+          entry.disabled = false;
+        });
+      },
+      reduceMotion ? 900 : boardCleared ? 2400 : 1800,
+    );
+  } catch (error) {
+    showToast(error.message || "Activity could not be saved.");
+    buttons.forEach((entry) => {
+      entry.disabled = false;
+    });
+  }
+}
+
+function playQuickAddButtonSuccess(button, { boardCleared = false } = {}) {
+  if (!button) return;
+  if (!button.dataset.quickLabelHtml) {
+    button.dataset.quickLabelHtml = button.innerHTML;
+  }
+  button.classList.add("is-success");
+  button.classList.toggle("is-board-cleared", boardCleared);
+  button.innerHTML = `
+    <span class="quick-add-confetti" aria-hidden="true"></span>
+    <strong>✓</strong>
+    <span>${boardCleared ? "CLEARED" : "ADDED"}</span>
+  `;
+  fireQuickAddConfetti(button.querySelector(".quick-add-confetti"), { boardCleared });
+}
+
+function clearQuickAddButtonSuccess(button) {
+  if (!button) return;
+  button.classList.remove("is-success", "is-board-cleared");
+  if (button.dataset.quickLabelHtml) {
+    button.innerHTML = button.dataset.quickLabelHtml;
+    delete button.dataset.quickLabelHtml;
+  }
+}
+
+function fireQuickAddConfetti(host, { boardCleared = false } = {}) {
+  if (!host || typeof confetti !== "function") return null;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return null;
+  host.replaceChildren();
+  const canvas = document.createElement("canvas");
+  host.appendChild(canvas);
+  const fire = confetti.create(canvas, { resize: true, useWorker: true });
+  const colors = boardCleared
+    ? ["#f5c842", "#ff2d78", "#e8763a", "#4cdf8a", "#c9b3ff"]
+    : ["#f5c842", "#e8763a", "#4cdf8a", "#f8ede1"];
+  fire({
+    particleCount: boardCleared ? 28 : 18,
+    spread: boardCleared ? 70 : 55,
+    startVelocity: boardCleared ? 22 : 16,
+    gravity: 1.15,
+    ticks: 120,
+    scalar: 0.7,
+    origin: { x: 0.5, y: 0.65 },
+    colors,
+  });
+  return fire;
+}
+
+function scrollDailyPulseIntoView() {
+  const pulse =
+    $(".history-day.is-today .daily-pulse:not(.is-compact)") || $(".history-day.is-today");
+  if (!pulse) return;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const navHeight = $(".site-nav")?.offsetHeight || 64;
+  const top = Math.max(0, pulse.getBoundingClientRect().top + window.scrollY - navHeight - 12);
+  window.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
+}
+
+$("#person-quick-add")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-quick-exercise]");
+  if (!button) return;
+  quickAddActivity(button);
+});
+
 document.addEventListener("click", async (event) => {
   const shareButton = event.target.closest(".daily-pulse-share");
   if (!shareButton) return;
@@ -2734,9 +2898,15 @@ function tickOldchellaCountdown() {
   secs.textContent = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
 }
 
+function scrollHomeToTop() {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "auto" : "smooth" });
+}
+
 $("#ripped-home-link").addEventListener("click", (event) => {
   event.preventDefault();
   window.location.hash = "";
+  scrollHomeToTop();
 });
 
 window.addEventListener("hashchange", renderPersonPage);
