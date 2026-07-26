@@ -332,10 +332,15 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
         `;
       })();
 
-  const revealClass = fromPercents ? " is-revealing" : "";
-  // During post-submit reveal, defer banner + share so the card keeps its pre-submit height,
-  // then inject them with the enter animation once the celebration starts.
-  const showCompleteChrome = complete && !compact && !fromPercents;
+  // Only stamp the slide-up entrance when the dialog flow needs it. Quick Add skips it
+  // so the card doesn't jump down (translateY/margin) and then animate back up.
+  const revealClass =
+    fromPercents && !pendingPulseReveal?.skipEntrance ? " is-revealing" : "";
+  // Defer banner/share only on the board-clear celebration so they can animate in.
+  // If the board was already clear, keep them in the HTML so Quick Add doesn't rebuild
+  // the card and make Daily Pulse grow/shrink on every tap.
+  const deferCompleteChrome = Boolean(fromPercents && pendingPulseReveal?.boardCleared);
+  const showCompleteChrome = complete && !compact && !deferCompleteChrome;
   const banner = showCompleteChrome
     ? `<div class="daily-pulse-banner" role="status"><span>Daily goal met</span></div>`
     : "";
@@ -1853,22 +1858,27 @@ function revealDailyPulseAfterLog() {
   const boardCleared = Boolean(pendingPulseReveal?.boardCleared);
   const showPulseLfg = Boolean(boardCleared && pendingPulseReveal?.showPulseLfg);
   const skipEntrance = Boolean(pendingPulseReveal?.skipEntrance);
-  const showBanner = Boolean(boardCleared || pulse.classList.contains("is-complete"));
+  // Only inject celebration chrome when the board was just cleared; otherwise the
+  // already-complete banner/share stay in the rendered HTML and shouldn't re-enter.
+  const showBanner = Boolean(boardCleared);
 
   if (showBanner) {
     pulse.classList.add("is-complete");
   }
 
-  // Lock pre-celebration height so injecting banner/share at 0 doesn't jump layout early.
-  const lockedHeight = pulse.offsetHeight;
-  pulse.style.minHeight = `${lockedHeight}px`;
+  // Lock height only when celebration chrome will be injected (avoids layout thrash on Quick Add).
+  if (showBanner || showPulseLfg) {
+    pulse.style.minHeight = `${pulse.offsetHeight}px`;
+  }
 
   fills.forEach((fill) => {
     const from = Number(fill.dataset.from) || 0;
     fill.style.width = `${from}%`;
   });
 
-  if (!skipEntrance) {
+  if (skipEntrance) {
+    pulse.classList.remove("is-revealing");
+  } else {
     pulse.classList.add("is-revealing");
     // Force layout so the slide/fill transitions run from the starting state.
     void pulse.offsetWidth;
@@ -2599,10 +2609,8 @@ async function quickAddActivity(button) {
     render({ skipScroll: true });
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    window.setTimeout(() => {
-      scrollPersonLogButtonIntoView();
-      window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 280);
-    }, reduceMotion ? 60 : 420);
+    // Stay put — no scroll. Reveal only animates bar fills (and LFG on board clear).
+    window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 280);
 
     window.setTimeout(
       () => {
@@ -2875,6 +2883,89 @@ $("#log-form").addEventListener("submit", async (event) => {
   }
 });
 
+function restoreActivityItem(item, html) {
+  if (!item) return;
+  item.classList.remove("is-deleting", "is-tv-off");
+  item.removeAttribute("aria-busy");
+  item.style.height = "";
+  item.style.marginTop = "";
+  item.style.marginBottom = "";
+  item.style.paddingTop = "";
+  item.style.paddingBottom = "";
+  item.style.overflow = "";
+  item.style.removeProperty("--delete-h");
+  item.innerHTML = html;
+}
+
+function playActivityTvOff(item) {
+  return new Promise((resolve) => {
+    if (!item) {
+      resolve();
+      return;
+    }
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      resolve();
+      return;
+    }
+
+    const height = item.offsetHeight;
+    item.style.setProperty("--delete-h", `${height}px`);
+    item.style.height = `${height}px`;
+    item.style.overflow = "hidden";
+    void item.offsetWidth;
+    item.classList.add("is-tv-off");
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      item.removeEventListener("animationend", onEnd);
+      resolve();
+    };
+    const onEnd = (event) => {
+      if (event.target !== item || event.animationName !== "activity-tv-off") return;
+      finish();
+    };
+    item.addEventListener("animationend", onEnd);
+    window.setTimeout(finish, 900);
+  });
+}
+
+async function deleteActivityItem(item, activity, personId) {
+  if (!item || !activity || !personId) return;
+  if (item.classList.contains("is-deleting")) return;
+
+  const snapshot = item.innerHTML;
+  const lockedHeight = item.offsetHeight;
+  item.classList.add("is-deleting");
+  item.setAttribute("aria-busy", "true");
+  item.style.height = `${lockedHeight}px`;
+  item.innerHTML = `<span class="activity-deleting-label">Deleting</span>`;
+
+  try {
+    const result = await protectedRequest("/api/activities", "DELETE", personId, {
+      activityId: activity.id,
+    });
+    if (!result) {
+      restoreActivityItem(item, snapshot);
+      return;
+    }
+
+    activities = activities.filter((entry) => entry.id !== result.deletedActivityId);
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduceMotion) {
+      await new Promise((resolve) => window.setTimeout(resolve, 320));
+    }
+    await playActivityTvOff(item);
+    render({ skipScroll: true });
+    showToast("Activity deleted. Totals updated.");
+  } catch (error) {
+    restoreActivityItem(item, snapshot);
+    showToast(error.message || "Activity could not be deleted.");
+  }
+}
+
 document.querySelectorAll("[data-participation]").forEach((button) => {
   button.addEventListener("click", async () => {
     const personId = currentPersonId();
@@ -2906,37 +2997,17 @@ $("#person-activity-list").addEventListener("click", async (event) => {
   const deleteButton = event.target.closest("[data-delete-activity-id]");
   if (deleteButton) {
     event.stopPropagation();
+    const item = deleteButton.closest("[data-activity-id]");
     const activity = activities.find((entry) => entry.id === deleteButton.dataset.deleteActivityId);
     const personId = currentPersonId();
-    if (!activity || !personId || activity.personId !== personId) return;
-    if (
-      !window.confirm(
-        `Delete this ${formatActivityAmount(activity)} ${exerciseUnit(activity).toLowerCase()} ${exerciseName(activity).toLowerCase()} entry?`,
-      )
-    ) {
-      return;
-    }
-
-    deleteButton.disabled = true;
-    try {
-      const result = await protectedRequest("/api/activities", "DELETE", personId, {
-        activityId: activity.id,
-      });
-      if (!result) return;
-
-      activities = activities.filter((entry) => entry.id !== result.deletedActivityId);
-      render();
-      showToast("Activity deleted. Totals updated.");
-    } catch (error) {
-      showToast(error.message || "Activity could not be deleted.");
-    } finally {
-      deleteButton.disabled = false;
-    }
+    if (!item || !activity || !personId || activity.personId !== personId) return;
+    if (item.classList.contains("is-deleting")) return;
+    await deleteActivityItem(item, activity, personId);
     return;
   }
 
   const item = event.target.closest("[data-activity-id]");
-  if (!item) return;
+  if (!item || item.classList.contains("is-deleting")) return;
   const activity = activities.find((entry) => entry.id === item.dataset.activityId);
   const personId = currentPersonId();
   if (!activity || !personId || activity.personId !== personId) return;
@@ -2949,7 +3020,7 @@ $("#person-activity-list").addEventListener("click", async (event) => {
 $("#person-activity-list").addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
   const item = event.target.closest("[data-activity-id]");
-  if (!item || event.target.closest("[data-delete-activity-id]")) return;
+  if (!item || event.target.closest("[data-delete-activity-id]") || item.classList.contains("is-deleting")) return;
   event.preventDefault();
   item.click();
 });

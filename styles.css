@@ -1225,6 +1225,89 @@ a.activity-item:focus-visible {
   stroke-linejoin: round;
   stroke-width: 1.7;
 }
+.activity-item.is-deleting {
+  pointer-events: none;
+  cursor: default;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  overflow: hidden;
+  border-color: rgba(255, 45, 120, .5);
+  background: rgba(255, 45, 120, .12);
+  transform-origin: center center;
+  will-change: transform, height, opacity;
+}
+.activity-item.is-deleting:hover,
+.activity-item.is-deleting:focus-visible {
+  border-color: rgba(255, 45, 120, .5);
+  outline: none;
+}
+.activity-deleting-label {
+  color: var(--pink);
+  font: 800 11px/1 "Manrope", sans-serif;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.activity-item.is-tv-off {
+  animation: activity-tv-off 720ms cubic-bezier(.45, 0, .2, 1) forwards;
+}
+.activity-item.is-tv-off .activity-deleting-label {
+  opacity: 0;
+  transition: opacity 80ms linear;
+}
+@keyframes activity-tv-off {
+  0% {
+    opacity: 1;
+    height: var(--delete-h);
+    transform: scaleX(1);
+    border-color: rgba(255, 45, 120, .5);
+    background: rgba(255, 45, 120, .12);
+    border-radius: 15px;
+  }
+  12% {
+    background: #ff2d78;
+    border-color: #ff2d78;
+  }
+  48% {
+    opacity: 1;
+    height: 2px;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-width: 0;
+    border-radius: 99px;
+    background: #ff2d78;
+    transform: scaleX(1);
+  }
+  88% {
+    opacity: 1;
+    height: 2px;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-width: 0;
+    border-radius: 99px;
+    background: #ff2d78;
+    transform: scaleX(0);
+  }
+  100% {
+    opacity: 0;
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    border-width: 0;
+    border-radius: 99px;
+    background: #ff2d78;
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-item.is-tv-off { animation: none; }
+}
 .empty-state {
   padding: 34px 20px;
   border: 1px dashed var(--line);
