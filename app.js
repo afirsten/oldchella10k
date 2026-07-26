@@ -1852,6 +1852,7 @@ function revealDailyPulseAfterLog() {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const boardCleared = Boolean(pendingPulseReveal?.boardCleared);
   const showPulseLfg = Boolean(boardCleared && pendingPulseReveal?.showPulseLfg);
+  const skipEntrance = Boolean(pendingPulseReveal?.skipEntrance);
   const showBanner = Boolean(boardCleared || pulse.classList.contains("is-complete"));
 
   if (showBanner) {
@@ -1867,9 +1868,11 @@ function revealDailyPulseAfterLog() {
     fill.style.width = `${from}%`;
   });
 
-  pulse.classList.add("is-revealing");
-  // Force layout so the slide/fill transitions run from the starting state.
-  void pulse.offsetWidth;
+  if (!skipEntrance) {
+    pulse.classList.add("is-revealing");
+    // Force layout so the slide/fill transitions run from the starting state.
+    void pulse.offsetWidth;
+  }
 
   const run = () => {
     if (showBanner) {
@@ -2026,6 +2029,8 @@ function queuePulseReveal(personId, activityDate, boardCleared, previousPercents
     boardCleared,
     previousPercents: { ...previousPercents },
     showPulseLfg: Boolean(options.showPulseLfg),
+    // Quick Add is already on-screen; skip the down-then-up entrance slide.
+    skipEntrance: Boolean(options.skipEntrance),
   };
 }
 
@@ -2588,6 +2593,7 @@ async function quickAddActivity(button) {
     const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
     queuePulseReveal(personId, activityDate, boardCleared, previousPercents, {
       showPulseLfg: boardCleared,
+      skipEntrance: true,
     });
     playQuickAddButtonSuccess(button, { boardCleared });
     render({ skipScroll: true });
