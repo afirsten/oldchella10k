@@ -648,7 +648,7 @@ function formatPersonHeadline(name) {
   return `${escapeHtml(parts.join(" "))}<span class="name-initial">${escapeHtml(initial)}</span>`;
 }
 
-function render() {
+function render({ skipScroll = false } = {}) {
   const ranking = totalsByPerson().sort(
     (a, b) =>
       Number(a.status === "out") - Number(b.status === "out") ||
@@ -793,7 +793,7 @@ function render() {
         .join("")
     : '<div class="empty-state">No reps yet. Be the first to get moving.</div>';
 
-  renderPersonPage();
+  renderPersonPage({ skipScroll });
 }
 
 function formatDate(value) {
@@ -2582,7 +2582,7 @@ async function quickAddActivity(button) {
       showPulseLfg: boardCleared,
     });
     playQuickAddButtonSuccess(button, { boardCleared });
-    render();
+    render({ skipScroll: true });
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.setTimeout(() => {
