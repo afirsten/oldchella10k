@@ -2609,8 +2609,10 @@ async function quickAddActivity(button) {
     render({ skipScroll: true });
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // Stay put — no scroll. Reveal only animates bar fills (and LFG on board clear).
-    window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 280);
+    window.setTimeout(() => {
+      scrollPersonLogButtonIntoView();
+      window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 280);
+    }, reduceMotion ? 60 : 420);
 
     window.setTimeout(
       () => {
