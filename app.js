@@ -1909,8 +1909,16 @@ function revealDailyPulseAfterLog() {
       playDailyPulseLfg(pulse);
       window.setTimeout(() => {
         const lfg = pulse.querySelector(".daily-pulse-lfg");
-        if (lfg) lfg.classList.add("is-out");
-      }, reduceMotion ? 0 : 2800);
+        if (!lfg) return;
+        lfg.classList.remove("is-in");
+        // Force a frame so the exit transition runs from full opacity.
+        void lfg.offsetWidth;
+        lfg.classList.add("is-out");
+        window.setTimeout(() => {
+          lfg.remove();
+          pulse.classList.remove("is-lfg");
+        }, reduceMotion ? 0 : 300);
+      }, reduceMotion ? 0 : 2600);
     }
 
     pulse.classList.add("is-animating");
@@ -1931,7 +1939,7 @@ function revealDailyPulseAfterLog() {
       if (lfg) lfg.remove();
       fills.forEach((fill) => fill.classList.remove("is-maxed"));
       pendingPulseReveal = null;
-    }, reduceMotion ? 0 : showPulseLfg ? 5600 : 4200);
+    }, reduceMotion ? 0 : showPulseLfg ? 4800 : 4200);
   };
 
   if (reduceMotion) {
@@ -2586,8 +2594,7 @@ async function quickAddActivity(button) {
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.setTimeout(() => {
-      if (boardCleared) scrollDailyPulseIntoView();
-      else scrollPersonLogButtonIntoView();
+      scrollPersonLogButtonIntoView();
       window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 280);
     }, reduceMotion ? 60 : 420);
 
@@ -2653,19 +2660,6 @@ function fireQuickAddConfetti(host, { boardCleared = false } = {}) {
     colors,
   });
   return fire;
-}
-
-function scrollDailyPulseIntoView() {
-  const pulse =
-    $(".history-day.is-today .daily-pulse:not(.is-compact)") || $(".history-day.is-today");
-  if (!pulse) {
-    scrollPersonLogButtonIntoView();
-    return;
-  }
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const navHeight = $(".site-nav")?.offsetHeight || 64;
-  const top = Math.max(0, pulse.getBoundingClientRect().top + window.scrollY - navHeight - 12);
-  window.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
 }
 
 $("#person-quick-add")?.addEventListener("click", (event) => {
