@@ -937,8 +937,15 @@ function render({ skipScroll = false } = {}) {
       : 0;
   const eachLeft = participants.length ? Math.ceil(remaining / participants.length) : remaining;
   const burned = estimateCategoryCalories(categoryTotals);
-  const daysLogged = participants.reduce((sum, person) => sum + person.sessions, 0);
+  // Unique calendar days any opted-in crew member logged (not sum of per-person sessions).
+  const uniqueLoggingDays = new Set();
+  for (const activity of activities) {
+    if (!participantIds.has(activity.personId)) continue;
+    const day = String(activity.createdAt || "").slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) uniqueLoggingDays.add(day);
+  }
   const daysGoal = 100;
+  const daysLogged = Math.min(daysGoal, uniqueLoggingDays.size);
   const bestDay = bestGroupDay(participantIds);
   const activeCrew = participants.filter((person) => person.sessions > 0).length;
   const personalPace = onTargetReps();
