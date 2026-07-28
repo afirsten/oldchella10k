@@ -2375,10 +2375,16 @@ a.activity-item:focus-visible {
 }
 .feed-cleared-card__sub {
   margin: 0 0 18px;
-  max-width: 34rem;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.45;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .feed-cleared-card__sub {
+    white-space: normal;
+    font-size: 13px;
+  }
 }
 .feed-cleared-people {
   display: grid;
