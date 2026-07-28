@@ -883,7 +883,7 @@ function render({ skipScroll = false } = {}) {
     activityPageList.innerHTML = recent.length ? recent.map(activityFeedItem).join("") : emptyFeed;
   }
 
-  // Mirror key stats onto the Activity page.
+  // Mirror key stats onto the Stats page.
   const setText = (id, value) => {
     const el = $(id);
     if (el) el.textContent = value;
