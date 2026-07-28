@@ -2335,6 +2335,99 @@ a.activity-item:focus-visible {
   text-align: center;
 }
 
+.feed-day-filter {
+  margin: 4px 0 18px;
+  padding: 2px 0 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent);
+}
+.feed-day-filter::-webkit-scrollbar {
+  display: none;
+}
+.feed-day-filter__track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  min-width: 100%;
+  padding: 4px 2px 6px;
+  justify-content: flex-end;
+}
+.feed-day-filter__day {
+  appearance: none;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 1.5px solid rgba(255, 160, 80, .2);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, rgba(245, 200, 66, .08), transparent 55%),
+    rgba(18, 10, 6, .42);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+.feed-day-filter__day:hover,
+.feed-day-filter__day:focus-visible {
+  border-color: rgba(245, 200, 66, .45);
+  color: var(--ink);
+  outline: none;
+  transform: translateY(-1px);
+}
+.feed-day-filter__day.is-selected {
+  border-color: var(--lime);
+  background:
+    radial-gradient(circle at 40% 30%, rgba(245, 200, 66, .28), transparent 58%),
+    linear-gradient(160deg, rgba(245, 200, 66, .18), rgba(18, 10, 6, .55));
+  color: var(--lime);
+  box-shadow:
+    0 0 0 1px rgba(245, 200, 66, .35),
+    0 8px 20px rgba(245, 200, 66, .12);
+}
+.feed-day-filter__day.is-today:not(.is-selected) {
+  border-color: rgba(76, 223, 138, .35);
+}
+.feed-day-filter__num {
+  font: 800 15px/1 "Manrope", sans-serif;
+  letter-spacing: -.03em;
+}
+.feed-day-filter__dow {
+  font: 700 8px/1 "Manrope", sans-serif;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  opacity: .85;
+}
+.feed-day-filter__day.is-selected .feed-day-filter__dow {
+  opacity: 1;
+}
+[data-theme="light"] .feed-day-filter__day {
+  background:
+    radial-gradient(circle at 35% 28%, rgba(166, 122, 12, .08), transparent 55%),
+    rgba(255, 248, 240, .9);
+  border-color: rgba(120, 60, 20, .18);
+}
+[data-theme="light"] .feed-day-filter__day.is-selected {
+  background:
+    radial-gradient(circle at 40% 30%, rgba(166, 122, 12, .2), transparent 58%),
+    linear-gradient(160deg, rgba(245, 200, 66, .22), rgba(255, 248, 240, .95));
+  box-shadow:
+    0 0 0 1px rgba(166, 122, 12, .28),
+    0 8px 18px rgba(166, 122, 12, .1);
+}
+
 .feed-cleared-card {
   margin: 8px 0 28px;
   padding: 20px 18px 18px;

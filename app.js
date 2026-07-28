@@ -328,21 +328,152 @@ function peopleWhoClearedDailyGoal(dateKey = localDateValue()) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function renderFeedClearedToday() {
+const FEED_DAY_WINDOW = 14;
+let feedSelectedDateKey = null;
+
+function shiftLocalDateKey(dateKey, deltaDays) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  date.setDate(date.getDate() + deltaDays);
+  return localDateValue(date);
+}
+
+function feedDayKeys() {
+  const todayKey = localDateValue();
+  const keys = [];
+  for (let offset = FEED_DAY_WINDOW - 1; offset >= 0; offset -= 1) {
+    const key = shiftLocalDateKey(todayKey, -offset);
+    if (key < CHALLENGE_START) continue;
+    if (key > todayKey) continue;
+    keys.push(key);
+  }
+  if (!keys.includes(todayKey)) keys.push(todayKey);
+  return keys;
+}
+
+function ensureFeedSelectedDate() {
+  const todayKey = localDateValue();
+  const keys = feedDayKeys();
+  if (!feedSelectedDateKey || !keys.includes(feedSelectedDateKey)) {
+    feedSelectedDateKey = todayKey;
+  }
+  return feedSelectedDateKey;
+}
+
+function formatFeedDayLabel(dateKey, { long = false } = {}) {
+  const todayKey = localDateValue();
+  if (dateKey === todayKey) return long ? "today" : "Today";
+  const date = new Date(`${dateKey}T12:00:00`);
+  if (long) {
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+}
+
+function feedDayParts(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  return {
+    num: String(date.getDate()),
+    dow: date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+  };
+}
+
+function renderFeedDayFilter({ smoothScroll = false } = {}) {
+  const track = $("#feed-day-filter");
+  if (!track) return;
+
+  const todayKey = localDateValue();
+  const selectedKey = ensureFeedSelectedDate();
+  const keys = feedDayKeys();
+
+  track.innerHTML = keys
+    .map((key) => {
+      const { num, dow } = feedDayParts(key);
+      const selected = key === selectedKey;
+      const isToday = key === todayKey;
+      const label = isToday ? `Today, ${formatFeedDayLabel(key)}` : formatFeedDayLabel(key);
+      return `
+        <button
+          type="button"
+          class="feed-day-filter__day${selected ? " is-selected" : ""}${isToday ? " is-today" : ""}"
+          role="tab"
+          aria-selected="${selected ? "true" : "false"}"
+          aria-label="${escapeHtml(label)}"
+          data-feed-date="${key}"
+          ${selected ? 'tabindex="0"' : 'tabindex="-1"'}
+        >
+          <span class="feed-day-filter__num">${num}</span>
+          <span class="feed-day-filter__dow">${isToday ? "NOW" : dow}</span>
+        </button>
+      `;
+    })
+    .join("");
+
+  const selectedBtn = track.querySelector(".feed-day-filter__day.is-selected");
+  const scroller = track.closest(".feed-day-filter");
+  if (selectedBtn && scroller) {
+    requestAnimationFrame(() => {
+      const btnRect = selectedBtn.getBoundingClientRect();
+      const scrollerRect = scroller.getBoundingClientRect();
+      const delta =
+        btnRect.left - scrollerRect.left - (scrollerRect.width - btnRect.width) / 2;
+      scroller.scrollBy({ left: delta, behavior: smoothScroll ? "smooth" : "auto" });
+    });
+  }
+}
+
+function updateFeedPageCopy(dateKey) {
+  const todayKey = localDateValue();
+  const isToday = dateKey === todayKey;
+  const shortLabel = formatFeedDayLabel(dateKey);
+  const longLabel = formatFeedDayLabel(dateKey, { long: true });
+
+  const hero = $("#feed-hero-copy");
+  if (hero) {
+    hero.textContent = isToday
+      ? "Who’s locked the board today — then every SCAD Bro log, newest first."
+      : `Who’s locked the board on ${longLabel} — then every SCAD Bro log from that day, newest first.`;
+  }
+
+  const eyebrow = $("#feed-cleared-eyebrow");
+  if (eyebrow) eyebrow.textContent = isToday ? "TODAY’S BOARD" : `${shortLabel} BOARD`;
+
+  const activityEyebrow = $("#feed-activity-eyebrow");
+  if (activityEyebrow) activityEyebrow.textContent = isToday ? "LATEST" : shortLabel;
+
+  const activityHeading = $("#feed-activity-heading");
+  if (activityHeading) activityHeading.textContent = isToday ? "All activity" : "Day’s activity";
+}
+
+function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   const list = $("#feed-cleared-list");
   const countEl = $("#feed-cleared-count");
   if (!list) return;
 
+  const dateKey = ensureFeedSelectedDate();
+  updateFeedPageCopy(dateKey);
+  renderFeedDayFilter({ smoothScroll: smoothDayScroll });
+
   const eligible = crew.filter((person) => personStatus(person.id) !== "out");
-  const cleared = peopleWhoClearedDailyGoal();
+  const cleared = peopleWhoClearedDailyGoal(dateKey);
   if (countEl) countEl.textContent = `${cleared.length} / ${eligible.length}`;
+
+  const isToday = dateKey === localDateValue();
+  const longLabel = formatFeedDayLabel(dateKey, { long: true });
 
   if (!cleared.length) {
     list.innerHTML = `
       <div class="feed-cleared-empty" role="status">
         <span class="feed-cleared-empty__icon" aria-hidden="true">wb_sunny</span>
-        <p><strong>Nobody’s locked the board yet today.</strong></p>
-        <p>Hit push-ups, squats, and plank — be the first to clear the desert daily.</p>
+        <p><strong>${
+          isToday
+            ? "Nobody’s locked the board yet today."
+            : `Nobody locked the board on ${escapeHtml(longLabel)}.`
+        }</strong></p>
+        <p>${
+          isToday
+            ? "Hit push-ups, squats, and plank — be the first to clear the desert daily."
+            : "No full clear that day — push-ups, squats, and plank make the board."
+        }</p>
       </div>
     `;
     return;
@@ -368,6 +499,43 @@ function renderFeedClearedToday() {
         .join("")}
     </ul>
   `;
+}
+
+function activityFeedItemHtml(activity) {
+  const person = getPerson(activity.personId);
+  return `
+      <a class="activity-item is-feed" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
+        <div class="activity-stack" aria-hidden="true">
+          <img class="activity-avatar" src="${person.image}" alt="" />
+          ${exerciseIcon(activity)}
+        </div>
+        <div class="activity-main">
+          <p class="activity-person">${escapeHtml(person.name)}</p>
+          <span>${formatDate(activity.createdAt)}</span>
+        </div>
+        <div class="activity-meta">
+          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+        </div>
+      </a>
+    `;
+}
+
+function renderFeedPageActivityList() {
+  const feedPageList = $("#feed-page-list");
+  if (!feedPageList) return;
+
+  const dateKey = ensureFeedSelectedDate();
+  const dayActivities = [...activities]
+    .filter((activity) => activityDateKey(activity) === dateKey)
+    .sort(compareActivitiesRecentFirst);
+  const isToday = dateKey === localDateValue();
+  const emptyFeed = isToday
+    ? '<div class="empty-state">No reps yet. Be the first to get moving.</div>'
+    : '<div class="empty-state">No logs on this day yet.</div>';
+
+  feedPageList.innerHTML = dayActivities.length
+    ? dayActivities.map(activityFeedItemHtml).join("")
+    : emptyFeed;
 }
 
 function activityDateKey(activity) {
@@ -911,36 +1079,17 @@ function render({ skipScroll = false } = {}) {
   if (leaderboardPageList) leaderboardPageList.innerHTML = leaderboardHtml;
 
   const recent = [...activities].sort(compareActivitiesRecentFirst);
-  const activityFeedItem = (activity) => {
-    const person = getPerson(activity.personId);
-    return `
-      <a class="activity-item is-feed" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
-        <div class="activity-stack" aria-hidden="true">
-          <img class="activity-avatar" src="${person.image}" alt="" />
-          ${exerciseIcon(activity)}
-        </div>
-        <div class="activity-main">
-          <p class="activity-person">${escapeHtml(person.name)}</p>
-          <span>${formatDate(activity.createdAt)}</span>
-        </div>
-        <div class="activity-meta">
-          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
-        </div>
-      </a>
-    `;
-  };
   const emptyFeed = '<div class="empty-state">No reps yet. Be the first to get moving.</div>';
   $("#activity-list").innerHTML = recent.length
-    ? recent.slice(0, 8).map(activityFeedItem).join("")
+    ? recent.slice(0, 8).map(activityFeedItemHtml).join("")
     : emptyFeed;
   const activityPageList = $("#activity-page-list");
   if (activityPageList) {
-    activityPageList.innerHTML = recent.length ? recent.map(activityFeedItem).join("") : emptyFeed;
+    activityPageList.innerHTML = recent.length
+      ? recent.map(activityFeedItemHtml).join("")
+      : emptyFeed;
   }
-  const feedPageList = $("#feed-page-list");
-  if (feedPageList) {
-    feedPageList.innerHTML = recent.length ? recent.map(activityFeedItem).join("") : emptyFeed;
-  }
+  renderFeedPageActivityList();
   renderFeedClearedToday();
 
   // Mirror key stats onto the Stats page.
@@ -3470,6 +3619,16 @@ document.addEventListener("click", async (event) => {
       });
     }, 1200);
   }
+});
+
+$("#feed-day-filter")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-feed-date]");
+  if (!button) return;
+  const nextKey = button.dataset.feedDate;
+  if (!nextKey || nextKey === feedSelectedDateKey) return;
+  feedSelectedDateKey = nextKey;
+  renderFeedPageActivityList();
+  renderFeedClearedToday({ smoothDayScroll: true });
 });
 $("#nav-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
 $("#menu-add-reps-button")?.addEventListener("click", () => {
