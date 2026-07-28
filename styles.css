@@ -294,7 +294,11 @@ body.is-menu-open .nav-menu-toggle__bars span:nth-child(3),
   padding: 0;
   border-radius: 50%;
   background: var(--activity-avatar-bg, rgba(255, 160, 80, .08));
+  font-family: inherit;
   font-size: 0;
+  font-variation-settings: normal;
+  font-feature-settings: normal;
+  -webkit-font-feature-settings: normal;
 }
 .site-menu-link__icon--avatar img {
   display: block;

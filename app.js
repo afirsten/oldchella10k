@@ -1208,10 +1208,19 @@ function storedPin(personId) {
   }
 }
 
+function rememberLastPerson(personId) {
+  if (!personId || !crew.some((person) => person.id === personId)) return;
+  try {
+    localStorage.setItem(LAST_PERSON_KEY, personId);
+  } catch {
+    // Navigation still works if this browser blocks localStorage.
+  }
+}
+
 function rememberPin(personId, pin) {
   try {
     localStorage.setItem(`${PIN_STORAGE_PREFIX}${personId}`, pin);
-    localStorage.setItem(LAST_PERSON_KEY, personId);
+    rememberLastPerson(personId);
   } catch {
     // Saving still works if this browser blocks localStorage.
   }
@@ -1230,15 +1239,30 @@ function forgetPin(personId) {
   }
 }
 
-function rememberedPersonId() {
+function storedLastPersonId() {
   try {
     const last = localStorage.getItem(LAST_PERSON_KEY);
-    if (last && storedPin(last) && crew.some((person) => person.id === last)) return last;
+    if (last && crew.some((person) => person.id === last)) return last;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberedPersonId() {
+  try {
+    const last = storedLastPersonId();
+    if (last && storedPin(last)) return last;
     const match = crew.find((person) => storedPin(person.id));
     return match ? match.id : null;
   } catch {
     return null;
   }
+}
+
+/** Person for the personalized menu home row (PIN optional — nav only). */
+function menuHomePersonId() {
+  return rememberedPersonId() || currentPersonId() || storedLastPersonId();
 }
 
 function updateQuickAddButton() {
@@ -1814,6 +1838,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const personId = appRoute.personId;
   const route = { personId, openAdd: appRoute.openAdd };
   wasShowingPersonPage = true;
+  rememberLastPerson(personId);
   showAppPage("person", { skipScroll: true });
 
   const person = getPerson(personId);
@@ -3384,8 +3409,11 @@ $("#menu-add-reps-button")?.addEventListener("click", () => {
 $("#person-picker-grid").addEventListener("click", (event) => {
   const option = event.target.closest("[data-person-id]");
   if (!option) return;
+  const personId = option.dataset.personId;
+  rememberLastPerson(personId);
+  updateSiteMenu();
   closePersonPicker();
-  window.location.hash = `/person/${option.dataset.personId}/add`;
+  window.location.hash = `/person/${personId}/add`;
 });
 $("#close-person-picker-button").addEventListener("click", () => closePersonPicker());
 $("#person-picker-dialog").addEventListener("click", (event) => {
@@ -3764,7 +3792,7 @@ function updateSiteMenu() {
   const myHomeLabel = $("#menu-my-home-label");
   const myHomeMeta = $("#menu-my-home-meta");
   const myHomeAvatar = $("#menu-my-home-avatar");
-  const knownId = rememberedPersonId();
+  const knownId = menuHomePersonId();
   if (myHome) {
     if (knownId) {
       const person = getPerson(knownId);
