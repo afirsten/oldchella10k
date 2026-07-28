@@ -1287,7 +1287,8 @@ function dismissAddRepsTip() {
 function updateAddRepsTip() {
   const tip = $("#hero-add-tip");
   if (!tip) return;
-  tip.hidden = Boolean(currentPersonId()) || isAddRepsTipDismissed();
+  // Tip lives inside #dashboard-page (already hidden off-home). Only dismiss hides it.
+  tip.hidden = isAddRepsTipDismissed();
 }
 
 function updateQuickAddButton() {
@@ -3974,6 +3975,7 @@ let wasShowingPersonPage = Boolean(parsePersonRoute());
 let homeNestleDone = false;
 
 function nestleAddRepsTip({ force = false } = {}) {
+  updateAddRepsTip();
   if (currentPersonId() || !isCookiedVisitor()) return;
   if (!force && homeNestleDone) return;
   const target = $("#hero-add-tip");
