@@ -1269,8 +1269,6 @@ function updateQuickAddButton() {
   const wrap = $("#hero-quick-add");
   const button = $("#quick-add-button");
   const label = $("#quick-add-label");
-  const activityButton = $("#activity-add-reps-button");
-  const activityLabel = $("#activity-add-reps-label");
   const menuButton = $("#menu-add-reps-button");
   const menuLabel = $("#menu-add-reps-label");
   const navButton = $("#nav-add-reps-button");
@@ -1289,13 +1287,6 @@ function updateQuickAddButton() {
       label.textContent = labelText;
       button.setAttribute("aria-label", aria);
     }
-  }
-
-  if (activityButton && activityLabel) {
-    if (personId) activityButton.dataset.personId = personId;
-    else delete activityButton.dataset.personId;
-    activityLabel.textContent = labelText;
-    activityButton.setAttribute("aria-label", aria);
   }
 
   if (menuButton && menuLabel) {
@@ -3400,7 +3391,6 @@ document.addEventListener("click", async (event) => {
   }
 });
 $("#quick-add-button").addEventListener("click", () => startAddRepsFlow());
-$("#activity-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
 $("#nav-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
 $("#menu-add-reps-button")?.addEventListener("click", () => {
   closeSiteMenu();

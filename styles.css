@@ -342,21 +342,6 @@ body.is-menu-open {
 .content-page {
   padding: 28px 0 8px;
 }
-.content-page-hero.activity-page-hero {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px 24px;
-  align-items: end;
-  justify-content: space-between;
-}
-.content-page-hero__copy {
-  min-width: 0;
-  flex: 1 1 220px;
-}
-.content-page-hero.activity-page-hero .quick-add-button {
-  flex: 0 0 auto;
-  margin-bottom: 2px;
-}
 .content-page-hero h1,
 .content-page h1 {
   margin: 0 0 10px;
