@@ -228,6 +228,13 @@ body.is-menu-open .site-menu-panel {
   transition-duration: 320ms;
   transition-timing-function: cubic-bezier(.22, 1, .36, 1);
 }
+.site-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+}
 .site-menu-eyebrow {
   margin: 0;
   padding: 0 10px;
@@ -1175,8 +1182,9 @@ body.is-menu-open {
   overflow: hidden;
 }
 .theme-toggle.site-menu-theme {
-  margin-top: auto;
-  align-self: flex-start;
+  width: 36px;
+  height: 36px;
+  margin: 0;
 }
 .nav-home {
   flex-shrink: 0;
