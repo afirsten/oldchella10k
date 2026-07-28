@@ -1273,6 +1273,7 @@ function updateQuickAddButton() {
   const activityLabel = $("#activity-add-reps-label");
   const menuButton = $("#menu-add-reps-button");
   const menuLabel = $("#menu-add-reps-label");
+  const navButton = $("#nav-add-reps-button");
   const personId = rememberedPersonId();
   const first = personId ? getPerson(personId).name.split(" ")[0].toUpperCase() : "";
   const labelText = personId ? `ADD REPS FOR ${first}` : "ADD REPS";
@@ -1302,6 +1303,12 @@ function updateQuickAddButton() {
     else delete menuButton.dataset.personId;
     menuLabel.textContent = labelText;
     menuButton.setAttribute("aria-label", aria);
+  }
+
+  if (navButton) {
+    if (personId) navButton.dataset.personId = personId;
+    else delete navButton.dataset.personId;
+    navButton.setAttribute("aria-label", personId ? `Add reps for ${first}` : "Add reps");
   }
 }
 
@@ -3399,6 +3406,7 @@ document.addEventListener("click", async (event) => {
 });
 $("#quick-add-button").addEventListener("click", () => startAddRepsFlow());
 $("#activity-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
+$("#nav-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
 $("#menu-add-reps-button")?.addEventListener("click", () => {
   closeSiteMenu();
   startAddRepsFlow();

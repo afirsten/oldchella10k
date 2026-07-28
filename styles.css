@@ -1199,8 +1199,41 @@ body.is-menu-open {
 .nav-home .compact-wordmark {
   font-size: 14px;
 }
+.nav-add-reps {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--terra), var(--lime));
+  color: #fff8f0;
+  cursor: pointer;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+.nav-add-reps:hover {
+  filter: brightness(1.06);
+}
+.nav-add-reps:active {
+  transform: scale(0.96);
+}
+.nav-add-reps:focus-visible {
+  outline: 2px solid var(--terra);
+  outline-offset: 2px;
+}
+.nav-add-reps svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2.6;
+}
 .site-nav .theme-toggle {
-  margin-left: auto;
+  margin-left: 0;
 }
 .brand {
   display: flex;
