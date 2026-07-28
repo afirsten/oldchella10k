@@ -252,6 +252,40 @@ function formatPlankMinutes(seconds) {
   return durationNumber.format((Number(seconds) || 0) / 60);
 }
 
+function estimateCategoryCalories(categoryTotals) {
+  const pushupCals = Math.round((categoryTotals.pushups || 0) * 0.36);
+  const squatCals = Math.round((categoryTotals.squats || 0) * 0.42);
+  const plankCals = Math.round(((categoryTotals.planks || 0) / 60) * 3.5);
+  return pushupCals + squatCals + plankCals;
+}
+
+function bestGroupDay(participantIds) {
+  const byDay = new Map();
+  for (const activity of activities) {
+    if (!participantIds.has(activity.personId)) continue;
+    if (activityExercise(activity) === "planks") continue;
+    const day = String(activity.createdAt || "").slice(0, 10);
+    if (!day) continue;
+    byDay.set(day, (byDay.get(day) || 0) + (Number(activity.reps) || 0));
+  }
+  let bestReps = 0;
+  let bestDate = "";
+  for (const [day, reps] of byDay) {
+    if (reps > bestReps) {
+      bestReps = reps;
+      bestDate = day;
+    }
+  }
+  return { reps: bestReps, date: bestDate };
+}
+
+function formatShortDayLabel(isoDate) {
+  if (!isoDate) return "REPS";
+  const date = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "REPS";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+}
+
 function dayGoalProgress(dayActivities) {
   const totals = dayActivities.reduce(
     (sums, activity) => {
@@ -520,7 +554,7 @@ function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDel
   const squatCals = Math.round(categoryTotals.squats * 0.42);
   const plankMins = categoryTotals.planks / 60;
   const plankCals = Math.round(plankMins * 3.5);
-  const burned = pushupCals + squatCals + plankCals;
+  const burned = estimateCategoryCalories(categoryTotals);
   const perPerson = participants.length ? Math.round(total / participants.length) : 0;
   const dailyNeeded =
     daysLeft > 0 && participants.length
@@ -768,7 +802,7 @@ function render({ skipScroll = false } = {}) {
   );
   updateQuickAddButton();
 
-  $("#leaderboard").innerHTML = ranking
+  const leaderboardHtml = ranking
     .map(
       (person, index) => {
         const rowState =
@@ -817,6 +851,9 @@ function render({ skipScroll = false } = {}) {
       },
     )
     .join("");
+  $("#leaderboard").innerHTML = leaderboardHtml;
+  const leaderboardPageList = $("#leaderboard-page-list");
+  if (leaderboardPageList) leaderboardPageList.innerHTML = leaderboardHtml;
 
   const recent = [...activities].sort(compareActivitiesRecentFirst);
   const activityFeedItem = (activity) => {
@@ -889,6 +926,163 @@ function render({ skipScroll = false } = {}) {
             ? `${number.format(paceDelta)} ahead of pace`
             : `${number.format(Math.abs(paceDelta))} behind pace`,
   );
+
+  const remaining = Math.max(0, goal - total);
+  const msLeft = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
+  const daysLeft = Math.floor(msLeft / 86400000);
+  const avgPerson = participants.length ? Math.round(total / participants.length) : 0;
+  const dailyNeed =
+    daysLeft > 0 && participants.length
+      ? Math.ceil(remaining / participants.length / daysLeft)
+      : 0;
+  const eachLeft = participants.length ? Math.ceil(remaining / participants.length) : remaining;
+  const burned = estimateCategoryCalories(categoryTotals);
+  const daysLogged = participants.reduce((sum, person) => sum + person.sessions, 0);
+  const daysGoal = 100;
+  const bestDay = bestGroupDay(participantIds);
+  const activeCrew = participants.filter((person) => person.sessions > 0).length;
+  const personalPace = onTargetReps();
+
+  setText("#activity-avg-person", number.format(avgPerson));
+  setText("#activity-daily-need", number.format(dailyNeed));
+  setText("#activity-pace-target", number.format(Math.round(groupTarget)));
+  setText("#activity-each-left", number.format(eachLeft));
+  setText("#activity-cal-burn", burned > 0 ? `~${number.format(burned)}` : "0");
+  setText("#activity-sessions-total", number.format(daysLogged));
+  setText("#activity-days-goal", number.format(daysGoal));
+  setText("#activity-best-day", number.format(bestDay.reps));
+  setText("#activity-best-day-label", formatShortDayLabel(bestDay.date));
+  setText("#activity-active-crew", `${activeCrew} / ${participants.length}`);
+
+  const daysBlock = $("#activity-days-block");
+  if (daysBlock) {
+    daysBlock.setAttribute(
+      "aria-label",
+      `${number.format(daysLogged)} of ${number.format(daysGoal)} logging days`,
+    );
+  }
+
+  // Pulse-row mini-viz: AVG/BRO, EACH LEFT, ~BURN, PACE TARGET.
+  const avgFill = $("#activity-avg-fill");
+  const avgMark = $("#activity-avg-mark");
+  const avgPct = Math.min(100, Math.round((avgPerson / GOAL_PER_PERSON) * 100));
+  const avgPacePct = Math.min(100, Math.round((personalPace / GOAL_PER_PERSON) * 100));
+  if (avgFill) avgFill.style.width = `${avgPct}%`;
+  if (avgMark) avgMark.style.left = `${avgPacePct}%`;
+
+  const leftTicks = $("#activity-left-ticks");
+  if (leftTicks) {
+    const tickCount = 8;
+    const leftShare = Math.min(1, Math.max(0, eachLeft / GOAL_PER_PERSON));
+    const leftCount = Math.round(leftShare * tickCount);
+    const doneCount = tickCount - leftCount;
+    let ticksHtml = "";
+    for (let i = 0; i < tickCount; i += 1) {
+      ticksHtml += `<i class="${i < doneCount ? "is-done" : "is-left"}"></i>`;
+    }
+    leftTicks.innerHTML = ticksHtml;
+  }
+
+  const burnFill = $("#activity-burn-fill");
+  const burnViz = $("#activity-burn-viz");
+  const burnRef = Math.max(
+    1,
+    Math.round(participants.length * Math.max(personalPace, 1) * 0.39),
+  );
+  const burnPct = Math.min(100, Math.round((burned / burnRef) * 100));
+  if (burnFill) burnFill.style.width = `${burnPct}%`;
+  if (burnViz) burnViz.classList.toggle("is-hot", burnPct >= 70);
+
+  const paceFill = $("#activity-pace-fill");
+  const paceMark = $("#activity-pace-mark");
+  const paceViz = $("#activity-pace-viz");
+  const paceScale = Math.max(goal, groupTarget, total, 1);
+  const actualPct = Math.min(100, Math.round((total / paceScale) * 100));
+  const targetPctMini = Math.min(100, Math.round((groupTarget / paceScale) * 100));
+  if (paceFill) paceFill.style.width = `${actualPct}%`;
+  if (paceMark) paceMark.style.left = `${targetPctMini}%`;
+  if (paceViz) {
+    paceViz.classList.toggle("is-ahead", paceDelta > 0);
+    paceViz.classList.toggle("is-on", paceDelta === 0 && groupTarget > 0);
+  }
+
+  // Activity-page visual storytelling (gauges, mix bar, day ticks).
+  const fairDaily = GOAL_PER_PERSON / CHALLENGE_DAYS;
+  const challengeDone = goal > 0 && total >= goal;
+  const dailyPressure = challengeDone
+    ? 100
+    : dailyNeed <= 0
+      ? 0
+      : Math.min(100, Math.round((dailyNeed / Math.max(fairDaily, 1)) * 55));
+  const dailyGaugeArc = $("#activity-daily-gauge-arc");
+  if (dailyGaugeArc) dailyGaugeArc.style.strokeDasharray = `${dailyPressure} 100`;
+  const dailyGauge = $("#activity-daily-gauge");
+  if (dailyGauge) {
+    dailyGauge.classList.toggle("is-easy", challengeDone || (dailyNeed > 0 && dailyNeed <= fairDaily));
+    dailyGauge.classList.toggle(
+      "is-warm",
+      !challengeDone && dailyNeed > fairDaily && dailyNeed <= fairDaily * 1.5,
+    );
+    dailyGauge.classList.toggle("is-hot", !challengeDone && dailyNeed > fairDaily * 1.5);
+    dailyGauge.setAttribute(
+      "aria-label",
+      dailyNeed > 0
+        ? `Daily need ${number.format(dailyNeed)} reps per bro per day`
+        : challengeDone
+          ? "Challenge complete — no daily need"
+          : "Daily need pending",
+    );
+  }
+
+  const activeShare =
+    participants.length > 0 ? Math.round((activeCrew / participants.length) * 100) : 0;
+  const activeArc = $("#activity-active-arc");
+  if (activeArc) activeArc.style.strokeDasharray = `${activeShare} 100`;
+  const activeRing = $("#activity-active-ring");
+  if (activeRing) {
+    activeRing.setAttribute(
+      "aria-label",
+      `${activeCrew} of ${participants.length} crew actively logging`,
+    );
+  }
+
+  const plankMinutes = Math.max(0, Math.round((categoryTotals.planks || 0) / 60));
+  const mixParts = {
+    pushups: Math.max(0, categoryTotals.pushups || 0),
+    squats: Math.max(0, categoryTotals.squats || 0),
+    planks: plankMinutes,
+    other: Math.max(0, categoryTotals.other || 0),
+  };
+  const mixSum = mixParts.pushups + mixParts.squats + mixParts.planks + mixParts.other;
+  const setMixSegment = (id, value) => {
+    const el = $(id);
+    if (!el) return;
+    el.style.flexGrow = String(mixSum > 0 ? value : 0);
+  };
+  setMixSegment("#activity-mix-pushups", mixParts.pushups);
+  setMixSegment("#activity-mix-squats", mixParts.squats);
+  setMixSegment("#activity-mix-planks", mixParts.planks);
+  setMixSegment("#activity-mix-other", mixParts.other);
+  const mixBar = $("#activity-mix-bar");
+  if (mixBar) {
+    mixBar.classList.toggle("is-empty", mixSum <= 0);
+    const mixLabel =
+      mixSum > 0
+        ? `Exercise mix: ${number.format(mixParts.pushups)} push-ups, ${number.format(mixParts.squats)} squats, ${number.format(mixParts.planks)} plank min, ${number.format(mixParts.other)} other`
+        : "Exercise mix empty";
+    mixBar.setAttribute("aria-label", mixLabel);
+  }
+
+  const sessionsTicks = $("#activity-sessions-ticks");
+  if (sessionsTicks) {
+    const tickCount = daysGoal;
+    const lit = Math.min(tickCount, daysLogged);
+    let ticksHtml = "";
+    for (let i = 0; i < tickCount; i += 1) {
+      ticksHtml += `<i class="${i < lit ? "is-on" : ""}"></i>`;
+    }
+    sessionsTicks.innerHTML = ticksHtml;
+  }
 
   renderPersonPage({ skipScroll });
   updateSiteMenu();
@@ -1265,6 +1459,7 @@ function parseAppRoute() {
   if (personMatch && crew.some((person) => person.id === personMatch[1])) {
     return { type: "person", personId: personMatch[1], openAdd: personMatch[2] === "add" };
   }
+  if (path === "/leaderboard" || path.startsWith("/leaderboard/")) return { type: "leaderboard" };
   if (path === "/activity" || path.startsWith("/activity/")) return { type: "activity" };
   if (path === "/recipes" || path.startsWith("/recipes/")) return { type: "recipes" };
   if (path === "/inspiration" || path.startsWith("/inspiration/")) return { type: "inspiration" };
@@ -1579,6 +1774,7 @@ function showAppPage(pageId, { skipScroll = false } = {}) {
     challenge: $("#dashboard-page"),
     person: $("#person-page"),
     activity: $("#activity-page"),
+    leaderboard: $("#leaderboard-page"),
     recipes: $("#recipes-page"),
     inspiration: $("#inspiration-page"),
   };
@@ -3504,34 +3700,46 @@ $("#person-activity-list").addEventListener("keydown", (event) => {
   item.click();
 });
 
-$("#leaderboard").addEventListener("click", (event) => {
+function onLeaderboardClick(event) {
   const row = event.target.closest("[data-person-id]");
   if (row) window.location.hash = `/person/${row.dataset.personId}`;
-});
+}
+$("#leaderboard").addEventListener("click", onLeaderboardClick);
+$("#leaderboard-page-list")?.addEventListener("click", onLeaderboardClick);
 
 function tickOldchellaCountdown() {
   const diff = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
   const dayCount = Math.floor(diff / 86400000);
-  const days = $("#nav-cd-days");
-  const hours = $("#nav-cd-hours");
-  const mins = $("#nav-cd-mins");
-  const secs = $("#nav-cd-secs");
+  const hourCount = Math.floor((diff % 86400000) / 3600000);
+  const minCount = Math.floor((diff % 3600000) / 60000);
+  const secCount = Math.floor((diff % 60000) / 1000);
+  const daysLeftLabel =
+    dayCount === 1 ? "1 day left in the challenge" : `${dayCount} days left in the challenge`;
   const goalDays = $("#goal-days-value");
   if (goalDays) {
     goalDays.textContent = String(dayCount);
     const goalDaysWrap = $("#goal-days");
     if (goalDaysWrap) {
-      goalDaysWrap.setAttribute(
+      goalDaysWrap.setAttribute("aria-label", daysLeftLabel);
+    }
+  }
+  const days = $("#activity-cd-days");
+  const hours = $("#activity-cd-hours");
+  const mins = $("#activity-cd-mins");
+  const secs = $("#activity-cd-secs");
+  if (days && hours && mins && secs) {
+    days.textContent = String(dayCount).padStart(3, "0");
+    hours.textContent = String(hourCount).padStart(2, "0");
+    mins.textContent = String(minCount).padStart(2, "0");
+    secs.textContent = String(secCount).padStart(2, "0");
+    const activityCountdown = $("#activity-days-countdown");
+    if (activityCountdown) {
+      activityCountdown.setAttribute(
         "aria-label",
-        dayCount === 1 ? "1 day left until Old-Chella" : `${dayCount} days left until Old-Chella`,
+        `${dayCount} days, ${hourCount} hours, ${minCount} minutes, ${secCount} seconds left in the challenge — open Going To Live Forever`,
       );
     }
   }
-  if (!days || !hours || !mins || !secs) return;
-  days.textContent = String(dayCount).padStart(3, "0");
-  hours.textContent = String(Math.floor((diff % 86400000) / 3600000)).padStart(2, "0");
-  mins.textContent = String(Math.floor((diff % 3600000) / 60000)).padStart(2, "0");
-  secs.textContent = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
 }
 
 function scrollHomeToTop() {
@@ -3560,6 +3768,7 @@ function updateSiteMenu() {
     let current = false;
     if (key === "home") current = route.type === "person" && route.personId === knownId;
     else if (key === "challenge") current = route.type === "challenge";
+    else if (key === "leaderboard") current = route.type === "leaderboard";
     else if (key === "activity") current = route.type === "activity";
     else if (key === "recipes") current = route.type === "recipes";
     else if (key === "inspiration") current = route.type === "inspiration";
