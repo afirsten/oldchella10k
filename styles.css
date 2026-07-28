@@ -2342,8 +2342,9 @@ a.activity-item:focus-visible {
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent);
+  /* Fade only the leading edge so the selected (often rightmost) day stays crisp */
+  mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 100%);
 }
 .feed-day-filter::-webkit-scrollbar {
   display: none;
@@ -2354,7 +2355,7 @@ a.activity-item:focus-visible {
   gap: 10px;
   width: max-content;
   min-width: 100%;
-  padding: 4px 2px 6px;
+  padding: 4px 10px 6px 4px;
   justify-content: flex-end;
 }
 .feed-day-filter__day {
@@ -2482,46 +2483,44 @@ a.activity-item:focus-visible {
   }
 }
 .feed-cleared-people {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin: 0;
-  padding: 0;
+  padding: 2px 0 0;
   list-style: none;
 }
 .feed-cleared-person {
-  display: grid;
-  justify-items: center;
-  gap: 8px;
-  padding: 14px 10px 12px;
-  border: 1px solid rgba(255, 160, 80, .16);
-  border-radius: 14px;
-  background: rgba(18, 10, 6, .4);
+  display: block;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
   color: inherit;
-  text-align: center;
   text-decoration: none;
-  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+  transition: transform 140ms ease, filter 140ms ease;
 }
 .feed-cleared-person:hover,
 .feed-cleared-person:focus-visible {
-  border-color: rgba(245, 200, 66, .4);
-  background: rgba(245, 200, 66, .08);
   outline: none;
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.04);
+  filter: brightness(1.06);
 }
 .feed-cleared-person__avatar {
   position: relative;
-  width: 56px;
-  height: 56px;
+  display: block;
+  width: 58px;
+  height: 58px;
 }
 .feed-cleared-person__avatar img {
   display: block;
-  width: 56px;
-  height: 56px;
-  border: 2px solid rgba(245, 200, 66, .45);
+  width: 58px;
+  height: 58px;
+  border: 2px solid rgba(245, 200, 66, .5);
   border-radius: 50%;
   object-fit: cover;
   background: var(--activity-avatar-bg);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .28);
 }
 .feed-cleared-person__badge {
   position: absolute;
@@ -2539,16 +2538,7 @@ a.activity-item:focus-visible {
   font-size: 14px;
   font-variation-settings: "FILL" 1, "wght" 600, "GRAD" 0, "opsz" 20;
   line-height: 1;
-}
-.feed-cleared-person__name {
-  font: 700 13px/1.15 "Manrope", sans-serif;
-  letter-spacing: -.01em;
-}
-.feed-cleared-person__meta {
-  color: var(--lime);
-  font: 800 9px/1 "Manrope", sans-serif;
-  letter-spacing: .12em;
-  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
 }
 .feed-cleared-empty {
   display: grid;

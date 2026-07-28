@@ -377,6 +377,36 @@ function feedDayParts(dateKey) {
   };
 }
 
+function scrollFeedDayFilterToSelected({ smooth = false } = {}) {
+  const track = $("#feed-day-filter");
+  const scroller = track?.closest(".feed-day-filter");
+  const selectedBtn = track?.querySelector(".feed-day-filter__day.is-selected");
+  if (!track || !scroller || !selectedBtn) return;
+
+  const feedPage = $("#feed-page");
+  if (feedPage?.hidden) return;
+
+  const run = () => {
+    const pad = 8;
+    const target =
+      selectedBtn.offsetLeft - (scroller.clientWidth - selectedBtn.offsetWidth) / 2;
+    const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    // Prefer keeping today/selected fully in view near the end when it's the last day.
+    const endBias =
+      selectedBtn === track.lastElementChild
+        ? Math.max(0, selectedBtn.offsetLeft + selectedBtn.offsetWidth + pad - scroller.clientWidth)
+        : target;
+    const next = Math.max(0, Math.min(max, selectedBtn === track.lastElementChild ? endBias : target));
+    if (smooth && typeof scroller.scrollTo === "function") {
+      scroller.scrollTo({ left: next, behavior: "smooth" });
+    } else {
+      scroller.scrollLeft = next;
+    }
+  };
+
+  requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
 function renderFeedDayFilter({ smoothScroll = false } = {}) {
   const track = $("#feed-day-filter");
   if (!track) return;
@@ -408,17 +438,7 @@ function renderFeedDayFilter({ smoothScroll = false } = {}) {
     })
     .join("");
 
-  const selectedBtn = track.querySelector(".feed-day-filter__day.is-selected");
-  const scroller = track.closest(".feed-day-filter");
-  if (selectedBtn && scroller) {
-    requestAnimationFrame(() => {
-      const btnRect = selectedBtn.getBoundingClientRect();
-      const scrollerRect = scroller.getBoundingClientRect();
-      const delta =
-        btnRect.left - scrollerRect.left - (scrollerRect.width - btnRect.width) / 2;
-      scroller.scrollBy({ left: delta, behavior: smoothScroll ? "smooth" : "auto" });
-    });
-  }
+  scrollFeedDayFilterToSelected({ smooth: smoothScroll });
 }
 
 function updateFeedPageCopy(dateKey) {
@@ -485,13 +505,16 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
         .map(
           (person) => `
         <li>
-          <a class="feed-cleared-person" href="#/person/${person.id}" data-person-id="${person.id}">
+          <a
+            class="feed-cleared-person"
+            href="#/person/${person.id}"
+            data-person-id="${person.id}"
+            aria-label="${escapeHtml(person.name)} cleared the board"
+          >
             <span class="feed-cleared-person__avatar">
               <img src="${person.image}" alt="" />
               <span class="feed-cleared-person__badge" aria-hidden="true">check</span>
             </span>
-            <span class="feed-cleared-person__name">${escapeHtml(person.name)}</span>
-            <span class="feed-cleared-person__meta">Board cleared</span>
           </a>
         </li>
       `,
@@ -2044,6 +2067,9 @@ function showAppPage(pageId, { skipScroll = false } = {}) {
   }
   if (!skipScroll && pageId !== "person") {
     window.scrollTo({ top: 0, behavior: "auto" });
+  }
+  if (pageId === "feed") {
+    scrollFeedDayFilterToSelected({ smooth: false });
   }
 }
 
