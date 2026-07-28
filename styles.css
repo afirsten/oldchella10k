@@ -77,7 +77,10 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { background: var(--background); }
+html {
+  background: var(--background);
+  font-size: 90%;
+}
 body {
   margin: 0;
   min-width: 320px;
@@ -87,6 +90,7 @@ body {
     radial-gradient(circle at 12% 42%, var(--glow-b), transparent 24rem),
     var(--background);
   color: var(--ink);
+  font-size: 14.5px;
 }
 button, input, select { font: inherit; }
 button { color: inherit; }
@@ -207,7 +211,7 @@ body.is-menu-open .nav-menu-toggle__bars span:nth-child(3) {
   margin: 0;
   padding: 0 10px;
   color: var(--label);
-  font: 800 10px/1 "Manrope", sans-serif;
+  font: 800 9px/1 "Manrope", sans-serif;
   letter-spacing: .16em;
   text-transform: uppercase;
 }
@@ -272,6 +276,20 @@ body.is-menu-open .nav-menu-toggle__bars span:nth-child(3) {
   width: 22px;
   height: 22px;
 }
+.site-menu-link__icon--avatar {
+  overflow: hidden;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--activity-avatar-bg, rgba(255, 160, 80, .08));
+  font-size: 0;
+}
+.site-menu-link__icon--avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
 .site-menu-link__text {
   display: grid;
   gap: 4px;
@@ -279,13 +297,13 @@ body.is-menu-open .nav-menu-toggle__bars span:nth-child(3) {
 }
 .site-menu-link__label {
   color: var(--ink);
-  font: 400 28px/.9 "Abril Fatface", serif;
+  font: 400 25px/.9 "Abril Fatface", serif;
   letter-spacing: -.02em;
   text-transform: uppercase;
 }
 .site-menu-link__meta {
   color: var(--quiet);
-  font: 600 11px/1.2 "Manrope", sans-serif;
+  font: 600 10px/1.2 "Manrope", sans-serif;
   letter-spacing: .06em;
   text-transform: uppercase;
 }
@@ -317,7 +335,7 @@ body.is-menu-open {
 .content-page-hero h1,
 .content-page h1 {
   margin: 0 0 10px;
-  font: 400 clamp(42px, 10vw, 64px)/.9 "Abril Fatface", serif;
+  font: 400 clamp(38px, 9vw, 58px)/.9 "Abril Fatface", serif;
   letter-spacing: -.02em;
   text-transform: uppercase;
 }
@@ -590,7 +608,7 @@ body.is-menu-open {
 }
 .activity-best__copy strong {
   color: var(--ink);
-  font: 800 clamp(28px, 7vw, 36px)/.9 "Abril Fatface", serif;
+  font: 800 clamp(25px, 6.3vw, 32px)/.9 "Abril Fatface", serif;
   font-variant-numeric: tabular-nums;
   letter-spacing: -.02em;
 }
@@ -1154,7 +1172,7 @@ body.is-menu-open {
   text-decoration: none;
 }
 .nav-home .compact-wordmark {
-  font-size: 16px;
+  font-size: 14px;
 }
 .site-nav .theme-toggle {
   margin-left: auto;
@@ -1164,14 +1182,14 @@ body.is-menu-open {
   gap: 10px;
   align-items: center;
   color: var(--ink);
-  font: 800 15px/1 "Manrope", sans-serif;
+  font: 800 14px/1 "Manrope", sans-serif;
   letter-spacing: .16em;
   text-decoration: none;
 }
 .compact-wordmark {
   display: inline-flex;
   align-items: baseline;
-  font: 400 15px/.9 "Abril Fatface", serif;
+  font: 400 14px/.9 "Abril Fatface", serif;
   letter-spacing: -.025em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1230,7 +1248,7 @@ body.is-menu-open {
   font-family: "Cormorant Garamond", serif;
   font-style: italic;
   font-weight: 300;
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: .05em;
 }
 .hero-logo {
@@ -1265,14 +1283,14 @@ body.is-menu-open {
   font-family: "Cormorant Garamond", serif;
   font-style: italic;
   font-weight: 300;
-  font-size: 18px;
+  font-size: 16px;
   letter-spacing: .04em;
   text-align: center;
 }
 .eyebrow, .label {
   margin: 0 0 9px;
   color: var(--label);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: .17em;
   text-transform: uppercase;
@@ -1280,7 +1298,7 @@ body.is-menu-open {
 h1, h2, p { margin-top: 0; }
 h1 {
   margin-bottom: 12px;
-  font: 400 clamp(54px, 15vw, 92px)/.82 "Abril Fatface", serif;
+  font: 400 clamp(48px, 13.5vw, 82px)/.82 "Abril Fatface", serif;
   letter-spacing: -.025em;
   text-transform: uppercase;
 }
@@ -1305,7 +1323,7 @@ h1 .logo-chella {
   width: 100%;
   margin-bottom: 20px;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.55;
 }
 .hero .rules-card,
@@ -1359,7 +1377,7 @@ h1 .logo-chella {
 .rules-toggle-title {
   display: block;
   color: var(--ink);
-  font: 400 clamp(22px, 5.2vw, 30px)/1.08 "Abril Fatface", serif;
+  font: 400 clamp(20px, 4.7vw, 27px)/1.08 "Abril Fatface", serif;
   letter-spacing: -.02em;
 }
 .rules-chevron {
@@ -1451,10 +1469,10 @@ h1 .logo-chella {
 }
 .goal-total {
   margin-bottom: 22px;
-  font: 800 28px/1 "Manrope", sans-serif;
+  font: 800 25px/1 "Manrope", sans-serif;
   letter-spacing: -.04em;
 }
-.goal-total small { color: var(--quiet); font-size: 15px; }
+.goal-total small { color: var(--quiet); font-size: 14px; }
 .goal-meters {
   display: flex;
   flex-shrink: 0;
@@ -2257,7 +2275,7 @@ a.activity-item:focus-visible {
 }
 .person-hero h1 {
   margin: 0 0 8px;
-  font-size: clamp(36px, 10vw, 64px);
+  font-size: clamp(32px, 9vw, 58px);
   line-height: .95;
 }
 .person-hero h1 .name-initial {

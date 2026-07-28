@@ -3754,18 +3754,35 @@ function scrollHomeToTop() {
   window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 
+function possessiveHomeLabel(firstName) {
+  const first = (firstName || "").trim() || "Your";
+  return `${first}’s Home`;
+}
+
 function updateSiteMenu() {
   const myHome = $("#menu-my-home");
+  const myHomeLabel = $("#menu-my-home-label");
   const myHomeMeta = $("#menu-my-home-meta");
+  const myHomeAvatar = $("#menu-my-home-avatar");
   const knownId = rememberedPersonId();
   if (myHome) {
     if (knownId) {
       const person = getPerson(knownId);
+      const first = person?.name?.split(" ")[0] || "Your";
       myHome.hidden = false;
       myHome.href = `#/person/${knownId}`;
-      if (myHomeMeta) myHomeMeta.textContent = person?.name?.split(" ")[0] || "You";
+      if (myHomeLabel) myHomeLabel.textContent = possessiveHomeLabel(first);
+      if (myHomeMeta) myHomeMeta.textContent = "Your progress";
+      if (myHomeAvatar) {
+        myHomeAvatar.src = person?.image || "";
+        myHomeAvatar.alt = "";
+      }
     } else {
       myHome.hidden = true;
+      if (myHomeAvatar) {
+        myHomeAvatar.removeAttribute("src");
+        myHomeAvatar.alt = "";
+      }
     }
   }
 
