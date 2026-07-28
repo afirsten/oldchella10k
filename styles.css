@@ -236,11 +236,6 @@ body.is-menu-open .site-menu-panel {
   letter-spacing: .16em;
   text-transform: uppercase;
 }
-.site-menu-add-reps {
-  width: 100%;
-  min-width: 0;
-  height: 52px;
-}
 .site-menu-nav {
   display: grid;
   gap: 6px;
@@ -1180,43 +1175,8 @@ body.is-menu-open {
   overflow: hidden;
 }
 .theme-toggle.site-menu-theme {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 12px;
-  justify-content: stretch;
-  align-items: center;
-  width: 100%;
-  height: auto;
   margin-top: auto;
-  padding: 12px;
-  border: 1px solid rgba(245, 200, 66, .18);
-  border-radius: 14px;
-  background:
-    linear-gradient(165deg, rgba(232, 118, 58, .08), transparent 70%),
-    rgba(255, 160, 80, .04);
-  color: inherit;
-  text-align: left;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-.theme-toggle.site-menu-theme:hover,
-.theme-toggle.site-menu-theme:focus-visible {
-  border-color: rgba(245, 200, 66, .35);
-  background:
-    linear-gradient(165deg, rgba(232, 118, 58, .12), transparent 70%),
-    rgba(255, 160, 80, .08);
-  color: var(--ink);
-  outline: none;
-}
-.theme-toggle.site-menu-theme:focus-visible {
-  outline: 2px solid var(--terra);
-  outline-offset: 2px;
-}
-.theme-toggle.site-menu-theme .theme-toggle__icon {
-  font-size: 22px;
-  color: var(--lime);
-}
-.theme-toggle.site-menu-theme .site-menu-link__label {
-  font-size: 20px;
+  align-self: flex-start;
 }
 .nav-home {
   flex-shrink: 0;
@@ -1684,39 +1644,6 @@ h1 .logo-chella {
 }
 .potential-copy.is-fading {
   opacity: 0;
-}
-.quick-add-button {
-  display: flex;
-  width: auto;
-  min-width: 148px;
-  height: 44px;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 0;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 12px;
-  background: linear-gradient(90deg, var(--terra), var(--lime));
-  color: #fff8f0;
-  font: 800 11px/1 "Manrope", sans-serif;
-  font-weight: 800;
-  letter-spacing: .1em;
-  cursor: pointer;
-}
-.quick-add-button[hidden] {
-  display: none;
-}
-.quick-add-button svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 2.4;
-}
-.quick-add-label {
-  font-weight: 800;
 }
 .person-picker-dialog {
   padding: 22px 22px calc(28px + env(safe-area-inset-bottom));

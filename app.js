@@ -38,11 +38,9 @@ function applyTheme(theme) {
   const icon =
     document.getElementById("theme-toggle-icon") ||
     toggle?.querySelector(".theme-toggle__icon");
-  const label = document.getElementById("theme-toggle-label");
   const meta = document.getElementById("theme-color-meta");
   const isDark = theme === "dark";
   if (icon) icon.textContent = isDark ? "light_mode" : "dark_mode";
-  if (label) label.textContent = isDark ? "Light mode" : "Dark mode";
   if (toggle) {
     toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
   }
@@ -1547,22 +1545,11 @@ function updateAddRepsTip() {
 }
 
 function updateQuickAddButton() {
-  const menuButton = $("#menu-add-reps-button");
-  const menuLabel = $("#menu-add-reps-label");
   const navButton = $("#nav-add-reps-button");
   const personId = rememberedPersonId();
   const first = personId ? getPerson(personId).name.split(" ")[0].toUpperCase() : "";
-  const labelText = personId ? `ADD REPS FOR ${first}` : "ADD REPS";
-  const aria = personId ? `Add reps for ${first}` : "Add reps — pick who you are";
 
   updateAddRepsTip();
-
-  if (menuButton && menuLabel) {
-    if (personId) menuButton.dataset.personId = personId;
-    else delete menuButton.dataset.personId;
-    menuLabel.textContent = labelText;
-    menuButton.setAttribute("aria-label", aria);
-  }
 
   if (navButton) {
     if (personId) navButton.dataset.personId = personId;
@@ -3720,10 +3707,6 @@ $("#feed-day-filter")?.addEventListener("click", (event) => {
   renderFeedClearedToday({ smoothDayScroll: true });
 });
 $("#nav-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
-$("#menu-add-reps-button")?.addEventListener("click", () => {
-  closeSiteMenu();
-  startAddRepsFlow();
-});
 $("#hero-add-tip-dismiss")?.addEventListener("click", () => dismissAddRepsTip());
 $("#person-picker-grid").addEventListener("click", (event) => {
   const option = event.target.closest("[data-person-id]");
@@ -4107,11 +4090,6 @@ function scrollHomeToTop() {
   window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 
-function possessiveHomeLabel(firstName) {
-  const first = (firstName || "").trim() || "Your";
-  return `${first}’s Home`;
-}
-
 function updateSiteMenu() {
   const myHome = $("#menu-my-home");
   const myHomeLabel = $("#menu-my-home-label");
@@ -4124,7 +4102,7 @@ function updateSiteMenu() {
       const first = person?.name?.split(" ")[0] || "Your";
       myHome.hidden = false;
       myHome.href = `#/person/${knownId}`;
-      if (myHomeLabel) myHomeLabel.textContent = possessiveHomeLabel(first);
+      if (myHomeLabel) myHomeLabel.textContent = first;
       if (myHomeMeta) myHomeMeta.textContent = "Your progress";
       if (myHomeAvatar) {
         myHomeAvatar.src = person?.image || "";
@@ -4249,8 +4227,7 @@ function openSiteMenu() {
     reveal();
   }
 
-  const first =
-    $("#menu-add-reps-button") || menu.querySelector(".site-menu-link:not([hidden])");
+  const first = menu.querySelector(".site-menu-link:not([hidden])");
   if (first) window.setTimeout(() => first.focus(), 0);
 }
 
