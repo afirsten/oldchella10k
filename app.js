@@ -38,9 +38,11 @@ function applyTheme(theme) {
   const icon =
     document.getElementById("theme-toggle-icon") ||
     toggle?.querySelector(".theme-toggle__icon");
+  const label = document.getElementById("theme-toggle-label");
   const meta = document.getElementById("theme-color-meta");
   const isDark = theme === "dark";
   if (icon) icon.textContent = isDark ? "light_mode" : "dark_mode";
+  if (label) label.textContent = isDark ? "Light mode" : "Dark mode";
   if (toggle) {
     toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
   }
