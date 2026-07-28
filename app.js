@@ -672,7 +672,7 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
     ? `<div class="daily-pulse-banner" role="status"><span>Daily goal met</span></div>`
     : "";
   const share =
-    showCompleteChrome && personId
+    showCompleteChrome && personId && isPersonPageOwner(personId)
       ? `<button type="button" class="share-whatsapp-button daily-pulse-share" data-person-id="${escapeHtml(personId)}" data-date="${escapeHtml(dateKey)}">Share to WhatsApp</button>`
       : "";
 
@@ -2872,25 +2872,27 @@ function revealDailyPulseAfterLog() {
       }
       banner.classList.add("is-in");
 
-      let share = pulse.querySelector(".daily-pulse-share");
-      if (!share) {
-        const personId = pendingPulseReveal?.personId || currentPersonId();
-        const dateKey = pendingPulseReveal?.activityDate || localDateValue();
-        share = document.createElement("button");
-        share.type = "button";
-        share.className = "share-whatsapp-button daily-pulse-share is-entering";
-        share.dataset.personId = personId;
-        share.dataset.date = dateKey;
-        share.textContent = "Share to WhatsApp";
-        banner.insertAdjacentElement("afterend", share);
-        void share.offsetWidth;
+      const personId = pendingPulseReveal?.personId || currentPersonId();
+      const dateKey = pendingPulseReveal?.activityDate || localDateValue();
+      if (personId && isPersonPageOwner(personId)) {
+        let share = pulse.querySelector(".daily-pulse-share");
+        if (!share) {
+          share = document.createElement("button");
+          share.type = "button";
+          share.className = "share-whatsapp-button daily-pulse-share is-entering";
+          share.dataset.personId = personId;
+          share.dataset.date = dateKey;
+          share.textContent = "Share to WhatsApp";
+          banner.insertAdjacentElement("afterend", share);
+          void share.offsetWidth;
+        }
+        share.classList.add("is-in");
+        pendingShareGoal = {
+          personId: share.dataset.personId,
+          activityDate: share.dataset.date,
+        };
+        ensureDailyGoalShareBlob(share.dataset.personId, share.dataset.date).catch(() => {});
       }
-      share.classList.add("is-in");
-      pendingShareGoal = {
-        personId: share.dataset.personId,
-        activityDate: share.dataset.date,
-      };
-      ensureDailyGoalShareBlob(share.dataset.personId, share.dataset.date).catch(() => {});
     }
 
     if (showPulseLfg) {
@@ -3445,6 +3447,7 @@ async function ensureDailyGoalShareBlob(personId, dateKey) {
 }
 
 async function shareDailyGoalMetToWhatsApp(personId, dateKey, buttonEl = null) {
+  if (!personId || !dateKey || !isPersonPageOwner(personId)) return false;
   const button =
     buttonEl ||
     $("#success-share-button") ||
@@ -3506,13 +3509,14 @@ function showLogSuccess(personId, entries, options = {}) {
   const form = $("#log-form");
   const success = $("#log-success");
   const shareButton = $("#success-share-button");
+  const canShare = boardCleared && isPersonPageOwner(personId);
   success.classList.toggle("is-board-cleared", boardCleared);
-  pendingShareGoal = boardCleared ? { personId, activityDate } : null;
+  pendingShareGoal = canShare ? { personId, activityDate } : null;
   pendingShareBlob = null;
   pendingShareBlobPromise = null;
 
   if (shareButton) {
-    shareButton.hidden = !boardCleared;
+    shareButton.hidden = !canShare;
     shareButton.disabled = false;
     shareButton.textContent = "Share to WhatsApp";
     shareButton.dataset.personId = personId;
@@ -3528,7 +3532,7 @@ function showLogSuccess(personId, entries, options = {}) {
         ? "Daily goals locked in. Absolute menace."
         : `${list.length} activities in — daily goals locked in.`;
     setSuccessRemainingMessage(personId, activityDate, { boardCleared: true });
-    ensureDailyGoalShareBlob(personId, activityDate).catch(() => {});
+    if (canShare) ensureDailyGoalShareBlob(personId, activityDate).catch(() => {});
   } else {
     fillNormalLogSuccess(personId, list, activityDate);
   }
@@ -3685,7 +3689,7 @@ document.addEventListener("click", async (event) => {
   event.preventDefault();
   const personId = shareButton.dataset.personId;
   const activityDate = shareButton.dataset.date;
-  if (!personId || !activityDate) return;
+  if (!personId || !activityDate || !isPersonPageOwner(personId)) return;
   // Keep the success sheet open while the OS share sheet is up.
   if (shareButton.classList.contains("log-success-share")) {
     window.clearTimeout(logSuccessTimer);
