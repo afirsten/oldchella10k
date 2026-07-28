@@ -1862,7 +1862,11 @@ h1 .logo-chella {
   font-size: 7px;
   letter-spacing: .06em;
 }
-.activity-list { display: grid; gap: 10px; }
+.activity-list {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
 .history-day {
   display: grid;
   gap: 10px;
@@ -2002,6 +2006,7 @@ h1 .logo-chella {
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
+  min-width: 0;
   padding: 15px;
   border: 1px solid var(--line);
   border-radius: 15px;
@@ -2010,7 +2015,7 @@ h1 .logo-chella {
   text-decoration: none;
 }
 .activity-item.is-feed {
-  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-columns: 54px minmax(0, 1fr) minmax(0, auto);
   gap: 14px;
 }
 .activity-item.is-editable {
@@ -2081,34 +2086,54 @@ a.activity-item:focus-visible {
   background: rgba(76,223,138,.12);
   color: var(--green);
 }
+.activity-main {
+  min-width: 0;
+}
 .activity-main p {
   margin: 0 0 3px;
   color: var(--ink);
   font-size: 14px;
+  overflow-wrap: break-word;
 }
 .activity-person {
   margin: 0 0 3px;
+  overflow: hidden;
   color: var(--ink);
   font: 700 16px/1.15 "DM Sans", sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .activity-main > span {
   color: var(--quiet);
   font-size: 11px;
 }
 .activity-meta {
+  min-width: 0;
+  max-width: 100%;
   text-align: right;
-  white-space: nowrap;
 }
 .activity-meta p {
   margin: 0;
   color: var(--ink);
   font-size: 14px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .activity-reps {
   margin: 0 4px 0 0;
   color: var(--lime);
   font: 800 15px/1 "Manrope", sans-serif;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (min-width: 480px) {
+  .activity-meta p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
 }
 .activity-item.is-editable .activity-main p {
   margin: 0;
