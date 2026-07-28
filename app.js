@@ -331,7 +331,7 @@ function dayGoalProgressLines(dayActivities) {
     lines: [
       `${number.format(totals.pushups)} of ${number.format(DAILY_GOALS.pushups)} pushups`,
       `${number.format(totals.squats)} of ${number.format(DAILY_GOALS.squats)} squats`,
-      `${number.format(totals.planks)} of ${number.format(DAILY_GOALS.planks)} seconds planking`,
+      `${formatPlankMinutes(totals.planks)} of ${formatPlankMinutes(DAILY_GOALS.planks)} min planking`,
       `${number.format(totals.other)} of 100 Other`,
     ],
   };
@@ -390,7 +390,7 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
     {
       key: "planks",
       label: "PLANK",
-      value: `${number.format(totals.planks)} / ${number.format(DAILY_GOALS.planks)} SEC`,
+      value: `${formatPlankMinutes(totals.planks)} / ${formatPlankMinutes(DAILY_GOALS.planks)} MIN`,
       percent: percents.planks,
     },
     {
@@ -2488,12 +2488,7 @@ function dailyGoalRemainingParts(personId, dateKey) {
   if (pushLeft) parts.push(`${number.format(pushLeft)} push-up${pushLeft === 1 ? "" : "s"}`);
   if (squatLeft) parts.push(`${number.format(squatLeft)} squat${squatLeft === 1 ? "" : "s"}`);
   if (plankLeft) {
-    if (plankLeft >= 60 && plankLeft % 60 === 0) {
-      const mins = plankLeft / 60;
-      parts.push(`${durationNumber.format(mins)} min plank`);
-    } else {
-      parts.push(`${number.format(plankLeft)} sec plank`);
-    }
+    parts.push(`${formatPlankMinutes(plankLeft)} min plank`);
   }
   return parts;
 }
@@ -2922,7 +2917,7 @@ async function buildDailyGoalMetImage(personId, dateKey) {
     },
     {
       label: "PLANK",
-      value: `${number.format(totals.planks)} / ${number.format(DAILY_GOALS.planks)} SEC`,
+      value: `${formatPlankMinutes(totals.planks)} / ${formatPlankMinutes(DAILY_GOALS.planks)} MIN`,
       percent: percents.planks,
       colors: ["#d4a017", "#f5c842"],
     },
