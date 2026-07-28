@@ -288,11 +288,13 @@ body.is-menu-open .site-menu-panel {
   -webkit-font-feature-settings: "liga";
   user-select: none;
 }
-.site-menu-link__icon--cactus {
+.site-menu-link__icon--cactus,
+.site-menu-link__icon--feed {
   font-family: inherit;
   font-variation-settings: normal;
 }
-.site-menu-link__icon--cactus svg {
+.site-menu-link__icon--cactus svg,
+.site-menu-link__icon--feed svg {
   display: block;
   width: 22px;
   height: 22px;

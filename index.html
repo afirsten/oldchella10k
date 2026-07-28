@@ -39,7 +39,7 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=235" />
+    <link rel="stylesheet" href="./styles.css?v=236" />
     <script>
       (function () {
         try {
@@ -155,7 +155,17 @@
             </span>
           </a>
           <a class="site-menu-link" data-menu-route="feed" href="#/feed">
-            <span class="site-menu-link__icon" aria-hidden="true">view_agenda</span>
+            <span class="site-menu-link__icon site-menu-link__icon--feed" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <!-- three stacked card + rule rows -->
+                <rect x="3.5" y="2.2" width="17" height="3.1" rx="1.15"/>
+                <rect x="3.5" y="5.85" width="17" height="0.95" rx="0.45"/>
+                <rect x="3.5" y="8.55" width="17" height="3.1" rx="1.15"/>
+                <rect x="3.5" y="12.2" width="17" height="0.95" rx="0.45"/>
+                <rect x="3.5" y="14.9" width="17" height="3.1" rx="1.15"/>
+                <rect x="3.5" y="18.55" width="17" height="0.95" rx="0.45"/>
+              </svg>
+            </span>
             <span class="site-menu-link__text">
               <span class="site-menu-link__label">Activity Feed</span>
               <span class="site-menu-link__meta">Latest logs</span>
