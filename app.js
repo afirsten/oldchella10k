@@ -1697,22 +1697,19 @@ function renderSheetFeedList(kind, items) {
   }
   list.innerHTML = items
     .map((item) => {
-      const matchedPerson =
-        !isInspiration && item.contributor ? matchCrewPerson(item.contributor) : null;
+      const matchedPerson = item.contributor ? matchCrewPerson(item.contributor) : null;
       const who = item.contributor
         ? matchedPerson
           ? `<span class="recipe-card__meta">From <a class="recipe-card__person" href="#/person/${escapeHtml(matchedPerson.id)}">${escapeHtml(item.contributor)}</a></span>`
           : `<span class="recipe-card__meta">From ${escapeHtml(item.contributor)}</span>`
         : "";
-      const linkDescription = isInspiration && item.linkDescription
+      const linkDescription = item.linkDescription
         ? `<span class="recipe-card__desc">${escapeHtml(item.linkDescription)}</span>`
         : "";
       const submitterNote = (item.note || item.description || "").trim();
-      const note = isInspiration && submitterNote
+      const note = submitterNote
         ? `<span class="recipe-card__note">${escapeHtml(submitterNote)}</span>`
-        : !isInspiration && submitterNote
-          ? `<span class="recipe-card__desc">${escapeHtml(submitterNote)}</span>`
-          : "";
+        : "";
       const host = item.host
         ? `<a class="recipe-card__host" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.host)}</a>`
         : "";

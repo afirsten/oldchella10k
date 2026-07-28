@@ -6,7 +6,7 @@ export const SHEET_TABS = {
   inspiration: { gid: "1013060614", label: "inspiration" },
 };
 
-const META_PREFIX = "rippedchella:sheet-meta:v2:";
+const META_PREFIX = "rippedchella:sheet-meta:v3:";
 const META_TTL_HIT = 60 * 60 * 24 * 7;
 const META_TTL_MISS = 60 * 60 * 12;
 const FETCH_TIMEOUT_MS = 4500;
@@ -285,7 +285,9 @@ export async function enrichLinkItems(items, { enrichCopy = false } = {}) {
   return Promise.all(
     items.map(async (item) => {
       const needsImage = !item.image;
-      const needsCopy = enrichCopy && (!item.title || item.title === titleFromUrl(item.url) || !item.linkDescription);
+      const needsCopy =
+        enrichCopy &&
+        (!item.title || item.title === titleFromUrl(item.url) || !item.linkDescription);
       if (!needsImage && !needsCopy) return item;
 
       const cacheKey = `${META_PREFIX}${item.url}`;
@@ -299,7 +301,13 @@ export async function enrichLinkItems(items, { enrichCopy = false } = {}) {
         }
       }
 
-      if (!meta) {
+      const cacheMissesTitle =
+        needsCopy &&
+        meta &&
+        !meta.title &&
+        (!item.title || item.title === titleFromUrl(item.url));
+
+      if (!meta || cacheMissesTitle) {
         meta = await fetchLinkMeta(item.url);
         const ttl = meta.title || meta.description || meta.image ? META_TTL_HIT : META_TTL_MISS;
         await softRedis(["SET", cacheKey, JSON.stringify(meta), "EX", ttl]);
@@ -336,7 +344,7 @@ export async function loadSheetFeed(tabKey) {
     error.status = 403;
     throw error;
   }
-  const enrichCopy = tabKey === "inspiration";
+  const enrichCopy = tabKey === "inspiration" || tabKey === "recipes";
   const items = await enrichLinkItems(parseSheetLinkRows(csv), { enrichCopy });
   return {
     items,
