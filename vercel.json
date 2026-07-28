@@ -3,6 +3,12 @@
   "functions": {
     "api/*.mjs": {
       "maxDuration": 10
+    },
+    "api/recipes.mjs": {
+      "maxDuration": 20
+    },
+    "api/inspiration.mjs": {
+      "maxDuration": 20
     }
   },
   "headers": [
@@ -12,6 +18,24 @@
         {
           "key": "Cache-Control",
           "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/api/recipes",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=120, stale-while-revalidate=600"
+        }
+      ]
+    },
+    {
+      "source": "/api/inspiration",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=120, stale-while-revalidate=600"
         }
       ]
     }

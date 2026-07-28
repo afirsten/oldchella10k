@@ -2,6 +2,12 @@ const GOAL_PER_PERSON = 10000;
 const CHALLENGE_START = "2026-07-14";
 const CHALLENGE_DAYS = 100;
 const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
+const OLD_CHELLA_URL = "https://goingtoliveforever.com/";
+const RECIPES_SHEET_ID = "1UkuA5apWL5PZ2XQkZP_r9horqKtial1FCrk5Vn3HK88";
+const RECIPES_SHEET_GID = "0";
+const INSPIRATION_SHEET_GID = "1013060614";
+const RECIPES_CSV_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${RECIPES_SHEET_GID}`;
+const INSPIRATION_CSV_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${INSPIRATION_SHEET_GID}`;
 const FACT_ROTATE_MS = 5600;
 const THEME_STORAGE_KEY = "rippedchella-theme-v1";
 const DAILY_GOALS = {
@@ -167,6 +173,47 @@ function personStatus(personId) {
 
 function getPerson(id) {
   return crew.find((person) => person.id === id) ?? crew[0];
+}
+
+function normalizePersonKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function matchCrewPerson(contributor) {
+  const raw = normalizePersonKey(contributor);
+  if (!raw) return null;
+
+  const exactName = crew.find((person) => normalizePersonKey(person.name) === raw);
+  if (exactName) return exactName;
+
+  const exactId = crew.find((person) => person.id === raw);
+  if (exactId) return exactId;
+
+  const tokens = raw.split(" ");
+  const first = tokens[0];
+  const firstMatches = crew.filter(
+    (person) => normalizePersonKey(person.name).split(" ")[0] === first,
+  );
+  if (firstMatches.length === 1 && tokens.length === 1) return firstMatches[0];
+
+  const withInitial = crew.find((person) => {
+    const parts = normalizePersonKey(person.name).split(" ");
+    if (parts.length < 2) return false;
+    const initial = parts[1][0];
+    return (
+      raw === `${parts[0]} ${initial}` ||
+      raw === `${parts[0]}${initial}` ||
+      raw === normalizePersonKey(person.name)
+    );
+  });
+  if (withInitial) return withInitial;
+
+  if (firstMatches.length === 1) return firstMatches[0];
+  return null;
 }
 
 function activityExercise(activity) {
@@ -771,34 +818,80 @@ function render({ skipScroll = false } = {}) {
     )
     .join("");
 
-  const recent = [...activities]
-    .sort(compareActivitiesRecentFirst)
-    .slice(0, 8);
-
+  const recent = [...activities].sort(compareActivitiesRecentFirst);
+  const activityFeedItem = (activity) => {
+    const person = getPerson(activity.personId);
+    return `
+      <a class="activity-item is-feed" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
+        <div class="activity-stack" aria-hidden="true">
+          <img class="activity-avatar" src="${person.image}" alt="" />
+          ${exerciseIcon(activity)}
+        </div>
+        <div class="activity-main">
+          <p class="activity-person">${escapeHtml(person.name)}</p>
+          <span>${formatDate(activity.createdAt)}</span>
+        </div>
+        <div class="activity-meta">
+          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+        </div>
+      </a>
+    `;
+  };
+  const emptyFeed = '<div class="empty-state">No reps yet. Be the first to get moving.</div>';
   $("#activity-list").innerHTML = recent.length
-    ? recent
-        .map((activity) => {
-          const person = getPerson(activity.personId);
-          return `
-            <a class="activity-item is-feed" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
-              <div class="activity-stack" aria-hidden="true">
-                <img class="activity-avatar" src="${person.image}" alt="" />
-                ${exerciseIcon(activity)}
-              </div>
-              <div class="activity-main">
-                <p class="activity-person">${escapeHtml(person.name)}</p>
-                <span>${formatDate(activity.createdAt)}</span>
-              </div>
-              <div class="activity-meta">
-                <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
-              </div>
-            </a>
-          `;
-        })
-        .join("")
-    : '<div class="empty-state">No reps yet. Be the first to get moving.</div>';
+    ? recent.slice(0, 8).map(activityFeedItem).join("")
+    : emptyFeed;
+  const activityPageList = $("#activity-page-list");
+  if (activityPageList) {
+    activityPageList.innerHTML = recent.length ? recent.map(activityFeedItem).join("") : emptyFeed;
+  }
+
+  // Mirror key stats onto the Activity page.
+  const setText = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  };
+  setText("#activity-group-total", number.format(total));
+  setText("#activity-goal-target", number.format(goal));
+  setText("#activity-pushups-total", number.format(categoryTotals.pushups));
+  setText("#activity-squats-total", number.format(categoryTotals.squats));
+  setText("#activity-planks-total", formatPlankMinutes(categoryTotals.planks));
+  setText("#activity-other-total", number.format(categoryTotals.other));
+  setText("#activity-crew-status-total", `${participants.length} / ${optedOut.length}`);
+  setText("#activity-remaining-total", number.format(Math.max(0, goal - total)));
+  setText("#activity-goal-percent-value", `${percent}%`);
+  const activityGoalPercent = $("#activity-goal-percent");
+  if (activityGoalPercent) activityGoalPercent.setAttribute("aria-label", `${percent}% done`);
+  const activityFill = $("#activity-progress-fill");
+  if (activityFill) activityFill.style.width = `${percent}%`;
+  const activityTarget = $("#activity-progress-target");
+  if (activityTarget) activityTarget.style.width = `${targetPercent}%`;
+  const activityPace = $("#activity-progress-pace");
+  if (activityPace) activityPace.style.left = `${targetPercent}%`;
+  const activityTrack = $("#activity-progress-track");
+  if (activityTrack) {
+    activityTrack.setAttribute("aria-valuenow", String(total));
+    activityTrack.setAttribute("aria-valuemax", String(goal));
+    activityTrack.setAttribute(
+      "aria-valuetext",
+      `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
+    );
+  }
+  setText(
+    "#activity-pace-copy",
+    goal > 0 && total >= goal
+      ? "Challenge complete!"
+      : groupTarget <= 0
+        ? "Oldchella awaits"
+        : paceDelta === 0
+          ? `On pace (${number.format(groupTarget)})`
+          : paceDelta > 0
+            ? `${number.format(paceDelta)} ahead of pace`
+            : `${number.format(Math.abs(paceDelta))} behind pace`,
+  );
 
   renderPersonPage({ skipScroll });
+  updateSiteMenu();
 }
 
 function formatDate(value) {
@@ -951,23 +1044,49 @@ function updateQuickAddButton() {
   const wrap = $("#hero-quick-add");
   const button = $("#quick-add-button");
   const label = $("#quick-add-label");
-  if (!wrap || !button || !label) return;
-  if (currentPersonId()) {
-    wrap.hidden = true;
-    return;
+  const activityButton = $("#activity-add-reps-button");
+  const activityLabel = $("#activity-add-reps-label");
+  const menuButton = $("#menu-add-reps-button");
+  const menuLabel = $("#menu-add-reps-label");
+  const personId = rememberedPersonId();
+  const first = personId ? getPerson(personId).name.split(" ")[0].toUpperCase() : "";
+  const labelText = personId ? `ADD REPS FOR ${first}` : "ADD REPS";
+  const aria = personId ? `Add reps for ${first}` : "Add reps — pick who you are";
+
+  if (wrap && button && label) {
+    if (currentPersonId()) {
+      wrap.hidden = true;
+    } else {
+      wrap.hidden = false;
+      if (personId) button.dataset.personId = personId;
+      else delete button.dataset.personId;
+      label.textContent = labelText;
+      button.setAttribute("aria-label", aria);
+    }
   }
-  wrap.hidden = false;
+
+  if (activityButton && activityLabel) {
+    if (personId) activityButton.dataset.personId = personId;
+    else delete activityButton.dataset.personId;
+    activityLabel.textContent = labelText;
+    activityButton.setAttribute("aria-label", aria);
+  }
+
+  if (menuButton && menuLabel) {
+    if (personId) menuButton.dataset.personId = personId;
+    else delete menuButton.dataset.personId;
+    menuLabel.textContent = labelText;
+    menuButton.setAttribute("aria-label", aria);
+  }
+}
+
+function startAddRepsFlow() {
   const personId = rememberedPersonId();
   if (personId) {
-    const first = getPerson(personId).name.split(" ")[0].toUpperCase();
-    button.dataset.personId = personId;
-    label.textContent = `ADD REPS FOR ${first}`;
-    button.setAttribute("aria-label", `Add reps for ${first}`);
-  } else {
-    delete button.dataset.personId;
-    label.textContent = "ADD REPS";
-    button.setAttribute("aria-label", "Add reps — pick who you are");
+    window.location.hash = `/person/${personId}/add`;
+    return;
   }
+  openPersonPicker();
 }
 
 function openPersonPicker() {
@@ -1139,33 +1258,360 @@ async function protectedRequest(path, method, personId, body) {
   }
 }
 
+function parseAppRoute() {
+  const raw = window.location.hash.replace(/^#/, "") || "/";
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
+  const personMatch = path.match(/^\/person\/([a-z]+)(?:\/(add))?\/?$/);
+  if (personMatch && crew.some((person) => person.id === personMatch[1])) {
+    return { type: "person", personId: personMatch[1], openAdd: personMatch[2] === "add" };
+  }
+  if (path === "/activity" || path.startsWith("/activity/")) return { type: "activity" };
+  if (path === "/recipes" || path.startsWith("/recipes/")) return { type: "recipes" };
+  if (path === "/inspiration" || path.startsWith("/inspiration/")) return { type: "inspiration" };
+  return { type: "challenge" };
+}
+
 function parsePersonRoute() {
-  const match = window.location.hash.match(/^#\/person\/([a-z]+)(?:\/(add))?\/?$/);
-  if (!match || !crew.some((person) => person.id === match[1])) return null;
-  return { personId: match[1], openAdd: match[2] === "add" };
+  const route = parseAppRoute();
+  if (route.type !== "person") return null;
+  return { personId: route.personId, openAdd: route.openAdd };
 }
 
 function currentPersonId() {
   return parsePersonRoute()?.personId || null;
 }
 
-function renderPersonPage({ skipScroll = false } = {}) {
-  const route = parsePersonRoute();
-  const personId = route?.personId || null;
-  const dashboard = $("#dashboard-page");
-  const personPage = $("#person-page");
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+  const input = String(text || "").replace(/^\uFEFF/, "");
 
-  if (!personId) {
-    const returningHome = wasShowingPersonPage;
-    wasShowingPersonPage = false;
-    dashboard.hidden = false;
-    personPage.hidden = true;
-    updateQuickAddButton();
-    if (returningHome) scrollHomeToTop();
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    const next = input[i + 1];
+    if (inQuotes) {
+      if (char === '"' && next === '"') {
+        cell += '"';
+        i += 1;
+      } else if (char === '"') {
+        inQuotes = false;
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (char === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else if (char !== "\r") {
+      cell += char;
+    }
+  }
+  if (cell.length || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.filter((entry) => entry.some((value) => String(value).trim()));
+}
+
+function sheetItemTitleFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host.includes("instagram")) return "Instagram post";
+    if (host.includes("youtube") || host.includes("youtu.be")) return "YouTube video";
+    if (host.includes("tiktok")) return "TikTok video";
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const slug = parts[parts.length - 1] || "";
+    const titled = slug
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[-_]+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    return titled || host;
+  } catch {
+    return "Link";
+  }
+}
+
+function youtubeIdFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtu.be")) {
+      return parsed.pathname.split("/").filter(Boolean)[0] || "";
+    }
+    if (parsed.hostname.includes("youtube.com")) {
+      if (parsed.searchParams.get("v")) return parsed.searchParams.get("v");
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") {
+        return parts[1] || "";
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return "";
+}
+
+function parseSheetLinkCsv(text) {
+  const rows = parseCsvRows(text);
+  if (!rows.length) return [];
+  const headers = rows[0].map((header) => String(header).trim().toLowerCase());
+  const linkIdx = headers.findIndex(
+    (header) =>
+      header.includes("link") ||
+      header.includes("url") ||
+      /^(recipe|inspiration)$/.test(header),
+  );
+  const contributorIdx = headers.findIndex((header) =>
+    /contributor|author|by|name|who/.test(header),
+  );
+  const imageIdx = headers.findIndex((header) => /image|thumb|photo|pic/.test(header));
+  const descriptionIdx = headers.findIndex((header) =>
+    /description|note|notes|blurb|caption|about/.test(header),
+  );
+  const urlColumn = linkIdx >= 0 ? linkIdx : 0;
+  const whoColumn = contributorIdx >= 0 ? contributorIdx : 1;
+
+  return rows
+    .slice(1)
+    .map((row) => {
+      const url = String(row[urlColumn] || "").trim();
+      if (!/^https?:\/\//i.test(url)) return null;
+      const contributor = String(row[whoColumn] || "").trim();
+      const sheetImage = imageIdx >= 0 ? String(row[imageIdx] || "").trim() : "";
+      const note = descriptionIdx >= 0 ? String(row[descriptionIdx] || "").trim() : "";
+      const yt = youtubeIdFromUrl(url);
+      const image = /^https?:\/\//i.test(sheetImage)
+        ? sheetImage
+        : yt
+          ? `https://img.youtube.com/vi/${yt}/hqdefault.jpg`
+          : "";
+      let host = "";
+      try {
+        host = new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        host = "";
+      }
+      return {
+        title: sheetItemTitleFromUrl(url),
+        url,
+        contributor,
+        note,
+        description: note,
+        linkDescription: "",
+        image,
+        host,
+      };
+    })
+    .filter(Boolean);
+}
+
+const sheetFeedState = {
+  recipes: { cache: null, promise: null },
+  inspiration: { cache: null, promise: null },
+};
+
+async function fetchSheetFeed(kind) {
+  const apiPath = kind === "inspiration" ? "/api/inspiration" : "/api/recipes";
+  const csvUrl = kind === "inspiration" ? INSPIRATION_CSV_URL : RECIPES_CSV_URL;
+  try {
+    const response = await fetch(apiPath);
+    if (response.ok) {
+      const payload = await response.json();
+      const items = Array.isArray(payload.items)
+        ? payload.items
+        : Array.isArray(payload.recipes)
+          ? payload.recipes
+          : null;
+      if (items) return items;
+    }
+  } catch {
+    // Fall through to direct sheet CSV.
+  }
+  const response = await fetch(csvUrl, { headers: { Accept: "text/csv,text/plain,*/*" } });
+  if (!response.ok) throw new Error("Sheet could not be loaded.");
+  const csv = await response.text();
+  if (/^\s*<!DOCTYPE html/i.test(csv) || /accounts\.google\.com/i.test(csv)) {
+    throw new Error("Sheet is still private.");
+  }
+  return parseSheetLinkCsv(csv);
+}
+
+function renderSheetFeedList(kind, items) {
+  const isInspiration = kind === "inspiration";
+  const list = $(isInspiration ? "#inspiration-list" : "#recipes-list");
+  const status = $(isInspiration ? "#inspiration-status" : "#recipes-status");
+  if (!list) return;
+  const emptyCopy = "Nothing here yet.";
+  const countLabel = isInspiration
+    ? `${items.length} spark${items.length === 1 ? "" : "s"}`
+    : `${items.length} recipe${items.length === 1 ? "" : "s"}`;
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty-state">${emptyCopy}</div>`;
+    if (status) {
+      status.hidden = true;
+      status.textContent = "";
+    }
+    return;
+  }
+  if (status) {
+    status.hidden = false;
+    status.textContent = countLabel;
+  }
+  list.innerHTML = items
+    .map((item) => {
+      const matchedPerson =
+        !isInspiration && item.contributor ? matchCrewPerson(item.contributor) : null;
+      const who = item.contributor
+        ? matchedPerson
+          ? `<span class="recipe-card__meta">From <a class="recipe-card__person" href="#/person/${escapeHtml(matchedPerson.id)}">${escapeHtml(item.contributor)}</a></span>`
+          : `<span class="recipe-card__meta">From ${escapeHtml(item.contributor)}</span>`
+        : "";
+      const linkDescription = isInspiration && item.linkDescription
+        ? `<span class="recipe-card__desc">${escapeHtml(item.linkDescription)}</span>`
+        : "";
+      const submitterNote = (item.note || item.description || "").trim();
+      const note = isInspiration && submitterNote
+        ? `<span class="recipe-card__note">${escapeHtml(submitterNote)}</span>`
+        : !isInspiration && submitterNote
+          ? `<span class="recipe-card__desc">${escapeHtml(submitterNote)}</span>`
+          : "";
+      const host = item.host
+        ? `<a class="recipe-card__host" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.host)}</a>`
+        : "";
+      const fallback = item.host?.includes("instagram")
+        ? "IG"
+        : item.host?.includes("youtube") || item.host?.includes("youtu.be")
+          ? "YT"
+          : "RC";
+      const thumb = item.image
+        ? `<img class="recipe-card__image" src="${escapeHtml(item.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`
+        : `<span class="recipe-card__thumb-fallback" aria-hidden="true">${fallback}</span>`;
+      return `
+        <article class="recipe-card">
+          <a class="recipe-card__thumb" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" aria-hidden="true" tabindex="-1">${thumb}</a>
+          <div class="recipe-card__copy">
+            <a class="recipe-card__title" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer"><strong>${escapeHtml(item.title)}</strong></a>
+            ${linkDescription}
+            ${note}
+            ${who}
+          </div>
+          ${host}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+async function loadSheetFeedPage(kind, { force = false } = {}) {
+  const isInspiration = kind === "inspiration";
+  const list = $(isInspiration ? "#inspiration-list" : "#recipes-list");
+  const status = $(isInspiration ? "#inspiration-status" : "#recipes-status");
+  const state = sheetFeedState[kind];
+  if (!list || !state) return;
+  const loadingCopy = isInspiration ? "Loading inspiration…" : "Loading recipes…";
+  const syncCopy = "Syncing from Google Sheet…";
+  const failCopy = isInspiration
+    ? "Inspiration could not be loaded."
+    : "Eats could not be loaded.";
+
+  if (!force && state.cache) {
+    renderSheetFeedList(kind, state.cache);
+    return;
+  }
+  if (!force && state.promise) {
+    list.innerHTML = `<div class="empty-state">${loadingCopy}</div>`;
+    if (status) {
+      status.hidden = false;
+      status.textContent = syncCopy;
+    }
+    try {
+      renderSheetFeedList(kind, await state.promise);
+    } catch (error) {
+      list.innerHTML = `<div class="empty-state">${escapeHtml(error.message || failCopy)}</div>`;
+    }
     return;
   }
 
+  list.innerHTML = `<div class="empty-state">${loadingCopy}</div>`;
+  if (status) {
+    status.hidden = false;
+    status.textContent = syncCopy;
+  }
+  state.promise = fetchSheetFeed(kind)
+    .then((items) => {
+      state.cache = items;
+      return items;
+    })
+    .finally(() => {
+      state.promise = null;
+    });
+  try {
+    renderSheetFeedList(kind, await state.promise);
+  } catch (error) {
+    list.innerHTML = `<div class="empty-state">${escapeHtml(error.message || failCopy)}</div>`;
+    if (status) {
+      status.hidden = false;
+      status.textContent = "Could not load right now. Try again later.";
+    }
+  }
+}
+
+function renderResourcePages() {
+  const route = parseAppRoute();
+  if (route.type === "recipes") loadSheetFeedPage("recipes");
+  if (route.type === "inspiration") loadSheetFeedPage("inspiration");
+}
+
+function showAppPage(pageId, { skipScroll = false } = {}) {
+  const pages = {
+    challenge: $("#dashboard-page"),
+    person: $("#person-page"),
+    activity: $("#activity-page"),
+    recipes: $("#recipes-page"),
+    inspiration: $("#inspiration-page"),
+  };
+  Object.entries(pages).forEach(([id, el]) => {
+    if (el) el.hidden = id !== pageId;
+  });
+  const homeLink = $("#ripped-home-link");
+  if (homeLink) {
+    if (pageId === "challenge") homeLink.setAttribute("aria-current", "page");
+    else homeLink.removeAttribute("aria-current");
+  }
+  if (!skipScroll && pageId !== "person") {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+}
+
+function renderPersonPage({ skipScroll = false } = {}) {
+  const appRoute = parseAppRoute();
+
+  if (appRoute.type !== "person") {
+    const returningHome = wasShowingPersonPage;
+    wasShowingPersonPage = false;
+    showAppPage(appRoute.type, { skipScroll });
+    updateQuickAddButton();
+    renderResourcePages();
+    if (returningHome && appRoute.type === "challenge" && !skipScroll) scrollHomeToTop();
+    return;
+  }
+
+  const personId = appRoute.personId;
+  const route = { personId, openAdd: appRoute.openAdd };
   wasShowingPersonPage = true;
+  showAppPage("person", { skipScroll: true });
 
   const person = getPerson(personId);
   const allStats = totalsByPerson();
@@ -1217,8 +1663,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
       .map((activity) => activity.createdAt.slice(0, 10)),
   ).size;
 
-  dashboard.hidden = true;
-  personPage.hidden = false;
   $("#person-avatar").src = person.image;
   $("#person-avatar").alt = `${person.name} profile photo`;
   const rankTile = $("#person-rank-tile");
@@ -1604,6 +2048,12 @@ function openLogDialog(personId, options = {}) {
   $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-success").classList.remove("is-board-cleared");
+  const successShare = $("#success-share-button");
+  if (successShare) {
+    successShare.hidden = true;
+    successShare.disabled = false;
+    successShare.textContent = "Share to WhatsApp";
+  }
   $("#log-form").reset();
   clearLogFormError();
 
@@ -2470,7 +2920,10 @@ async function ensureDailyGoalShareBlob(personId, dateKey) {
 }
 
 async function shareDailyGoalMetToWhatsApp(personId, dateKey, buttonEl = null) {
-  const button = buttonEl || document.querySelector(".daily-pulse-share");
+  const button =
+    buttonEl ||
+    $("#success-share-button") ||
+    document.querySelector(".daily-pulse-share");
   if (button) {
     button.disabled = true;
     button.textContent = "Preparing…";
@@ -2527,10 +2980,19 @@ function showLogSuccess(personId, entries, options = {}) {
 
   const form = $("#log-form");
   const success = $("#log-success");
+  const shareButton = $("#success-share-button");
   success.classList.toggle("is-board-cleared", boardCleared);
   pendingShareGoal = boardCleared ? { personId, activityDate } : null;
   pendingShareBlob = null;
   pendingShareBlobPromise = null;
+
+  if (shareButton) {
+    shareButton.hidden = !boardCleared;
+    shareButton.disabled = false;
+    shareButton.textContent = "Share to WhatsApp";
+    shareButton.dataset.personId = personId;
+    shareButton.dataset.date = activityDate;
+  }
 
   if (boardCleared) {
     $("#success-eyebrow").textContent = "BOARD CLEARED";
@@ -2685,21 +3147,36 @@ $("#person-quick-add")?.addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", async (event) => {
-  const shareButton = event.target.closest(".daily-pulse-share");
+  const shareButton = event.target.closest(
+    ".daily-pulse-share, .log-success-share, .share-whatsapp-button[data-person-id]",
+  );
   if (!shareButton) return;
+  event.preventDefault();
   const personId = shareButton.dataset.personId;
   const activityDate = shareButton.dataset.date;
   if (!personId || !activityDate) return;
-  pendingShareGoal = { personId, activityDate };
-  await shareDailyGoalMetToWhatsApp(personId, activityDate, shareButton);
-});
-$("#quick-add-button").addEventListener("click", () => {
-  const personId = rememberedPersonId();
-  if (personId) {
-    window.location.hash = `/person/${personId}/add`;
-    return;
+  // Keep the success sheet open while the OS share sheet is up.
+  if (shareButton.classList.contains("log-success-share")) {
+    window.clearTimeout(logSuccessTimer);
+    logSuccessTimer = null;
   }
-  openPersonPicker();
+  pendingShareGoal = { personId, activityDate };
+  const shared = await shareDailyGoalMetToWhatsApp(personId, activityDate, shareButton);
+  if (shared && shareButton.classList.contains("log-success-share") && dialog.open) {
+    logSuccessTimer = window.setTimeout(() => {
+      closeLogDialog().then(() => {
+        scrollPersonLogButtonIntoView();
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
+      });
+    }, 1200);
+  }
+});
+$("#quick-add-button").addEventListener("click", () => startAddRepsFlow());
+$("#activity-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
+$("#menu-add-reps-button")?.addEventListener("click", () => {
+  closeSiteMenu();
+  startAddRepsFlow();
 });
 $("#person-picker-grid").addEventListener("click", (event) => {
   const option = event.target.closest("[data-person-id]");
@@ -3062,13 +3539,94 @@ function scrollHomeToTop() {
   window.scrollTo({ top: 0, left: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 
+function updateSiteMenu() {
+  const myHome = $("#menu-my-home");
+  const myHomeMeta = $("#menu-my-home-meta");
+  const knownId = rememberedPersonId();
+  if (myHome) {
+    if (knownId) {
+      const person = getPerson(knownId);
+      myHome.hidden = false;
+      myHome.href = `#/person/${knownId}`;
+      if (myHomeMeta) myHomeMeta.textContent = person?.name?.split(" ")[0] || "You";
+    } else {
+      myHome.hidden = true;
+    }
+  }
+
+  const route = parseAppRoute();
+  document.querySelectorAll(".site-menu-link[data-menu-route]").forEach((link) => {
+    const key = link.dataset.menuRoute;
+    let current = false;
+    if (key === "home") current = route.type === "person" && route.personId === knownId;
+    else if (key === "challenge") current = route.type === "challenge";
+    else if (key === "activity") current = route.type === "activity";
+    else if (key === "recipes") current = route.type === "recipes";
+    else if (key === "inspiration") current = route.type === "inspiration";
+    if (current) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+}
+
+function closeSiteMenu() {
+  const menu = $("#site-menu");
+  const toggle = $("#nav-menu-toggle");
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  document.body.classList.remove("is-menu-open");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-label", "Open menu");
+  }
+}
+
+function openSiteMenu() {
+  const menu = $("#site-menu");
+  const toggle = $("#nav-menu-toggle");
+  if (!menu) return;
+  updateQuickAddButton();
+  updateSiteMenu();
+  menu.hidden = false;
+  document.body.classList.add("is-menu-open");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-label", "Close menu");
+  }
+  const first =
+    $("#menu-add-reps-button") || menu.querySelector(".site-menu-link:not([hidden])");
+  if (first) window.setTimeout(() => first.focus(), 0);
+}
+
+function toggleSiteMenu() {
+  const menu = $("#site-menu");
+  if (!menu) return;
+  if (menu.hidden) openSiteMenu();
+  else closeSiteMenu();
+}
+
+$("#nav-menu-toggle")?.addEventListener("click", () => toggleSiteMenu());
+$("#site-menu-backdrop")?.addEventListener("click", () => closeSiteMenu());
+$("#site-menu")?.addEventListener("click", (event) => {
+  const link = event.target.closest(".site-menu-link");
+  if (!link) return;
+  closeSiteMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeSiteMenu();
+});
+
 $("#ripped-home-link").addEventListener("click", (event) => {
   event.preventDefault();
-  window.location.hash = "";
+  closeSiteMenu();
+  window.location.hash = "#/";
   scrollHomeToTop();
 });
 
-window.addEventListener("hashchange", renderPersonPage);
+window.addEventListener("hashchange", () => {
+  closeSiteMenu();
+  renderPersonPage();
+  updateSiteMenu();
+});
 
 function isCookiedVisitor() {
   try {

@@ -39,7 +39,7 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=195" />
+    <link rel="stylesheet" href="./styles.css?v=212" />
     <script>
       (function () {
         try {
@@ -57,10 +57,22 @@
       })();
     </script>
     <script src="./vendor/confetti.browser.min.js"></script>
-    <script src="./app.js?v=150" defer></script>
+    <script src="./app.js?v=162" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
+      <button
+        type="button"
+        class="nav-menu-toggle"
+        id="nav-menu-toggle"
+        aria-expanded="false"
+        aria-controls="site-menu"
+        aria-label="Open menu"
+      >
+        <span class="nav-menu-toggle__bars" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+      </button>
       <a
         class="nav-home"
         href="#/"
@@ -72,15 +84,6 @@
           <span class="wordmark-base">RIPPED-</span><span class="wordmark-accent">CHELLA</span>
         </span>
       </a>
-      <ul class="nav-links">
-        <li><a href="https://goingtoliveforever.com#dates">Dates</a></li>
-        <li><a href="https://goingtoliveforever.com#place">The Place</a></li>
-        <li><a href="https://goingtoliveforever.com#roster">Roster</a></li>
-        <li><a href="https://goingtoliveforever.com#payment">Payment</a></li>
-        <li><a href="https://goingtoliveforever.com#flights">Flights</a></li>
-        <li><a href="https://goingtoliveforever.com#area">The Area</a></li>
-        <li><a href="https://goingtoliveforever.com#trips">Past Trips</a></li>
-      </ul>
       <a
         class="nav-countdown"
         href="https://goingtoliveforever.com/"
@@ -131,6 +134,75 @@
         })();
       </script>
     </nav>
+
+    <div class="site-menu" id="site-menu" hidden>
+      <button type="button" class="site-menu-backdrop" id="site-menu-backdrop" tabindex="-1" aria-label="Close menu"></button>
+      <div class="site-menu-panel" role="dialog" aria-modal="true" aria-label="Site menu">
+        <button class="quick-add-button site-menu-add-reps" id="menu-add-reps-button" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          <span class="quick-add-label" id="menu-add-reps-label">ADD REPS</span>
+        </button>
+        <p class="site-menu-eyebrow">Navigate</p>
+        <nav class="site-menu-nav" aria-label="Primary">
+          <a class="site-menu-link" data-menu-route="home" href="#/" id="menu-my-home" hidden>
+            <span class="site-menu-link__icon" aria-hidden="true">home</span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">My home</span>
+              <span class="site-menu-link__meta" id="menu-my-home-meta"></span>
+            </span>
+          </a>
+          <a class="site-menu-link" data-menu-route="challenge" href="#/">
+            <span class="site-menu-link__icon" aria-hidden="true">trophy</span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">Challenge</span>
+              <span class="site-menu-link__meta">Training center</span>
+            </span>
+          </a>
+          <a class="site-menu-link" data-menu-route="activity" href="#/activity">
+            <span class="site-menu-link__icon" aria-hidden="true">monitoring</span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">Activity</span>
+              <span class="site-menu-link__meta">Stats + feed</span>
+            </span>
+          </a>
+          <a class="site-menu-link" data-menu-route="recipes" href="#/recipes">
+            <span class="site-menu-link__icon" aria-hidden="true">lunch_dining</span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">Eats</span>
+              <span class="site-menu-link__meta">Crew kitchen</span>
+            </span>
+          </a>
+          <a class="site-menu-link" data-menu-route="inspiration" href="#/inspiration">
+            <span class="site-menu-link__icon" aria-hidden="true">auto_awesome</span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">Inspiration</span>
+              <span class="site-menu-link__meta">Videos, links, apps</span>
+            </span>
+          </a>
+          <a
+            class="site-menu-link"
+            data-menu-route="oldchella"
+            href="https://goingtoliveforever.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="site-menu-link__icon site-menu-link__icon--cactus" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <!-- simple saguaro silhouette: trunk + arms up, no spines/bloom -->
+                <path d="M9.2 21V4.3c0-1.55 1.25-2.8 2.8-2.8s2.8 1.25 2.8 2.8V21H9.2Z"/>
+                <path d="M3.9 13.6V7.8c0-1.27 1.03-2.3 2.3-2.3s2.3 1.03 2.3 2.3v3.5h2.7v2.3H3.9Z"/>
+                <path d="M14.8 13V9.8h1.6V5.5c0-1.27 1.03-2.3 2.3-2.3s2.3 1.03 2.3 2.3v5.2a2.3 2.3 0 0 1-2.3 2.3H14.8Z"/>
+                <path d="M8.1 20.5h7.8v1.7c0 .55-.45 1-1 1H9.1c-.55 0-1-.45-1-1v-1.7Z"/>
+              </svg>
+            </span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">Old-Chella</span>
+              <span class="site-menu-link__meta">Trip hub</span>
+            </span>
+          </a>
+        </nav>
+      </div>
+    </div>
 
     <div class="app-shell">
       <main id="dashboard-page">
@@ -420,6 +492,114 @@
         </section>
       </main>
 
+      <main id="activity-page" hidden>
+        <section class="content-page-hero activity-page-hero">
+          <div class="content-page-hero__copy">
+            <p class="eyebrow">LIVE BOARD</p>
+            <h1>Activity</h1>
+            <p class="hero-copy">Group stats and the latest SCAD Bro sessions.</p>
+          </div>
+          <button class="quick-add-button" id="activity-add-reps-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            <span class="quick-add-label" id="activity-add-reps-label">ADD REPS</span>
+          </button>
+        </section>
+
+        <section class="goal-card activity-stats-card" aria-label="Group progress">
+          <div class="goal-card__top">
+            <div>
+              <p class="label">GROUP PROGRESS</p>
+              <p class="goal-total"><span id="activity-group-total">0</span><small> / <span id="activity-goal-target">0</span></small></p>
+            </div>
+            <div class="goal-meters">
+              <div class="goal-percent" id="activity-goal-percent" aria-label="0% done">
+                <strong id="activity-goal-percent-value">0%</strong>
+                <span>DONE</span>
+              </div>
+            </div>
+          </div>
+          <div
+            class="progress-track"
+            id="activity-progress-track"
+            role="progressbar"
+            aria-label="Group progress"
+            aria-valuemin="0"
+            aria-valuemax="10000"
+            aria-valuenow="0"
+          >
+            <div class="progress-target" id="activity-progress-target" aria-hidden="true"></div>
+            <div class="progress-fill" id="activity-progress-fill"></div>
+            <span class="progress-pace" id="activity-progress-pace" aria-hidden="true"></span>
+          </div>
+          <div class="goal-meta">
+            <span><strong id="activity-remaining-total">0</strong> reps to go</span>
+            <span id="activity-pace-copy">Oldchella awaits</span>
+          </div>
+          <div class="exercise-breakdown">
+            <div>
+              <span>PUSH-UPS</span>
+              <strong id="activity-pushups-total">0</strong>
+              <small>REPS</small>
+            </div>
+            <div>
+              <span>SQUATS</span>
+              <strong id="activity-squats-total">0</strong>
+              <small>REPS</small>
+            </div>
+            <div>
+              <span>PLANKS</span>
+              <strong id="activity-planks-total">0</strong>
+              <small>MIN</small>
+            </div>
+            <div>
+              <span>OTHER</span>
+              <strong id="activity-other-total">0</strong>
+              <small>% GOAL</small>
+            </div>
+            <div>
+              <span>CREW</span>
+              <strong id="activity-crew-status-total">0 / 0</strong>
+              <small>IN / OUT</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="section activity-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LATEST</p>
+              <h2>SCAD Bro Activity</h2>
+            </div>
+          </div>
+          <div class="activity-list" id="activity-page-list"></div>
+        </section>
+      </main>
+
+      <main id="recipes-page" hidden>
+        <section class="content-page">
+          <p class="eyebrow">CREW KITCHEN</p>
+          <h1>Eats</h1>
+          <p class="hero-copy">
+            Meals that keep the crew fueled through the challenge — breakfasts, recovery bowls,
+            desert trip snacks, the works.
+          </p>
+          <p class="recipes-status" id="recipes-status" hidden></p>
+          <div class="recipes-list" id="recipes-list" aria-live="polite"></div>
+        </section>
+      </main>
+
+      <main id="inspiration-page" hidden>
+        <section class="content-page">
+          <p class="eyebrow">SPARK PLUG</p>
+          <h1>Inspiration</h1>
+          <p class="hero-copy">
+            Videos, apps, workouts, articles, and anything else that might help the group get after it.
+          </p>
+          <p class="recipes-status" id="inspiration-status" hidden></p>
+          <div class="recipes-list" id="inspiration-list" aria-live="polite"></div>
+        </section>
+      </main>
+
     </div>
 
     <dialog id="log-dialog">
@@ -516,6 +696,14 @@
         <span id="success-unit">REPS</span>
         <p class="success-remaining" id="success-remaining" hidden></p>
         <small id="success-copy">Added to your personal progress.</small>
+        <button
+          type="button"
+          class="share-whatsapp-button log-success-share"
+          id="success-share-button"
+          hidden
+        >
+          Share to WhatsApp
+        </button>
       </div>
       </div>
     </dialog>
