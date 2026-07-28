@@ -2333,6 +2333,158 @@ a.activity-item:focus-visible {
   text-align: center;
 }
 
+.feed-cleared-card {
+  margin: 8px 0 28px;
+  padding: 20px 18px 18px;
+  border: 1px solid rgba(245, 200, 66, .22);
+  border-radius: 18px;
+  background:
+    linear-gradient(155deg, rgba(245, 200, 66, .1), transparent 48%),
+    linear-gradient(340deg, rgba(232, 118, 58, .08), transparent 55%),
+    var(--surface);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .22);
+}
+.feed-cleared-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.feed-cleared-card__head .eyebrow {
+  margin-bottom: 6px;
+}
+.feed-cleared-card__head h2 {
+  margin: 0;
+  font: 400 clamp(26px, 6vw, 34px)/.95 "Abril Fatface", serif;
+  letter-spacing: -.02em;
+  text-transform: uppercase;
+}
+.feed-cleared-card__count {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  min-width: 52px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 200, 66, .28);
+  border-radius: 12px;
+  background: rgba(18, 10, 6, .45);
+  color: var(--lime);
+  font: 800 16px/1 "Manrope", sans-serif;
+  letter-spacing: -.02em;
+}
+.feed-cleared-card__sub {
+  margin: 0 0 18px;
+  max-width: 34rem;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.feed-cleared-people {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.feed-cleared-person {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 14px 10px 12px;
+  border: 1px solid rgba(255, 160, 80, .16);
+  border-radius: 14px;
+  background: rgba(18, 10, 6, .4);
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.feed-cleared-person:hover,
+.feed-cleared-person:focus-visible {
+  border-color: rgba(245, 200, 66, .4);
+  background: rgba(245, 200, 66, .08);
+  outline: none;
+  transform: translateY(-1px);
+}
+.feed-cleared-person__avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
+}
+.feed-cleared-person__avatar img {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border: 2px solid rgba(245, 200, 66, .45);
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--activity-avatar-bg);
+}
+.feed-cleared-person__badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--green);
+  color: #0c170f;
+  font-family: "Material Symbols Outlined", sans-serif;
+  font-size: 14px;
+  font-variation-settings: "FILL" 1, "wght" 600, "GRAD" 0, "opsz" 20;
+  line-height: 1;
+}
+.feed-cleared-person__name {
+  font: 700 13px/1.15 "Manrope", sans-serif;
+  letter-spacing: -.01em;
+}
+.feed-cleared-person__meta {
+  color: var(--lime);
+  font: 800 9px/1 "Manrope", sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.feed-cleared-empty {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 22px 16px;
+  border: 1px dashed rgba(255, 160, 80, .28);
+  border-radius: 14px;
+  background: rgba(18, 10, 6, .35);
+  color: var(--muted);
+  text-align: center;
+}
+.feed-cleared-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  background: rgba(245, 200, 66, .1);
+  color: var(--lime);
+  font-family: "Material Symbols Outlined", sans-serif;
+  font-size: 26px;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  line-height: 1;
+}
+.feed-cleared-empty p {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.feed-cleared-empty strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .person-log-button svg {
   width: 20px;
   fill: none;

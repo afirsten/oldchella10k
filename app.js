@@ -316,6 +316,60 @@ function dayGoalCheck(complete) {
   `;
 }
 
+function peopleWhoClearedDailyGoal(dateKey = localDateValue()) {
+  return crew
+    .filter((person) => personStatus(person.id) !== "out")
+    .filter((person) => {
+      const dayActivities = activities.filter(
+        (activity) => activity.personId === person.id && activityDateKey(activity) === dateKey,
+      );
+      return dayGoalProgress(dayActivities).complete;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function renderFeedClearedToday() {
+  const list = $("#feed-cleared-list");
+  const countEl = $("#feed-cleared-count");
+  if (!list) return;
+
+  const eligible = crew.filter((person) => personStatus(person.id) !== "out");
+  const cleared = peopleWhoClearedDailyGoal();
+  if (countEl) countEl.textContent = `${cleared.length} / ${eligible.length}`;
+
+  if (!cleared.length) {
+    list.innerHTML = `
+      <div class="feed-cleared-empty" role="status">
+        <span class="feed-cleared-empty__icon" aria-hidden="true">wb_sunny</span>
+        <p><strong>Nobody’s locked the board yet today.</strong></p>
+        <p>Hit push-ups, squats, and plank — be the first to clear the desert daily.</p>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = `
+    <ul class="feed-cleared-people">
+      ${cleared
+        .map(
+          (person) => `
+        <li>
+          <a class="feed-cleared-person" href="#/person/${person.id}" data-person-id="${person.id}">
+            <span class="feed-cleared-person__avatar">
+              <img src="${person.image}" alt="" />
+              <span class="feed-cleared-person__badge" aria-hidden="true">check</span>
+            </span>
+            <span class="feed-cleared-person__name">${escapeHtml(person.name)}</span>
+            <span class="feed-cleared-person__meta">Board cleared</span>
+          </a>
+        </li>
+      `,
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
 function activityDateKey(activity) {
   const date = new Date(activity.createdAt);
   return [
@@ -883,6 +937,11 @@ function render({ skipScroll = false } = {}) {
   if (activityPageList) {
     activityPageList.innerHTML = recent.length ? recent.map(activityFeedItem).join("") : emptyFeed;
   }
+  const feedPageList = $("#feed-page-list");
+  if (feedPageList) {
+    feedPageList.innerHTML = recent.length ? recent.map(activityFeedItem).join("") : emptyFeed;
+  }
+  renderFeedClearedToday();
 
   // Mirror key stats onto the Stats page.
   const setText = (id, value) => {
@@ -1503,6 +1562,14 @@ function parseAppRoute() {
   }
   if (path === "/leaderboard" || path.startsWith("/leaderboard/")) return { type: "leaderboard" };
   if (path === "/activity" || path.startsWith("/activity/")) return { type: "activity" };
+  if (
+    path === "/feed" ||
+    path.startsWith("/feed/") ||
+    path === "/activity-feed" ||
+    path.startsWith("/activity-feed/")
+  ) {
+    return { type: "feed" };
+  }
   if (path === "/recipes" || path.startsWith("/recipes/")) return { type: "recipes" };
   if (path === "/inspiration" || path.startsWith("/inspiration/")) return { type: "inspiration" };
   return { type: "challenge" };
@@ -1813,6 +1880,7 @@ function showAppPage(pageId, { skipScroll = false } = {}) {
     challenge: $("#dashboard-page"),
     person: $("#person-page"),
     activity: $("#activity-page"),
+    feed: $("#feed-page"),
     leaderboard: $("#leaderboard-page"),
     recipes: $("#recipes-page"),
     inspiration: $("#inspiration-page"),
@@ -3825,6 +3893,7 @@ function updateSiteMenu() {
     else if (key === "challenge") current = route.type === "challenge";
     else if (key === "leaderboard") current = route.type === "leaderboard";
     else if (key === "activity") current = route.type === "activity";
+    else if (key === "feed") current = route.type === "feed";
     else if (key === "recipes") current = route.type === "recipes";
     else if (key === "inspiration") current = route.type === "inspiration";
     if (current) link.setAttribute("aria-current", "page");
