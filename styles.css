@@ -2155,6 +2155,24 @@ a.activity-item:focus-visible {
   color: var(--quiet);
   font-size: 11px;
 }
+.activity-note,
+.activity-entered {
+  display: block;
+  color: var(--quiet);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.activity-note {
+  margin-top: 2px;
+  color: var(--ink);
+  opacity: .82;
+}
+.activity-entered {
+  margin-top: 3px;
+}
+.activity-item.is-readonly {
+  cursor: default;
+}
 .activity-meta {
   min-width: 0;
   max-width: 100%;

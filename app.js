@@ -1334,6 +1334,19 @@ function formatDate(value) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function formatEnteredAt(activity) {
+  const value = activity.loggedAt || activity.createdAt;
+  if (!value) return "";
+  const date = new Date(value);
+  const time = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const day = formatDate(value);
+  return day === "Today" ? `Today at ${time}` : `${day} at ${time}`;
+}
+
+function activityNoteText(activity) {
+  return String(activity?.note || "").trim();
+}
+
 function clearLogFormError() {
   const el = $("#log-form-error");
   if (!el) return;
@@ -1490,6 +1503,15 @@ function rememberedPersonId() {
   } catch {
     return null;
   }
+}
+
+/** True when the viewer is the person whose page is showing (PIN / remembered / last). */
+function isPersonPageOwner(personId) {
+  if (!personId) return false;
+  const remembered = rememberedPersonId();
+  if (remembered) return remembered === personId;
+  const last = storedLastPersonId();
+  return last === personId;
 }
 
 /** Person for the personalized menu home row (PIN optional — nav only). */
@@ -2089,7 +2111,8 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const personId = appRoute.personId;
   const route = { personId, openAdd: appRoute.openAdd };
   wasShowingPersonPage = true;
-  rememberLastPerson(personId);
+  const isOwner = isPersonPageOwner(personId);
+  if (isOwner) rememberLastPerson(personId);
   showAppPage("person", { skipScroll: true });
 
   const person = getPerson(personId);
@@ -2165,16 +2188,16 @@ function renderPersonPage({ skipScroll = false } = {}) {
         ? `${person.name.split(" ")[0]} has put in ${personStats.sessions} ${personStats.sessions === 1 ? "session" : "sessions"} on the road to Joshua Tree.`
         : `${person.name.split(" ")[0]} is ready to choose whether to join the challenge.`;
   const participationCard = $("#participation-card");
-  participationCard.hidden = history.length > 0;
+  participationCard.hidden = !isOwner || history.length > 0;
   participationCard.querySelectorAll("[data-participation]").forEach((button) => {
     button.classList.toggle("is-selected", button.dataset.participation === personStats.status);
   });
   const showProgress = history.length > 0 || personStats.status === "in";
   const todayKey = localDateValue();
   $(".personal-total").hidden = !showProgress;
-  $("#person-log-button").hidden = personStats.status !== "in";
+  $("#person-log-button").hidden = !isOwner || personStats.status !== "in";
   const quickAdd = $("#person-quick-add");
-  if (quickAdd) quickAdd.hidden = personStats.status !== "in";
+  if (quickAdd) quickAdd.hidden = !isOwner || personStats.status !== "in";
   $("#person-total").textContent = number.format(personStats.total);
   $("#person-total-label").textContent =
     personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "PUSH-UP COUNT";
@@ -2245,11 +2268,25 @@ function renderPersonPage({ skipScroll = false } = {}) {
                 ${group.activities
                   .map((activity) => {
                     const justAdded = isJustAdded(activity);
-                    return `
+                    const note = activityNoteText(activity);
+                    const enteredAt = formatEnteredAt(activity);
+                    const detailBits = [
+                      note
+                        ? `<span class="activity-note">${escapeHtml(note)}</span>`
+                        : "",
+                      enteredAt
+                        ? `<span class="activity-entered">${escapeHtml(enteredAt)}</span>`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join("");
+                    if (isOwner) {
+                      return `
                       <article class="activity-item is-editable${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
                           <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          ${detailBits}
                           ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
                         </div>
                         <button
@@ -2264,13 +2301,27 @@ function renderPersonPage({ skipScroll = false } = {}) {
                         </button>
                       </article>
                     `;
+                    }
+                    return `
+                      <article class="activity-item is-readonly" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
+                        ${exerciseIcon(activity)}
+                        <div class="activity-main">
+                          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          ${detailBits}
+                        </div>
+                      </article>
+                    `;
                   })
                   .join("")}
               </div>
-              <button class="add-to-date-button" type="button" data-log-date="${group.dateKey}">
+              ${
+                isOwner
+                  ? `<button class="add-to-date-button" type="button" data-log-date="${group.dateKey}">
                 <span aria-hidden="true">+</span>
                 ADD REPS TO THIS DAY
-              </button>
+              </button>`
+                  : ""
+              }
             </div>
           `;
         })
@@ -2293,7 +2344,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   if (route?.openAdd) {
     window.history.replaceState(null, "", `#/person/${personId}`);
     // Don't reopen/reset if the log sheet is already up (e.g. mid-success).
-    if (!dialog.open) {
+    if (isOwner && !dialog.open) {
       window.setTimeout(() => openLogDialog(personId), 0);
     }
   }
@@ -3503,11 +3554,17 @@ function showLogSuccess(personId, entries, options = {}) {
   }, boardCleared ? 6300 : 2700);
 }
 
-$("#person-log-button").addEventListener("click", () => openLogDialog(currentPersonId()));
+$("#person-log-button").addEventListener("click", () => {
+  const personId = currentPersonId();
+  if (!personId || !isPersonPageOwner(personId)) return;
+  openLogDialog(personId);
+});
 
 async function quickAddActivity(button) {
   const personId = currentPersonId();
-  if (!personId || !button || button.classList.contains("is-success")) return;
+  if (!personId || !isPersonPageOwner(personId) || !button || button.classList.contains("is-success")) {
+    return;
+  }
   const exercise = button.dataset.quickExercise;
   const reps = Number(button.dataset.quickReps);
   const otherActivity = button.dataset.quickOther || "";
@@ -3935,7 +3992,7 @@ async function deleteActivityItem(item, activity, personId) {
 document.querySelectorAll("[data-participation]").forEach((button) => {
   button.addEventListener("click", async () => {
     const personId = currentPersonId();
-    if (!personId) return;
+    if (!personId || !isPersonPageOwner(personId)) return;
     button.disabled = true;
     try {
       const result = await protectedRequest("/api/participation", "PUT", personId, {
@@ -3954,9 +4011,12 @@ document.querySelectorAll("[data-participation]").forEach((button) => {
 });
 
 $("#person-activity-list").addEventListener("click", async (event) => {
+  const personId = currentPersonId();
+  if (!personId || !isPersonPageOwner(personId)) return;
+
   const addButton = event.target.closest("[data-log-date]");
   if (addButton) {
-    openLogDialog(currentPersonId(), { activityDate: addButton.dataset.logDate });
+    openLogDialog(personId, { activityDate: addButton.dataset.logDate });
     return;
   }
 
@@ -3965,18 +4025,18 @@ $("#person-activity-list").addEventListener("click", async (event) => {
     event.stopPropagation();
     const item = deleteButton.closest("[data-activity-id]");
     const activity = activities.find((entry) => entry.id === deleteButton.dataset.deleteActivityId);
-    const personId = currentPersonId();
-    if (!item || !activity || !personId || activity.personId !== personId) return;
+    if (!item || !activity || activity.personId !== personId) return;
     if (item.classList.contains("is-deleting")) return;
     await deleteActivityItem(item, activity, personId);
     return;
   }
 
   const item = event.target.closest("[data-activity-id]");
-  if (!item || item.classList.contains("is-deleting")) return;
+  if (!item || item.classList.contains("is-deleting") || !item.classList.contains("is-editable")) {
+    return;
+  }
   const activity = activities.find((entry) => entry.id === item.dataset.activityId);
-  const personId = currentPersonId();
-  if (!activity || !personId || activity.personId !== personId) return;
+  if (!activity || activity.personId !== personId) return;
   openLogDialog(personId, {
     activity,
     activityDate: localDateValue(new Date(activity.createdAt)),
@@ -3985,8 +4045,11 @@ $("#person-activity-list").addEventListener("click", async (event) => {
 
 $("#person-activity-list").addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") return;
-  const item = event.target.closest("[data-activity-id]");
-  if (!item || event.target.closest("[data-delete-activity-id]") || item.classList.contains("is-deleting")) return;
+  const item = event.target.closest("[data-activity-id].is-editable");
+  if (!item || event.target.closest("[data-delete-activity-id]") || item.classList.contains("is-deleting")) {
+    return;
+  }
+  if (!isPersonPageOwner(currentPersonId())) return;
   event.preventDefault();
   item.click();
 });
