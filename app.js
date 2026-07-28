@@ -1741,10 +1741,10 @@ async function loadSheetFeedPage(kind, { force = false } = {}) {
   const status = $(isInspiration ? "#inspiration-status" : "#recipes-status");
   const state = sheetFeedState[kind];
   if (!list || !state) return;
-  const loadingCopy = isInspiration ? "Loading inspiration…" : "Loading recipes…";
+  const loadingCopy = isInspiration ? "Loading tips & tricks…" : "Loading recipes…";
   const syncCopy = "Syncing from Google Sheet…";
   const failCopy = isInspiration
-    ? "Inspiration could not be loaded."
+    ? "Tips & Tricks could not be loaded."
     : "Eats could not be loaded.";
 
   if (!force && state.cache) {
