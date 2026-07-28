@@ -20,6 +20,7 @@ const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
 const RULES_COLLAPSE_KEY = "rippedchella-rules-collapsed-v1";
+const ADD_REPS_TIP_DISMISS_KEY = "rippedchella-add-reps-tip-dismissed-v1";
 
 function getPreferredTheme() {
   try {
@@ -1265,10 +1266,31 @@ function menuHomePersonId() {
   return rememberedPersonId() || currentPersonId() || storedLastPersonId();
 }
 
+function isAddRepsTipDismissed() {
+  try {
+    return localStorage.getItem(ADD_REPS_TIP_DISMISS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function dismissAddRepsTip() {
+  try {
+    localStorage.setItem(ADD_REPS_TIP_DISMISS_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+  const tip = $("#hero-add-tip");
+  if (tip) tip.hidden = true;
+}
+
+function updateAddRepsTip() {
+  const tip = $("#hero-add-tip");
+  if (!tip) return;
+  tip.hidden = Boolean(currentPersonId()) || isAddRepsTipDismissed();
+}
+
 function updateQuickAddButton() {
-  const wrap = $("#hero-quick-add");
-  const button = $("#quick-add-button");
-  const label = $("#quick-add-label");
   const menuButton = $("#menu-add-reps-button");
   const menuLabel = $("#menu-add-reps-label");
   const navButton = $("#nav-add-reps-button");
@@ -1277,17 +1299,7 @@ function updateQuickAddButton() {
   const labelText = personId ? `ADD REPS FOR ${first}` : "ADD REPS";
   const aria = personId ? `Add reps for ${first}` : "Add reps — pick who you are";
 
-  if (wrap && button && label) {
-    if (currentPersonId()) {
-      wrap.hidden = true;
-    } else {
-      wrap.hidden = false;
-      if (personId) button.dataset.personId = personId;
-      else delete button.dataset.personId;
-      label.textContent = labelText;
-      button.setAttribute("aria-label", aria);
-    }
-  }
+  updateAddRepsTip();
 
   if (menuButton && menuLabel) {
     if (personId) menuButton.dataset.personId = personId;
@@ -3390,12 +3402,12 @@ document.addEventListener("click", async (event) => {
     }, 1200);
   }
 });
-$("#quick-add-button").addEventListener("click", () => startAddRepsFlow());
 $("#nav-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
 $("#menu-add-reps-button")?.addEventListener("click", () => {
   closeSiteMenu();
   startAddRepsFlow();
 });
+$("#hero-add-tip-dismiss")?.addEventListener("click", () => dismissAddRepsTip());
 $("#person-picker-grid").addEventListener("click", (event) => {
   const option = event.target.closest("[data-person-id]");
   if (!option) return;
@@ -3961,10 +3973,10 @@ function isCookiedVisitor() {
 let wasShowingPersonPage = Boolean(parsePersonRoute());
 let homeNestleDone = false;
 
-function nestleReadyToGoUnit({ force = false } = {}) {
+function nestleAddRepsTip({ force = false } = {}) {
   if (currentPersonId() || !isCookiedVisitor()) return;
   if (!force && homeNestleDone) return;
-  const target = $("#hero-quick-add");
+  const target = $("#hero-add-tip");
   if (!target || target.hidden) return;
   homeNestleDone = true;
 
@@ -4020,7 +4032,7 @@ updateExerciseFields();
 initThemeToggle();
 initRulesCollapse();
 render();
-nestleReadyToGoUnit();
+nestleAddRepsTip();
 loadSharedState();
 tickOldchellaCountdown();
 window.setInterval(tickOldchellaCountdown, 1000);

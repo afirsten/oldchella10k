@@ -1279,13 +1279,11 @@ body.is-menu-open {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   padding: 36px 0 26px;
 }
 .hero-welcome {
-  grid-column: 1 / -1;
   margin: 0 0 8px;
   color: var(--lavender);
   font-family: "Cormorant Garamond", serif;
@@ -1295,40 +1293,72 @@ body.is-menu-open {
   letter-spacing: .05em;
 }
 .hero-logo {
-  grid-column: 1;
-  grid-row: 2;
   min-width: 0;
   margin: 0;
 }
-.hero-quick-add {
-  grid-column: 2;
-  grid-row: 2;
-  display: grid;
-  gap: 10px;
-  align-content: center;
-  justify-items: center;
-  align-self: stretch;
-  min-width: 168px;
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background:
-    linear-gradient(160deg, rgba(232,118,58,.08), transparent 55%),
-    var(--surface);
-  box-shadow: inset 0 1px rgba(255,160,80,.05);
+.hero-add-tip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  margin: -4px 0 18px;
+  padding: 0 0 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  box-shadow: none;
 }
-.hero-quick-add[hidden] {
+.hero-add-tip[hidden] {
   display: none;
 }
-.hero-quick-prompt {
+.hero-add-tip-copy {
   margin: 0;
+  flex: 1 1 12rem;
   color: var(--lavender);
   font-family: "Cormorant Garamond", serif;
   font-style: italic;
   font-weight: 300;
-  font-size: 16px;
-  letter-spacing: .04em;
-  text-align: center;
+  font-size: 17px;
+  letter-spacing: .03em;
+  line-height: 1.35;
+}
+.hero-add-tip-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15em;
+  height: 1.15em;
+  margin: 0 .12em;
+  border-radius: 4px;
+  background: linear-gradient(135deg, var(--terra), var(--lime));
+  color: #fff8f0;
+  font-family: "Manrope", sans-serif;
+  font-style: normal;
+  font-weight: 800;
+  font-size: .72em;
+  line-height: 1;
+  vertical-align: .05em;
+}
+.hero-add-tip-dismiss {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--quiet);
+  font: 700 10px/1 "Manrope", sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.hero-add-tip-dismiss:hover {
+  color: var(--muted);
+}
+.hero-add-tip-dismiss:focus-visible {
+  outline: 2px solid var(--terra);
+  outline-offset: 3px;
 }
 .eyebrow, .label {
   margin: 0 0 9px;
@@ -1358,11 +1388,9 @@ h1 .logo-chella {
   color: var(--ink);
 }
 .hero > .eyebrow {
-  grid-column: 1 / -1;
   margin: 10px 0 18px;
 }
 .hero-copy {
-  grid-column: 1 / -1;
   width: 100%;
   margin-bottom: 20px;
   color: var(--muted);
@@ -3931,22 +3959,11 @@ input:focus, select:focus {
   .hero {
     grid-template-columns: 1fr;
   }
-  .hero-logo,
-  .hero-quick-add {
-    grid-column: 1;
-    grid-row: auto;
-  }
   .hero-copy {
     margin-bottom: 14px;
   }
-  .hero-quick-add {
-    width: 100%;
-    min-width: 0;
-    margin-bottom: 18px;
-    align-self: stretch;
-  }
-  .quick-add-button {
-    width: 100%;
+  .hero-add-tip {
+    margin-bottom: 14px;
   }
   .rules-card {
     padding: 6px 6px 8px;
