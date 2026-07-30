@@ -102,6 +102,12 @@ function titleFromUrl(url) {
   }
 }
 
+function isGenericLinkTitle(title) {
+  const value = String(title || "").trim();
+  if (!value) return true;
+  return /^(youtube(\s+video)?|instagram(\s+post)?|tiktok(\s+video)?|link|video)$/i.test(value);
+}
+
 function decodeHtmlEntities(value) {
   return String(value || "")
     .replace(/&amp;/g, "&")
@@ -138,6 +144,13 @@ export function parseSheetLinkRows(text) {
   const descriptionIdx = headers.findIndex((header) =>
     /description|note|notes|blurb|caption|about/.test(header),
   );
+  const titleIdx = headers.findIndex(
+    (header) =>
+      /^(title|recipe title|video title|link title)$/.test(header) ||
+      (header.includes("title") &&
+        !header.includes("subtitle") &&
+        !/contributor|author|description|note/.test(header)),
+  );
   const urlColumn = linkIdx >= 0 ? linkIdx : 0;
   const whoColumn = contributorIdx >= 0 ? contributorIdx : 1;
 
@@ -149,6 +162,7 @@ export function parseSheetLinkRows(text) {
       const contributor = String(row[whoColumn] || "").trim();
       const sheetImage = imageIdx >= 0 ? String(row[imageIdx] || "").trim() : "";
       const note = descriptionIdx >= 0 ? String(row[descriptionIdx] || "").trim() : "";
+      const sheetTitle = titleIdx >= 0 ? String(row[titleIdx] || "").trim() : "";
       const yt = youtubeId(url);
       const image = /^https?:\/\//i.test(sheetImage)
         ? sheetImage
@@ -161,8 +175,10 @@ export function parseSheetLinkRows(text) {
       } catch {
         host = "";
       }
+      const title =
+        sheetTitle && !isGenericLinkTitle(sheetTitle) ? sheetTitle : titleFromUrl(url);
       return {
-        title: titleFromUrl(url),
+        title,
         url,
         contributor,
         note,
@@ -285,9 +301,11 @@ export async function enrichLinkItems(items, { enrichCopy = false } = {}) {
   return Promise.all(
     items.map(async (item) => {
       const needsImage = !item.image;
-      const needsCopy =
+      const titleNeedsEnrich =
         enrichCopy &&
-        (!item.title || item.title === titleFromUrl(item.url) || !item.linkDescription);
+        (isGenericLinkTitle(item.title) || item.title === titleFromUrl(item.url));
+      const needsCopy =
+        enrichCopy && (titleNeedsEnrich || !item.linkDescription);
       if (!needsImage && !needsCopy) return item;
 
       const cacheKey = `${META_PREFIX}${item.url}`;
@@ -302,10 +320,7 @@ export async function enrichLinkItems(items, { enrichCopy = false } = {}) {
       }
 
       const cacheMissesTitle =
-        needsCopy &&
-        meta &&
-        !meta.title &&
-        (!item.title || item.title === titleFromUrl(item.url));
+        titleNeedsEnrich && meta && (!meta.title || isGenericLinkTitle(meta.title));
 
       if (!meta || cacheMissesTitle) {
         meta = await fetchLinkMeta(item.url);
@@ -313,9 +328,12 @@ export async function enrichLinkItems(items, { enrichCopy = false } = {}) {
         await softRedis(["SET", cacheKey, JSON.stringify(meta), "EX", ttl]);
       }
 
+      const enrichedTitle =
+        enrichCopy && meta.title && !isGenericLinkTitle(meta.title) ? meta.title : item.title;
+
       return {
         ...item,
-        title: enrichCopy && meta.title ? meta.title : item.title,
+        title: enrichedTitle,
         linkDescription: enrichCopy ? meta.description || "" : item.linkDescription || "",
         image: item.image || meta.image || "",
       };

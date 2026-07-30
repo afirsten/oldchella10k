@@ -10,7 +10,7 @@ const RECIPES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEE
 const RECIPES_CSV_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/export?format=csv&gid=${RECIPES_SHEET_GID}`;
 const RECIPES_CSV_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${RECIPES_SHEET_GID}`;
 const INSPIRATION_CSV_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${INSPIRATION_SHEET_GID}`;
-const FACT_ROTATE_MS = 5600;
+const FACT_ROTATE_MS = 11200;
 const THEME_STORAGE_KEY = "rippedchella-theme-v1";
 const DAILY_GOALS = {
   pushups: 100,
@@ -280,38 +280,124 @@ function formatPlankMinutes(seconds) {
   return durationNumber.format((Number(seconds) || 0) / 60);
 }
 
-function estimateCategoryCalories(categoryTotals) {
-  const pushupCals = Math.round((categoryTotals.pushups || 0) * 0.36);
-  const squatCals = Math.round((categoryTotals.squats || 0) * 0.42);
-  const plankCals = Math.round(((categoryTotals.planks || 0) / 60) * 3.5);
-  return pushupCals + squatCals + plankCals;
+/** Compact metric font tiers for tight numeric clusters: default <1k, is-k ≥1k, is-10k ≥10k. */
+const COMPACT_MAG_CLASSES = ["is-k", "is-10k"];
+
+function compactMagnitudeClass(value) {
+  const n = Math.abs(Number(value) || 0);
+  if (n >= 10000) return "is-10k";
+  if (n >= 1000) return "is-k";
+  return "";
 }
 
+function compactMagnitudeFromValues(values) {
+  let max = 0;
+  for (const value of values) {
+    const n = Math.abs(Number(value) || 0);
+    if (n > max) max = n;
+  }
+  return compactMagnitudeClass(max);
+}
+
+function compactMagnitudeAttr(values) {
+  const cls = Array.isArray(values)
+    ? compactMagnitudeFromValues(values)
+    : compactMagnitudeClass(values);
+  return cls ? ` ${cls}` : "";
+}
+
+function setCompactMagnitude(el, ...values) {
+  if (!el) return;
+  el.classList.remove(...COMPACT_MAG_CLASSES);
+  const cls = compactMagnitudeFromValues(values);
+  if (cls) el.classList.add(cls);
+}
+
+/**
+ * Rough kcal rates for crew burn (~BURN + SCAD OFFSETS). Generic means only.
+ * - Push-ups / squats: kcal per rep
+ * - Planks: kcal per minute (activity.reps stored as seconds)
+ * - Other/workouts: logged as % of daily goal; 100% ≈ one daily push-up
+ *   goal's burn → (other% / 100) * DAILY_GOALS.pushups * KCAL_PER_PUSHUP
+ */
+const KCAL_PER_PUSHUP = 0.36;
+const KCAL_PER_SQUAT = 0.42;
+const KCAL_PER_PLANK_MIN = 3.5;
+
+function estimateCategoryCalories(categoryTotals) {
+  const pushupCals = (categoryTotals.pushups || 0) * KCAL_PER_PUSHUP;
+  const squatCals = (categoryTotals.squats || 0) * KCAL_PER_SQUAT;
+  const plankCals = ((categoryTotals.planks || 0) / 60) * KCAL_PER_PLANK_MIN;
+  // 100% other ≈ DAILY_GOALS.pushups × KCAL_PER_PUSHUP (one push-up goal day).
+  const otherCals =
+    ((categoryTotals.other || 0) / 100) * DAILY_GOALS.pushups * KCAL_PER_PUSHUP;
+  return Math.round(pushupCals + squatCals + plankCals + otherCals);
+}
+
+/**
+ * Cheeky Savannah food/drink offsets for the Stats "SCAD Offsets" row.
+ * Each constant is a rough kcal per item; burned calories ÷ kcal = how many
+ * of that item the crew's burn would offset / buy.
+ */
+const KCAL_PER_RAIL_PUB_BEER = 150; // typical draft pint
+const KCAL_PER_VINNIE_PIZZA_SLICE = 285; // one Vinnie Van GoGo's slice
+const KCAL_PER_WET_WILLIES_CALL_A_CAB = 380; // frozen Call-a-Cab cocktail
+const KCAL_PER_LADY_AND_SONS_BISCUIT = 200; // cheese biscuit
+const KCAL_PER_WAREHOUSE_WING = 90; // one sauced wing
+
+function desertMathFromBurn(burned) {
+  const cals = Math.max(0, Math.round(burned) || 0);
+  return {
+    beers: Math.round(cals / KCAL_PER_RAIL_PUB_BEER),
+    pizzaSlices: Math.round(cals / KCAL_PER_VINNIE_PIZZA_SLICE),
+    callACabs: Math.round(cals / KCAL_PER_WET_WILLIES_CALL_A_CAB),
+    biscuits: Math.round(cals / KCAL_PER_LADY_AND_SONS_BISCUIT),
+    wings: Math.round(cals / KCAL_PER_WAREHOUSE_WING),
+  };
+}
+
+/** Sunday–Saturday local calendar week; labels match feedDayParts (SUN…SAT). */
+const WEEKDAY_ABBR = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+function weekDateKeys(anchor = new Date()) {
+  const local = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  const start = new Date(local);
+  start.setDate(local.getDate() - local.getDay());
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    return localDateValue(day);
+  });
+}
+
+/** Best crew day this week (Sun–Sat), plus daily totals for the sparkline. */
 function bestGroupDay(participantIds) {
-  const byDay = new Map();
+  const weekKeys = weekDateKeys();
+  const byDay = new Map(weekKeys.map((key) => [key, 0]));
   for (const activity of activities) {
     if (!participantIds.has(activity.personId)) continue;
     if (activityExercise(activity) === "planks") continue;
-    const day = String(activity.createdAt || "").slice(0, 10);
-    if (!day) continue;
+    // Local calendar day so bucketing matches weekDateKeys / feed.
+    const day = activityDateKey(activity);
+    if (!byDay.has(day)) continue;
     byDay.set(day, (byDay.get(day) || 0) + (Number(activity.reps) || 0));
   }
+  const days = weekKeys.map((date, index) => ({
+    date,
+    reps: byDay.get(date) || 0,
+    label: WEEKDAY_ABBR[index],
+  }));
   let bestReps = 0;
   let bestDate = "";
-  for (const [day, reps] of byDay) {
-    if (reps > bestReps) {
-      bestReps = reps;
-      bestDate = day;
+  let bestLabel = "";
+  for (const day of days) {
+    if (day.reps > bestReps) {
+      bestReps = day.reps;
+      bestDate = day.date;
+      bestLabel = day.label;
     }
   }
-  return { reps: bestReps, date: bestDate };
-}
-
-function formatShortDayLabel(isoDate) {
-  if (!isoDate) return "REPS";
-  const date = new Date(`${isoDate}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return "REPS";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+  return { days, reps: bestReps, date: bestDate, label: bestLabel };
 }
 
 function dayGoalProgress(dayActivities) {
@@ -346,16 +432,86 @@ function dayGoalCheck(complete) {
   `;
 }
 
+const BOARD_GOAL_KEYS = ["pushups", "squats", "planks"];
+const BOARD_GOAL_SHORT = { pushups: "PU", squats: "SQ", planks: "PL" };
+const BOARD_GOAL_LABELS = {
+  pushups: "push-ups",
+  squats: "squats",
+  planks: "plank",
+};
+
+function closedBoardCategories(percents) {
+  return Object.fromEntries(
+    BOARD_GOAL_KEYS.map((key) => [key, (percents?.[key] || 0) >= 100]),
+  );
+}
+
+function closedBoardCount(closed) {
+  return BOARD_GOAL_KEYS.filter((key) => closed[key]).length;
+}
+
+function feedClearedCategoryStack(closed = {}, { legend = false, decorative = false } = {}) {
+  const labels = BOARD_GOAL_KEYS.filter((key) => closed[key]).map(
+    (key) => BOARD_GOAL_LABELS[key],
+  );
+  const aria = decorative
+    ? 'aria-hidden="true"'
+    : legend
+      ? 'aria-label="Push-ups, squats, and plank — closed categories light up"'
+      : labels.length
+        ? `aria-label="Closed ${labels.join(", ")}"`
+        : 'aria-hidden="true"';
+  return `
+    <span class="feed-cleared-cats${legend ? " is-legend" : ""}" ${aria}>
+      ${BOARD_GOAL_KEYS.map((key, index) => {
+        const isClosed = Boolean(closed[key]);
+        return `
+          <span
+            class="feed-cleared-cat is-${key}${isClosed ? " is-closed" : " is-open"}"
+            style="--cat-i:${index}"
+            title="${BOARD_GOAL_LABELS[key]}${isClosed ? " closed" : " open"}"
+          >${BOARD_GOAL_SHORT[key]}</span>
+        `;
+      }).join("")}
+    </span>
+  `;
+}
+
+function personBoardProgress(personId, dateKey = localDateValue()) {
+  const dayActivities = activities.filter(
+    (activity) => activity.personId === personId && activityDateKey(activity) === dateKey,
+  );
+  const progress = dayGoalProgress(dayActivities);
+  const closed = closedBoardCategories(progress.percents);
+  return {
+    ...progress,
+    closed,
+    closedCount: closedBoardCount(closed),
+  };
+}
+
 function peopleWhoClearedDailyGoal(dateKey = localDateValue()) {
   return crew
     .filter((person) => !person.honorary && personStatus(person.id) !== "out")
-    .filter((person) => {
-      const dayActivities = activities.filter(
-        (activity) => activity.personId === person.id && activityDateKey(activity) === dateKey,
-      );
-      return dayGoalProgress(dayActivities).complete;
-    })
+    .filter((person) => personBoardProgress(person.id, dateKey).complete)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Bros who locked ≥1 of push / squat / plank for the day (includes full clears). */
+function peopleWithBoardClosingProgress(dateKey = localDateValue()) {
+  return crew
+    .filter((person) => !person.honorary && personStatus(person.id) !== "out")
+    .map((person) => ({ person, progress: personBoardProgress(person.id, dateKey) }))
+    .filter(({ progress }) => progress.closedCount > 0)
+    .sort((a, b) => {
+      if (a.progress.complete !== b.progress.complete) {
+        return a.progress.complete ? -1 : 1;
+      }
+      if (b.progress.closedCount !== a.progress.closedCount) {
+        return b.progress.closedCount - a.progress.closedCount;
+      }
+      return a.person.name.localeCompare(b.person.name);
+    });
 }
 
 const FEED_DAY_WINDOW = 14;
@@ -480,8 +636,8 @@ function updateFeedPageCopy(dateKey) {
   const hero = $("#feed-hero-copy");
   if (hero) {
     hero.textContent = isToday
-      ? "Who’s locked the board today — then every SCAD Bro log, newest first."
-      : `Who’s locked the board on ${longLabel} — then every SCAD Bro log from that day, newest first.`;
+      ? "See who closed out their goals and what they knocked out to get there."
+      : `See who closed out their goals for ${longLabel} and what they knocked out to get there.`;
   }
 
   const eyebrow = $("#feed-cleared-eyebrow");
@@ -494,9 +650,44 @@ function updateFeedPageCopy(dateKey) {
   if (activityHeading) activityHeading.textContent = isToday ? "All activity" : "Day’s activity";
 }
 
+function feedClearedPersonAria(person, progress) {
+  if (progress.complete) return `${person.name} cleared the board`;
+  const locked = BOARD_GOAL_KEYS.filter((key) => progress.closed[key]).map(
+    (key) => BOARD_GOAL_LABELS[key],
+  );
+  if (!locked.length) return `${person.name} — no categories closed`;
+  return `${person.name} closing the board — ${locked.join(", ")} locked`;
+}
+
+function renderFeedClearedPerson({ person, progress }) {
+  const complete = progress.complete;
+  return `
+    <li>
+      <a
+        class="feed-cleared-person${complete ? " is-complete" : " is-closing"}"
+        href="#/person/${person.id}"
+        data-person-id="${person.id}"
+        aria-label="${escapeHtml(feedClearedPersonAria(person, progress))}"
+      >
+        <span class="feed-cleared-person__avatar">
+          <img src="${person.image}" alt="" />
+          ${
+            complete
+              ? `<span class="feed-cleared-person__badge" aria-hidden="true">check</span>`
+              : ""
+          }
+        </span>
+        ${feedClearedCategoryStack(progress.closed, { decorative: true })}
+      </a>
+    </li>
+  `;
+}
+
 function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   const list = $("#feed-cleared-list");
   const countEl = $("#feed-cleared-count");
+  const headingEl = $("#feed-cleared-heading");
+  const subEl = document.querySelector("#feed-page .feed-cleared-card__sub");
   if (!list) return;
 
   const dateKey = ensureFeedSelectedDate();
@@ -506,25 +697,44 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   const eligible = crew.filter(
     (person) => !person.honorary && personStatus(person.id) !== "out",
   );
-  const cleared = peopleWhoClearedDailyGoal(dateKey);
+  const closing = peopleWithBoardClosingProgress(dateKey);
+  const cleared = closing.filter(({ progress }) => progress.complete);
+  const partials = closing.filter(({ progress }) => !progress.complete);
   if (countEl) countEl.textContent = `${cleared.length} / ${eligible.length}`;
 
   const isToday = dateKey === localDateValue();
   const longLabel = formatFeedDayLabel(dateKey, { long: true });
 
-  if (!cleared.length) {
+  if (headingEl) {
+    headingEl.textContent = "Daily closers";
+  }
+  if (subEl) {
+    if (cleared.length) {
+      subEl.textContent =
+        "Push-ups, squats, and plank — the full daily pulse. Bonus workouts are gravy.";
+    } else if (partials.length) {
+      subEl.textContent = isToday
+        ? "Categories lighting up — lock all three to clear the board."
+        : "Categories locked that day — all three make a full clear.";
+    } else {
+      subEl.textContent =
+        "Push-ups, squats, and plank — the full daily pulse. Bonus workouts are gravy.";
+    }
+  }
+
+  if (!closing.length) {
     list.innerHTML = `
       <div class="feed-cleared-empty" role="status">
-        <span class="feed-cleared-empty__icon" aria-hidden="true">wb_sunny</span>
+        ${feedClearedCategoryStack({}, { legend: true })}
         <p><strong>${
           isToday
-            ? "Nobody’s locked the board yet today."
-            : `Nobody locked the board on ${escapeHtml(longLabel)}.`
+            ? "Nobody’s closing the board yet today."
+            : `Nobody closed a category on ${escapeHtml(longLabel)}.`
         }</strong></p>
         <p>${
           isToday
-            ? "Hit push-ups, squats, and plank — be the first to clear the desert daily."
-            : "No full clear that day — push-ups, squats, and plank make the board."
+            ? "Hit push-ups, squats, or plank — light up a ring, then clear the desert daily."
+            : "No category locks that day — push-ups, squats, and plank make the board."
         }</p>
       </div>
     `;
@@ -533,32 +743,22 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
 
   list.innerHTML = `
     <ul class="feed-cleared-people">
-      ${cleared
-        .map(
-          (person) => `
-        <li>
-          <a
-            class="feed-cleared-person"
-            href="#/person/${person.id}"
-            data-person-id="${person.id}"
-            aria-label="${escapeHtml(person.name)} cleared the board"
-          >
-            <span class="feed-cleared-person__avatar">
-              <img src="${person.image}" alt="" />
-              <span class="feed-cleared-person__badge" aria-hidden="true">check</span>
-            </span>
-          </a>
-        </li>
-      `,
-        )
-        .join("")}
+      ${closing.map(renderFeedClearedPerson).join("")}
     </ul>
   `;
+}
+
+function activityCompactMagnitude(activity) {
+  const reps = Number(activity.reps) || 0;
+  return compactMagnitudeAttr(
+    activityExercise(activity) === "planks" ? reps / 60 : reps,
+  );
 }
 
 function activityFeedItemHtml(activity) {
   const person = getPerson(activity.personId);
   const honoraryClass = person.honorary ? " is-honorary" : "";
+  const repsMag = activityCompactMagnitude(activity);
   return `
       <a class="activity-item is-feed${honoraryClass}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
         <div class="activity-stack" aria-hidden="true">
@@ -570,7 +770,7 @@ function activityFeedItemHtml(activity) {
           <span>${formatDate(activity.createdAt)}</span>
         </div>
         <div class="activity-meta">
-          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
         </div>
       </a>
     `;
@@ -834,12 +1034,17 @@ function onTargetReps(asOf = new Date()) {
 function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDelta, groupTarget }) {
   const remaining = Math.max(0, goal - total);
   const msLeft = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
-  const daysLeft = Math.floor(msLeft / 86400000);
+  // Inclusive of today so daily-need pacing matches days still available to train.
+  const daysLeft = challengeDaysLeftInclusive();
+  const daysUntilCheckIn = challengeDaysRemaining();
   const hoursLeft = Math.floor((msLeft % 86400000) / 3600000);
-  const pushupCals = Math.round(categoryTotals.pushups * 0.36);
-  const squatCals = Math.round(categoryTotals.squats * 0.42);
+  const pushupCals = Math.round(categoryTotals.pushups * KCAL_PER_PUSHUP);
+  const squatCals = Math.round(categoryTotals.squats * KCAL_PER_SQUAT);
   const plankMins = categoryTotals.planks / 60;
-  const plankCals = Math.round(plankMins * 3.5);
+  const plankCals = Math.round(plankMins * KCAL_PER_PLANK_MIN);
+  const otherCals = Math.round(
+    ((categoryTotals.other || 0) / 100) * DAILY_GOALS.pushups * KCAL_PER_PUSHUP,
+  );
   const burned = estimateCategoryCalories(categoryTotals);
   const perPerson = participants.length ? Math.round(total / participants.length) : 0;
   const dailyNeeded =
@@ -849,7 +1054,7 @@ function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDel
 
   return [
     burned > 0
-      ? `Rough burn so far: ~${number.format(burned)} calories across push-ups, squats, and planks.`
+      ? `Rough burn so far: ~${number.format(burned)} calories across push-ups, squats, planks, and other workouts.`
       : "Add the first set and the calorie counter starts talking trash.",
     categoryTotals.pushups > 0
       ? `${number.format(categoryTotals.pushups)} push-ups ≈ ${number.format(pushupCals)} calories. Chest taxes paid.`
@@ -860,8 +1065,11 @@ function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDel
     plankMins > 0
       ? `${durationNumber.format(plankMins)} plank minutes ≈ ${number.format(plankCals)} calories of desert stillness.`
       : null,
-    daysLeft > 0
-      ? `${daysLeft} days and ${hoursLeft} hours until Old-Chella check-in. The desert is patient. Your rotator cuff is not.`
+    categoryTotals.other > 0
+      ? `${number.format(categoryTotals.other)}% other workouts ≈ ${number.format(otherCals)} calories (100% ≈ one daily push-up goal).`
+      : null,
+    msLeft > 0
+      ? `${daysUntilCheckIn} days and ${hoursLeft} hours until Old-Chella check-in. The desert is patient. Your rotator cuff is not.`
       : "Old-Chella is live. Get ripped or get roasted.",
     goal > 0
       ? `${number.format(remaining)} group reps left. That is ${number.format(Math.ceil(remaining / Math.max(participants.length, 1)))} each if everybody shows up.`
@@ -949,9 +1157,55 @@ let factIndex = 0;
 let factTick = 0;
 let factTimer = null;
 
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function setPotentialCopyText(text, { animate = true } = {}) {
+  const root = $("#potential-copy");
+  const track = $("#potential-copy-track");
+  if (!root || !track) return;
+
+  const value = String(text || "").trim();
+  root.classList.toggle("is-empty", !value);
+  root.setAttribute("aria-label", value || "No live updates");
+
+  if (!value) {
+    track.classList.remove("is-crawling");
+    track.textContent = "";
+    root.classList.remove("is-fading");
+    return;
+  }
+
+  const reduceMotion = prefersReducedMotion();
+
+  if (reduceMotion) {
+    if (!animate) {
+      track.classList.remove("is-crawling");
+      track.textContent = value;
+      root.classList.remove("is-fading");
+      return;
+    }
+    root.classList.add("is-fading");
+    window.setTimeout(() => {
+      track.classList.remove("is-crawling");
+      track.textContent = value;
+      root.classList.remove("is-fading");
+    }, 220);
+    return;
+  }
+
+  track.classList.remove("is-crawling");
+  track.textContent = value;
+  root.classList.remove("is-fading");
+  // Restart crawl so each fact enters from the right.
+  void track.offsetWidth;
+  // Keep crawl paced with fact rotation (~2× the prior ~5.4s board speed).
+  track.style.setProperty("--ticker-duration", `${Math.max(8.5, FACT_ROTATE_MS / 1000 - 0.2)}s`);
+  track.classList.add("is-crawling");
+}
+
 function showNextFact(animate = true) {
-  const el = $("#potential-copy");
-  if (!el) return;
   if (!rotatingFacts.length && !recentActivityFacts.length) return;
 
   let next;
@@ -964,16 +1218,7 @@ function showNextFact(animate = true) {
     next = recentActivityFacts[factTick % recentActivityFacts.length];
   }
   factTick += 1;
-
-  if (!animate) {
-    el.textContent = next;
-    return;
-  }
-  el.classList.add("is-fading");
-  window.setTimeout(() => {
-    el.textContent = next;
-    el.classList.remove("is-fading");
-  }, 220);
+  setPotentialCopyText(next, { animate });
 }
 
 function startFactRotation(facts) {
@@ -984,7 +1229,7 @@ function startFactRotation(facts) {
     window.clearInterval(factTimer);
     factTimer = null;
     factSignature = "";
-    $("#potential-copy").textContent = "";
+    setPotentialCopyText("");
     return;
   }
   if (signature === factSignature && factTimer) return;
@@ -1166,6 +1411,13 @@ function render({ skipScroll = false } = {}) {
             const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
             return `<span class="rank rank-${tone}">${index + 1}</span>`;
           })();
+      const plankMinutes = (Number(person.metrics.planks) || 0) / 60;
+      const repsMag = compactMagnitudeAttr([
+        person.metrics.pushups,
+        person.metrics.squats,
+        plankMinutes,
+        person.metrics.other,
+      ]);
       return `
         <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
           ${rankHtml}
@@ -1178,7 +1430,7 @@ function render({ skipScroll = false } = {}) {
             <p class="leader-name">${escapeHtml(person.name)}</p>
             <p class="leader-sub">${subtitle}</p>
           </div>
-          <div class="leader-reps">
+          <div class="leader-reps${repsMag}">
             <span class="${person.primaryType === "pushups" ? "is-primary" : ""}">
               <strong>${number.format(person.metrics.pushups)}</strong>
               <small>PUSH</small>
@@ -1272,8 +1524,8 @@ function render({ skipScroll = false } = {}) {
   );
 
   const remaining = Math.max(0, goal - total);
-  const msLeft = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
-  const daysLeft = Math.floor(msLeft / 86400000);
+  // Inclusive of today for daily-need pacing (Day D … Day 100).
+  const daysLeft = challengeDaysLeftInclusive();
   const avgPerson = participants.length ? Math.round(total / participants.length) : 0;
   const dailyNeed =
     daysLeft > 0 && participants.length
@@ -1281,15 +1533,10 @@ function render({ skipScroll = false } = {}) {
       : 0;
   const eachLeft = participants.length ? Math.ceil(remaining / participants.length) : remaining;
   const burned = estimateCategoryCalories(categoryTotals);
-  // Unique calendar days any opted-in crew member logged (not sum of per-person sessions).
-  const uniqueLoggingDays = new Set();
-  for (const activity of activities) {
-    if (!participantIds.has(activity.personId)) continue;
-    const day = String(activity.createdAt || "").slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(day)) uniqueLoggingDays.add(day);
-  }
-  const daysGoal = 100;
-  const daysLogged = Math.min(daysGoal, uniqueLoggingDays.size);
+  const desertMath = desertMathFromBurn(burned);
+  // Challenge calendar progress (same D as purple DAY); D + remaining days === 100.
+  const daysGoal = CHALLENGE_DAYS;
+  const daysLogged = currentChallengeDay();
   const bestDay = bestGroupDay(participantIds);
   const activeCrew = participants.filter((person) => person.sessions > 0).length;
   const personalPace = onTargetReps();
@@ -1299,21 +1546,63 @@ function render({ skipScroll = false } = {}) {
   setText("#activity-pace-target", number.format(Math.round(groupTarget)));
   setText("#activity-each-left", number.format(eachLeft));
   setText("#activity-cal-burn", burned > 0 ? `~${number.format(burned)}` : "0");
+  setCompactMagnitude($("#activity-avg-person"), avgPerson);
+  setCompactMagnitude($("#activity-each-left"), eachLeft);
+  setCompactMagnitude($("#activity-cal-burn"), burned);
+  setCompactMagnitude($("#activity-pace-target"), Math.round(groupTarget));
+  setText("#activity-fun-beers", number.format(desertMath.beers));
+  setText("#activity-fun-pizza", number.format(desertMath.pizzaSlices));
+  setText("#activity-fun-cabs", number.format(desertMath.callACabs));
+  setText("#activity-fun-biscuits", number.format(desertMath.biscuits));
+  setText("#activity-fun-wings", number.format(desertMath.wings));
   setText("#activity-sessions-total", number.format(daysLogged));
   setText("#activity-days-goal", number.format(daysGoal));
-  setText("#activity-best-day", number.format(bestDay.reps));
-  setText("#activity-best-day-label", formatShortDayLabel(bestDay.date));
+  if (bestDay.reps > 0 && bestDay.label) {
+    setText("#activity-best-day", `${bestDay.label} · ${number.format(bestDay.reps)}`);
+    setText("#activity-best-day-label", "REPS");
+  } else {
+    setText("#activity-best-day", "—");
+    setText("#activity-best-day-label", "0 REPS");
+  }
+  const bestBars = $(".activity-best__bars");
+  if (bestBars) {
+    const maxReps = Math.max(1, ...bestDay.days.map((day) => day.reps));
+    bestBars.innerHTML = bestDay.days
+      .map((day) => {
+        const pct =
+          day.reps > 0 ? Math.max(10, Math.round((day.reps / maxReps) * 100)) : 10;
+        const peakClass = bestDay.date && day.date === bestDay.date ? " is-peak" : "";
+        return `
+          <div class="activity-best__col">
+            <div class="activity-best__bar-slot">
+              <span class="${peakClass.trim()}" style="--h: ${pct}%"></span>
+            </div>
+            <em>${day.label}</em>
+          </div>
+        `;
+      })
+      .join("");
+  }
+  const bestBlock = $(".activity-best");
+  if (bestBlock) {
+    bestBlock.setAttribute(
+      "aria-label",
+      bestDay.reps > 0 && bestDay.label
+        ? `Best day this week ${bestDay.label} with ${number.format(bestDay.reps)} reps`
+        : "Best day this week — no reps logged yet",
+    );
+  }
   setText("#activity-active-crew", `${activeCrew} / ${participants.length}`);
 
   const daysBlock = $("#activity-days-block");
   if (daysBlock) {
     daysBlock.setAttribute(
       "aria-label",
-      `${number.format(daysLogged)} of ${number.format(daysGoal)} logging days`,
+      `Day ${number.format(daysLogged)} of ${number.format(daysGoal)}`,
     );
   }
 
-  // Pulse-row mini-viz: AVG/BRO, EACH LEFT, ~BURN, PACE TARGET.
+  // Pulse-row mini-viz: AVG/BRO, PUSH-UPS REMAINING, ~BURN, PACE TARGET.
   const avgFill = $("#activity-avg-fill");
   const avgMark = $("#activity-avg-mark");
   const avgPct = Math.min(100, Math.round((avgPerson / GOAL_PER_PERSON) * 100));
@@ -1378,10 +1667,10 @@ function render({ skipScroll = false } = {}) {
     dailyGauge.setAttribute(
       "aria-label",
       dailyNeed > 0
-        ? `Daily need ${number.format(dailyNeed)} reps per bro per day`
+        ? `Daily goal progress: ${number.format(dailyNeed)} reps per bro per day`
         : challengeDone
-          ? "Challenge complete — no daily need"
-          : "Daily need pending",
+          ? "Challenge complete — daily goal met"
+          : "Daily goal progress pending",
     );
   }
 
@@ -1393,7 +1682,7 @@ function render({ skipScroll = false } = {}) {
   if (activeRing) {
     activeRing.setAttribute(
       "aria-label",
-      `${activeCrew} of ${participants.length} crew actively logging`,
+      `${activeCrew} of ${participants.length} active bros logging`,
     );
   }
 
@@ -1955,6 +2244,12 @@ function sheetItemTitleFromUrl(url) {
   }
 }
 
+function isGenericLinkTitle(title) {
+  const value = String(title || "").trim();
+  if (!value) return true;
+  return /^(youtube(\s+video)?|instagram(\s+post)?|tiktok(\s+video)?|link|video)$/i.test(value);
+}
+
 function youtubeIdFromUrl(url) {
   try {
     const parsed = new URL(url);
@@ -1974,6 +2269,54 @@ function youtubeIdFromUrl(url) {
   return "";
 }
 
+const youtubeTitleCache = new Map();
+
+function decodeHtmlEntitiesClient(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .trim();
+}
+
+async function fetchYoutubeOEmbedTitle(pageUrl) {
+  const cacheKey = youtubeIdFromUrl(pageUrl) || pageUrl;
+  if (youtubeTitleCache.has(cacheKey)) return youtubeTitleCache.get(cacheKey);
+  const promise = (async () => {
+    try {
+      const endpoint = `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(pageUrl)}`;
+      const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+      if (!response.ok) return "";
+      const payload = await response.json();
+      return decodeHtmlEntitiesClient(payload?.title || "");
+    } catch {
+      return "";
+    }
+  })();
+  youtubeTitleCache.set(cacheKey, promise);
+  const title = await promise;
+  youtubeTitleCache.set(cacheKey, Promise.resolve(title));
+  return title;
+}
+
+async function enrichSheetItemTitles(items) {
+  return Promise.all(
+    items.map(async (item) => {
+      if (!isGenericLinkTitle(item.title) && item.title !== sheetItemTitleFromUrl(item.url)) {
+        return item;
+      }
+      if (!youtubeIdFromUrl(item.url)) return item;
+      const title = await fetchYoutubeOEmbedTitle(item.url);
+      if (!title || isGenericLinkTitle(title)) return item;
+      return { ...item, title };
+    }),
+  );
+}
+
 function parseSheetLinkCsv(text) {
   const rows = parseCsvRows(text);
   if (!rows.length) return [];
@@ -1991,6 +2334,13 @@ function parseSheetLinkCsv(text) {
   const descriptionIdx = headers.findIndex((header) =>
     /description|note|notes|blurb|caption|about/.test(header),
   );
+  const titleIdx = headers.findIndex(
+    (header) =>
+      /^(title|recipe title|video title|link title)$/.test(header) ||
+      (header.includes("title") &&
+        !header.includes("subtitle") &&
+        !/contributor|author|description|note/.test(header)),
+  );
   const urlColumn = linkIdx >= 0 ? linkIdx : 0;
   const whoColumn = contributorIdx >= 0 ? contributorIdx : 1;
 
@@ -2002,6 +2352,7 @@ function parseSheetLinkCsv(text) {
       const contributor = String(row[whoColumn] || "").trim();
       const sheetImage = imageIdx >= 0 ? String(row[imageIdx] || "").trim() : "";
       const note = descriptionIdx >= 0 ? String(row[descriptionIdx] || "").trim() : "";
+      const sheetTitle = titleIdx >= 0 ? String(row[titleIdx] || "").trim() : "";
       const yt = youtubeIdFromUrl(url);
       const image = /^https?:\/\//i.test(sheetImage)
         ? sheetImage
@@ -2014,8 +2365,10 @@ function parseSheetLinkCsv(text) {
       } catch {
         host = "";
       }
+      const title =
+        sheetTitle && !isGenericLinkTitle(sheetTitle) ? sheetTitle : sheetItemTitleFromUrl(url);
       return {
-        title: sheetItemTitleFromUrl(url),
+        title,
         url,
         contributor,
         note,
@@ -2053,29 +2406,34 @@ async function fetchSheetFeed(kind) {
     kind === "inspiration"
       ? [INSPIRATION_CSV_URL]
       : [RECIPES_CSV_URL, RECIPES_CSV_FALLBACK_URL];
+  let items = null;
   try {
     const response = await fetch(apiPath);
     if (response.ok) {
       const payload = await response.json();
-      const items = Array.isArray(payload.items)
+      items = Array.isArray(payload.items)
         ? payload.items
         : Array.isArray(payload.recipes)
           ? payload.recipes
           : null;
-      if (items) return items;
     }
   } catch {
     // Fall through to direct sheet CSV.
   }
-  let lastError = new Error("Sheet could not be loaded.");
-  for (const csvUrl of csvUrls) {
-    try {
-      return await fetchSheetCsv(csvUrl);
-    } catch (error) {
-      lastError = error;
+  if (!items) {
+    let lastError = new Error("Sheet could not be loaded.");
+    for (const csvUrl of csvUrls) {
+      try {
+        items = await fetchSheetCsv(csvUrl);
+        break;
+      } catch (error) {
+        lastError = error;
+      }
     }
+    if (!items) throw lastError;
   }
-  throw lastError;
+  // Local static hosts skip /api/*, so CSV fallbacks still need YouTube titles.
+  return enrichSheetItemTitles(items);
 }
 
 function renderSheetFeedList(kind, items) {
@@ -2205,11 +2563,6 @@ async function loadSheetFeedPage(kind, { force = false } = {}) {
   } catch (error) {
     showFeedError(error);
   }
-}
-
-function wireRecipesSheetCta() {
-  const link = $("#recipes-sheet-link");
-  if (link) link.href = RECIPES_SHEET_URL;
 }
 
 function renderResourcePages() {
@@ -2382,6 +2735,13 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-plank-minutes").innerHTML =
     `${durationNumber.format(plankMinutes)}<span class="stat-unit">MIN</span>`;
   $("#person-other-days").textContent = number.format(fullOtherDays);
+  setCompactMagnitude(
+    $(".personal-breakdown"),
+    personStats.metrics.pushups,
+    personStats.metrics.squats,
+    plankMinutes,
+    fullOtherDays,
+  );
   $("#person-sessions").textContent = number.format(personStats.sessions);
   $("#person-sessions-label").textContent = personStats.sessions === 1 ? "day" : "days";
   $("#person-avg-pushups").textContent = number.format(
@@ -2438,12 +2798,13 @@ function renderPersonPage({ skipScroll = false } = {}) {
                     ]
                       .filter(Boolean)
                       .join("");
+                    const repsMag = activityCompactMagnitude(activity);
                     if (isOwner) {
                       return `
                       <article class="activity-item is-editable${person.honorary ? " is-honorary" : ""}${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
                           ${detailBits}
                           ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
                         </div>
@@ -2464,7 +2825,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       <article class="activity-item is-readonly${person.honorary ? " is-honorary" : ""}" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
                           ${detailBits}
                         </div>
                       </article>
@@ -3706,6 +4067,15 @@ function showLogSuccess(personId, entries, options = {}) {
   if (!dialog.open) {
     dialog.showModal();
     lockLogDialogHeight();
+  } else if (canShare) {
+    // Form lock can be shorter than celebration + share CTA; grow so the button stays on-screen.
+    const lockedPx = parseFloat(dialog.style.height) || 0;
+    dialog.style.height = "auto";
+    dialog.style.minHeight = "";
+    const needed = Math.ceil(dialog.getBoundingClientRect().height);
+    const next = Math.max(lockedPx, needed);
+    dialog.style.height = `${next}px`;
+    dialog.style.minHeight = `${next}px`;
   }
 
   const fire = fireLogConfetti();
@@ -4265,20 +4635,59 @@ function onLeaderboardClick(event) {
 $("#leaderboard").addEventListener("click", onLeaderboardClick);
 $("#leaderboard-page-list")?.addEventListener("click", onLeaderboardClick);
 
+/** Unclamped 1-based day index from CHALLENGE_START (may be <1 or >CHALLENGE_DAYS). */
+function challengeDayIndex(asOf = new Date()) {
+  const todayKey = localDateValue(asOf);
+  const start = new Date(`${CHALLENGE_START}T12:00:00`);
+  const today = new Date(`${todayKey}T12:00:00`);
+  return Math.floor((today.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+/** 1-based challenge day (Day 1 = CHALLENGE_START), clamped to 1…CHALLENGE_DAYS. */
+function currentChallengeDay(asOf = new Date()) {
+  return Math.min(CHALLENGE_DAYS, Math.max(1, challengeDayIndex(asOf)));
+}
+
+/** Days after today through day 100. While in range: D + remaining === CHALLENGE_DAYS. */
+function challengeDaysRemaining(asOf = new Date()) {
+  const day = challengeDayIndex(asOf);
+  // Pre-start: UI clamps to Day 1, so remaining is 99 to keep the sum at 100.
+  if (day < 1) return CHALLENGE_DAYS - 1;
+  if (day > CHALLENGE_DAYS) return 0;
+  return CHALLENGE_DAYS - day;
+}
+
+/** Days left to train including today (Day D … Day 100). */
+function challengeDaysLeftInclusive(asOf = new Date()) {
+  const day = challengeDayIndex(asOf);
+  if (day < 1) return CHALLENGE_DAYS;
+  if (day > CHALLENGE_DAYS) return 0;
+  return CHALLENGE_DAYS - day + 1;
+}
+
 function tickOldchellaCountdown() {
   const diff = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
-  const dayCount = Math.floor(diff / 86400000);
+  // Calendar remaining (not floor(ms)): stays aligned with Day D so D + days === 100.
+  const dayCount = challengeDaysRemaining();
   const hourCount = Math.floor((diff % 86400000) / 3600000);
   const minCount = Math.floor((diff % 3600000) / 60000);
   const secCount = Math.floor((diff % 60000) / 1000);
-  const daysLeftLabel =
-    dayCount === 1 ? "1 day left in the challenge" : `${dayCount} days left in the challenge`;
+  const challengeDay = currentChallengeDay();
+  const challengeDayLabel = `Day ${challengeDay} of ${CHALLENGE_DAYS}`;
   const goalDays = $("#goal-days-value");
   if (goalDays) {
-    goalDays.textContent = String(dayCount);
+    goalDays.textContent = String(challengeDay);
     const goalDaysWrap = $("#goal-days");
     if (goalDaysWrap) {
-      goalDaysWrap.setAttribute("aria-label", daysLeftLabel);
+      goalDaysWrap.setAttribute("aria-label", challengeDayLabel);
+    }
+  }
+  const activityGoalDays = $("#activity-goal-days-value");
+  if (activityGoalDays) {
+    activityGoalDays.textContent = String(challengeDay);
+    const activityGoalDaysWrap = $("#activity-goal-days");
+    if (activityGoalDaysWrap) {
+      activityGoalDaysWrap.setAttribute("aria-label", challengeDayLabel);
     }
   }
   const days = $("#activity-cd-days");
@@ -4286,7 +4695,7 @@ function tickOldchellaCountdown() {
   const mins = $("#activity-cd-mins");
   const secs = $("#activity-cd-secs");
   if (days && hours && mins && secs) {
-    days.textContent = String(dayCount).padStart(3, "0");
+    days.textContent = String(dayCount);
     hours.textContent = String(hourCount).padStart(2, "0");
     mins.textContent = String(minCount).padStart(2, "0");
     secs.textContent = String(secCount).padStart(2, "0");
@@ -4525,7 +4934,6 @@ function initRulesCollapse() {
 updateExerciseFields();
 initThemeToggle();
 initRulesCollapse();
-wireRecipesSheetCta();
 render();
 loadSharedState();
 tickOldchellaCountdown();
