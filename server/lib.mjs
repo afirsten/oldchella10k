@@ -1,7 +1,7 @@
 import { seedState } from "./seed.mjs";
 
 export const PEOPLE = new Set([
-  "andrew", "brian", "chris", "james", "jamie", "joe", "john", "matt", "mike",
+  "andrew", "brian", "chris", "evan", "james", "jamie", "joe", "john", "kelly", "matt", "mike",
 ]);
 
 const STATE_KEY = "rippedchella:state:v1";

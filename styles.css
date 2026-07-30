@@ -11,6 +11,7 @@
   --label: #f5c842;
   --pink: #ff2d78;
   --lavender: #c9b3ff;
+  --honorary: #c9b3ff;
   --terra: #e8763a;
   --green: #4cdf8a;
   --background: #120a06;
@@ -50,6 +51,7 @@
   --label: #5c4335;
   --pink: #c91050;
   --lavender: #6a4fc4;
+  --honorary: #6a4fc4;
   --terra: #c45620;
   --green: #178a48;
   --background: #f3ebe0;
@@ -1002,6 +1004,25 @@ body.is-menu-open {
   font-size: 15px;
   line-height: 1.55;
 }
+.recipes-sheet-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--terra), var(--lime));
+  color: #fff8f0;
+  font: 800 12px/1 "Manrope", sans-serif;
+  letter-spacing: .08em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.recipes-sheet-cta:hover,
+.recipes-sheet-cta:focus-visible {
+  filter: brightness(1.05);
+}
 .recipes-status {
   margin: 18px 0 0;
   color: var(--quiet);
@@ -1824,6 +1845,13 @@ h1 .logo-chella {
     0 1px 0 rgba(255,255,255,.16) inset,
     0 3px 8px rgba(0,0,0,.35);
 }
+.rank-honorary {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.28), transparent 42%),
+    linear-gradient(135deg, #e4d7ff 0%, var(--honorary) 48%, #5f4a9a 100%);
+  color: #1a1028;
+  font-size: 11px;
+}
 .avatar, .activity-avatar {
   border-radius: 50%;
   object-fit: cover;
@@ -1851,6 +1879,44 @@ h1 .logo-chella {
   letter-spacing: .12em;
   transform: translate(-50%,-50%) rotate(-12deg);
   box-shadow: 0 0 0 1px rgba(255,45,120,.18);
+}
+.honorary-stamp {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  z-index: 1;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 2px solid var(--background);
+  border-radius: 50%;
+  background: var(--honorary);
+  color: #1a1028;
+  font: 800 9px/1 "Manrope", sans-serif;
+}
+.leader-row.is-honorary .leader-reps .is-primary {
+  background: color-mix(in srgb, var(--honorary) 16%, transparent);
+}
+.leader-row.is-honorary .leader-reps strong,
+.leader-row.is-honorary .leader-reps .is-primary strong {
+  color: var(--honorary);
+}
+.leader-row.is-honorary .leader-sub {
+  color: color-mix(in srgb, var(--honorary) 72%, var(--quiet));
+}
+.honorary-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--honorary) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--honorary) 14%, transparent);
+  color: var(--honorary);
+  font: 800 9px/1 "Manrope", sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  vertical-align: 1px;
 }
 .leader-name { margin: 0 0 3px; font-weight: 600; }
 .leader-sub { margin: 0; color: var(--quiet); font-size: 11px; }
@@ -2162,6 +2228,9 @@ a.activity-item:focus-visible {
   font: 800 15px/1 "Manrope", sans-serif;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.activity-item.is-honorary .activity-reps {
+  color: var(--honorary);
 }
 @media (min-width: 480px) {
   .activity-meta p {
@@ -2654,6 +2723,20 @@ a.activity-item:focus-visible {
   color: #fff4f8;
   text-shadow: 0 1px 0 rgba(80, 0, 30, .25);
 }
+.person-rank-badge.is-honorary {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.28), transparent 40%),
+    linear-gradient(135deg, #e4d7ff 0%, var(--honorary) 48%, #5f4a9a 100%);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.28) inset,
+    0 4px 10px rgba(0,0,0,.35),
+    0 0 10px color-mix(in srgb, var(--honorary) 35%, transparent);
+}
+.person-rank-badge.is-honorary strong {
+  color: #1a1028;
+  text-shadow: none;
+  letter-spacing: .04em;
+}
 .participation-card {
   display: grid;
   gap: 22px;
@@ -2717,6 +2800,14 @@ a.activity-item:focus-visible {
   margin-right: 7px;
   font: 800 42px/1 "Manrope", sans-serif;
   letter-spacing: -.055em;
+}
+.personal-total.is-honorary .personal-total-row > div:first-child > strong,
+.personal-total.is-honorary .person-total-line strong,
+.personal-total.is-honorary .personal-goal strong {
+  color: var(--honorary);
+}
+.personal-total.is-honorary .personal-total-row > div:first-child > span {
+  color: color-mix(in srgb, var(--honorary) 70%, var(--quiet));
 }
 .personal-total-row > div:first-child > span {
   color: var(--quiet);

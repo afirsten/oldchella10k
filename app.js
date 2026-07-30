@@ -6,7 +6,9 @@ const OLD_CHELLA_URL = "https://goingtoliveforever.com/";
 const RECIPES_SHEET_ID = "1UkuA5apWL5PZ2XQkZP_r9horqKtial1FCrk5Vn3HK88";
 const RECIPES_SHEET_GID = "0";
 const INSPIRATION_SHEET_GID = "1013060614";
-const RECIPES_CSV_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${RECIPES_SHEET_GID}`;
+const RECIPES_SHEET_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/edit?usp=sharing`;
+const RECIPES_CSV_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/export?format=csv&gid=${RECIPES_SHEET_GID}`;
+const RECIPES_CSV_FALLBACK_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${RECIPES_SHEET_GID}`;
 const INSPIRATION_CSV_URL = `https://docs.google.com/spreadsheets/d/${RECIPES_SHEET_ID}/gviz/tq?tqx=out:csv&gid=${INSPIRATION_SHEET_GID}`;
 const FACT_ROTATE_MS = 5600;
 const THEME_STORAGE_KEY = "rippedchella-theme-v1";
@@ -67,13 +69,21 @@ const crew = [
   { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
   { id: "brian", name: "Brian M", image: "./assets/people/brian.png" },
   { id: "chris", name: "Chris E", image: "./assets/people/chris.png" },
+  { id: "evan", name: "Evan F", image: "./assets/people/evan.png", honorary: true },
   { id: "james", name: "James Z", image: "./assets/people/james.png" },
   { id: "jamie", name: "Jamie D", image: "./assets/people/jamie.png" },
   { id: "joe", name: "Joe D", image: "./assets/people/joe.png" },
   { id: "john", name: "John Z", image: "./assets/people/john.png" },
+  { id: "kelly", name: "Kelly D", image: "./assets/people/kelly.png", honorary: true },
   { id: "matt", name: "Matt H", image: "./assets/people/matt.png" },
   { id: "mike", name: "Mike B", image: "./assets/people/mike.png" },
 ];
+
+function isHonorary(personOrId) {
+  if (!personOrId) return false;
+  if (typeof personOrId === "object") return Boolean(personOrId.honorary);
+  return Boolean(crew.find((person) => person.id === personOrId)?.honorary);
+}
 
 function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setNote, run = false }) {
   const entries = [];
@@ -168,6 +178,7 @@ try {
 }
 
 function personStatus(personId) {
+  if (isHonorary(personId)) return "in";
   if (participation[personId]) return participation[personId];
   return activities.some((activity) => activity.personId === personId) ? "in" : "unknown";
 }
@@ -318,7 +329,7 @@ function dayGoalCheck(complete) {
 
 function peopleWhoClearedDailyGoal(dateKey = localDateValue()) {
   return crew
-    .filter((person) => personStatus(person.id) !== "out")
+    .filter((person) => !person.honorary && personStatus(person.id) !== "out")
     .filter((person) => {
       const dayActivities = activities.filter(
         (activity) => activity.personId === person.id && activityDateKey(activity) === dateKey,
@@ -473,7 +484,9 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   updateFeedPageCopy(dateKey);
   renderFeedDayFilter({ smoothScroll: smoothDayScroll });
 
-  const eligible = crew.filter((person) => personStatus(person.id) !== "out");
+  const eligible = crew.filter(
+    (person) => !person.honorary && personStatus(person.id) !== "out",
+  );
   const cleared = peopleWhoClearedDailyGoal(dateKey);
   if (countEl) countEl.textContent = `${cleared.length} / ${eligible.length}`;
 
@@ -526,14 +539,15 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
 
 function activityFeedItemHtml(activity) {
   const person = getPerson(activity.personId);
+  const honoraryClass = person.honorary ? " is-honorary" : "";
   return `
-      <a class="activity-item is-feed" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
+      <a class="activity-item is-feed${honoraryClass}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
         <div class="activity-stack" aria-hidden="true">
           <img class="activity-avatar" src="${person.image}" alt="" />
           ${exerciseIcon(activity)}
         </div>
         <div class="activity-main">
-          <p class="activity-person">${escapeHtml(person.name)}</p>
+          <p class="activity-person">${escapeHtml(person.name)}${person.honorary ? ' <span class="honorary-tag">Honorary</span>' : ""}</p>
           <span>${formatDate(activity.createdAt)}</span>
         </div>
         <div class="activity-meta">
@@ -985,11 +999,12 @@ function render({ skipScroll = false } = {}) {
     (a, b) =>
       Number(a.status === "out") - Number(b.status === "out") ||
       Number(a.status === "unknown") - Number(b.status === "unknown") ||
+      Number(Boolean(a.honorary)) - Number(Boolean(b.honorary)) ||
       b.total - a.total ||
       a.name.localeCompare(b.name),
   );
-  const participants = ranking.filter((person) => person.status === "in");
-  const optedOut = ranking.filter((person) => person.status === "out");
+  const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
+  const optedOut = ranking.filter((person) => person.status === "out" && !person.honorary);
   const goal = participants.length * GOAL_PER_PERSON;
   const total = participants.reduce((sum, person) => sum + person.total, 0);
   const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
@@ -1048,27 +1063,38 @@ function render({ skipScroll = false } = {}) {
   );
   updateQuickAddButton();
 
+  let competitiveIndex = 0;
   const leaderboardHtml = ranking
-    .map(
-      (person, index) => {
-        const rowState =
-          person.status === "out"
-            ? " is-out"
-            : person.status === "unknown"
-              ? " is-undecided"
-              : "";
-        const subtitle =
-          person.status === "out"
-            ? "Out"
-            : person.status === "unknown"
-              ? "Undecided"
-              : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
-        return `
+    .map((person) => {
+      const rowState = person.honorary
+        ? " is-honorary"
+        : person.status === "out"
+          ? " is-out"
+          : person.status === "unknown"
+            ? " is-undecided"
+            : "";
+      const subtitle = person.honorary
+        ? "Honorary · not in group total"
+        : person.status === "out"
+          ? "Out"
+          : person.status === "unknown"
+            ? "Undecided"
+            : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
+      const rankHtml = person.honorary
+        ? `<span class="rank rank-honorary" title="Honorary">★</span>`
+        : (() => {
+            const index = competitiveIndex;
+            competitiveIndex += 1;
+            const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
+            return `<span class="rank rank-${tone}">${index + 1}</span>`;
+          })();
+      return `
         <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
-          <span class="rank rank-${index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel"}">${index + 1}</span>
+          ${rankHtml}
           <span class="avatar-wrap">
             <img class="avatar" src="${person.image}" alt="" />
             ${person.status === "out" ? '<span class="out-stamp">OUT</span>' : ""}
+            ${person.honorary ? '<span class="honorary-stamp">H</span>' : ""}
           </span>
           <div>
             <p class="leader-name">${escapeHtml(person.name)}</p>
@@ -1094,8 +1120,7 @@ function render({ skipScroll = false } = {}) {
           </div>
         </a>
       `;
-      },
-    )
+    })
     .join("");
   $("#leaderboard").innerHTML = leaderboardHtml;
   const leaderboardPageList = $("#leaderboard-page-list");
@@ -1908,9 +1933,26 @@ const sheetFeedState = {
   inspiration: { cache: null, promise: null },
 };
 
+async function fetchSheetCsv(url) {
+  const response = await fetch(url, { headers: { Accept: "text/csv,text/plain,*/*" } });
+  if (!response.ok) throw new Error("Sheet could not be loaded.");
+  const csv = await response.text();
+  if (
+    /^\s*<!DOCTYPE html/i.test(csv) ||
+    /accounts\.google\.com/i.test(csv) ||
+    /Sign in/i.test(csv)
+  ) {
+    throw new Error("Sheet is still private.");
+  }
+  return parseSheetLinkCsv(csv);
+}
+
 async function fetchSheetFeed(kind) {
   const apiPath = kind === "inspiration" ? "/api/inspiration" : "/api/recipes";
-  const csvUrl = kind === "inspiration" ? INSPIRATION_CSV_URL : RECIPES_CSV_URL;
+  const csvUrls =
+    kind === "inspiration"
+      ? [INSPIRATION_CSV_URL]
+      : [RECIPES_CSV_URL, RECIPES_CSV_FALLBACK_URL];
   try {
     const response = await fetch(apiPath);
     if (response.ok) {
@@ -1925,13 +1967,15 @@ async function fetchSheetFeed(kind) {
   } catch {
     // Fall through to direct sheet CSV.
   }
-  const response = await fetch(csvUrl, { headers: { Accept: "text/csv,text/plain,*/*" } });
-  if (!response.ok) throw new Error("Sheet could not be loaded.");
-  const csv = await response.text();
-  if (/^\s*<!DOCTYPE html/i.test(csv) || /accounts\.google\.com/i.test(csv)) {
-    throw new Error("Sheet is still private.");
+  let lastError = new Error("Sheet could not be loaded.");
+  for (const csvUrl of csvUrls) {
+    try {
+      return await fetchSheetCsv(csvUrl);
+    } catch (error) {
+      lastError = error;
+    }
   }
-  return parseSheetLinkCsv(csv);
+  throw lastError;
 }
 
 function renderSheetFeedList(kind, items) {
@@ -2009,6 +2053,21 @@ async function loadSheetFeedPage(kind, { force = false } = {}) {
   const failCopy = isInspiration
     ? "Tips etc could not be loaded."
     : "Eats could not be loaded.";
+  const privateCopy =
+    "This Google Sheet is still private. Share it as Anyone with the link → Viewer, then refresh.";
+
+  const showFeedError = (error) => {
+    const message = /private/i.test(error?.message || "")
+      ? privateCopy
+      : error?.message || failCopy;
+    list.innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+    if (status) {
+      status.hidden = false;
+      status.textContent = /private/i.test(error?.message || "")
+        ? "Sheet is private"
+        : "Could not load right now. Try again later.";
+    }
+  };
 
   if (!force && state.cache) {
     renderSheetFeedList(kind, state.cache);
@@ -2023,7 +2082,7 @@ async function loadSheetFeedPage(kind, { force = false } = {}) {
     try {
       renderSheetFeedList(kind, await state.promise);
     } catch (error) {
-      list.innerHTML = `<div class="empty-state">${escapeHtml(error.message || failCopy)}</div>`;
+      showFeedError(error);
     }
     return;
   }
@@ -2044,12 +2103,13 @@ async function loadSheetFeedPage(kind, { force = false } = {}) {
   try {
     renderSheetFeedList(kind, await state.promise);
   } catch (error) {
-    list.innerHTML = `<div class="empty-state">${escapeHtml(error.message || failCopy)}</div>`;
-    if (status) {
-      status.hidden = false;
-      status.textContent = "Could not load right now. Try again later.";
-    }
+    showFeedError(error);
   }
+}
+
+function wireRecipesSheetCta() {
+  const link = $("#recipes-sheet-link");
+  if (link) link.href = RECIPES_SHEET_URL;
 }
 
 function renderResourcePages() {
@@ -2107,7 +2167,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const person = getPerson(personId);
   const allStats = totalsByPerson();
   const ranking = allStats
-    .filter((entry) => entry.status === "in")
+    .filter((entry) => entry.status === "in" && !entry.honorary)
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   const personStats = allStats.find((entry) => entry.id === personId);
   const rank = ranking.findIndex((entry) => entry.id === personId) + 1;
@@ -2158,8 +2218,9 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-avatar").alt = `${person.name} profile photo`;
   const rankTile = $("#person-rank-tile");
   const rankBadge = $("#person-rank");
-  const rankLabel =
-    personStats.status === "out"
+  const rankLabel = person.honorary
+    ? "HONORARY"
+    : personStats.status === "out"
       ? "OUT"
       : personStats.status === "unknown"
         ? ""
@@ -2169,27 +2230,35 @@ function renderPersonPage({ skipScroll = false } = {}) {
   rankBadge.textContent = rankLabel || "—";
   rankTile.hidden = !rankLabel;
   rankTile.classList.toggle("is-out", personStats.status === "out");
+  rankTile.classList.toggle("is-honorary", Boolean(person.honorary));
   $("#person-name").innerHTML = formatPersonHeadline(person.name);
-  $("#person-summary").textContent =
-    personStats.status === "out"
+  $("#person-summary").textContent = person.honorary
+    ? `${person.name.split(" ")[0]} is an honorary bro — logs show up, but don’t count toward the crew total.`
+    : personStats.status === "out"
       ? `${person.name.split(" ")[0]} is sitting this challenge out.`
       : history.length
         ? `${person.name.split(" ")[0]} has put in ${personStats.sessions} ${personStats.sessions === 1 ? "session" : "sessions"} on the road to Joshua Tree.`
         : `${person.name.split(" ")[0]} is ready to choose whether to join the challenge.`;
   const participationCard = $("#participation-card");
-  participationCard.hidden = !isOwner || history.length > 0;
+  participationCard.hidden = !isOwner || person.honorary || history.length > 0;
   participationCard.querySelectorAll("[data-participation]").forEach((button) => {
     button.classList.toggle("is-selected", button.dataset.participation === personStats.status);
   });
-  const showProgress = history.length > 0 || personStats.status === "in";
+  const showProgress = person.honorary || history.length > 0 || personStats.status === "in";
   const todayKey = localDateValue();
   $(".personal-total").hidden = !showProgress;
+  $(".personal-total")?.classList.toggle("is-honorary", Boolean(person.honorary));
   $("#person-log-button").hidden = !isOwner || personStats.status !== "in";
   const quickAdd = $("#person-quick-add");
   if (quickAdd) quickAdd.hidden = !isOwner || personStats.status !== "in";
   $("#person-total").textContent = number.format(personStats.total);
-  $("#person-total-label").textContent =
-    personStats.primaryType === "other" ? "TOTAL ALTERNATIVE WORK" : "PUSH-UP COUNT";
+  $("#person-total-label").textContent = person.honorary
+    ? personStats.primaryType === "other"
+      ? "HONORARY ALTERNATIVE"
+      : "HONORARY PUSH-UPS"
+    : personStats.primaryType === "other"
+      ? "TOTAL ALTERNATIVE WORK"
+      : "PUSH-UP COUNT";
   $("#person-goal-percent").textContent = `${personalPercent}%`;
   $("#person-goal-current").textContent = number.format(personStats.total);
   $("#person-progress-fill").style.width = `${Math.min(100, personalPercent)}%`;
@@ -2271,7 +2340,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       .join("");
                     if (isOwner) {
                       return `
-                      <article class="activity-item is-editable${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
+                      <article class="activity-item is-editable${person.honorary ? " is-honorary" : ""}${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
                           <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
@@ -2292,7 +2361,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                     `;
                     }
                     return `
-                      <article class="activity-item is-readonly" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
+                      <article class="activity-item is-readonly${person.honorary ? " is-honorary" : ""}" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
                           <p><span class="activity-reps">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
@@ -4333,6 +4402,7 @@ function initRulesCollapse() {
 updateExerciseFields();
 initThemeToggle();
 initRulesCollapse();
+wireRecipesSheetCta();
 render();
 nestleAddRepsTip();
 loadSharedState();
