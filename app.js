@@ -998,7 +998,6 @@ function render({ skipScroll = false } = {}) {
     (a, b) =>
       Number(a.status === "out") - Number(b.status === "out") ||
       Number(a.status === "unknown") - Number(b.status === "unknown") ||
-      Number(Boolean(a.honorary)) - Number(Boolean(b.honorary)) ||
       b.total - a.total ||
       a.name.localeCompare(b.name),
   );
@@ -1125,14 +1124,14 @@ function render({ skipScroll = false } = {}) {
             ? " is-undecided"
             : "";
       const subtitle = person.honorary
-        ? "Honorary · not in group total"
+        ? `Honorary · ${person.sessions} ${person.sessions === 1 ? "session" : "sessions"} · not in group total`
         : person.status === "out"
           ? "Out"
           : person.status === "unknown"
             ? "Undecided"
             : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
       const rankHtml = person.honorary
-        ? `<span class="rank rank-honorary" title="Honorary">★</span>`
+        ? `<span class="rank rank-honorary" title="Honorary · not counted in group total">★</span>`
         : (() => {
             const index = competitiveIndex;
             competitiveIndex += 1;
