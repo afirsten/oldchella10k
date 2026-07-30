@@ -218,19 +218,6 @@
           </h1>
           <p class="eyebrow">TRAINING CENTER + TRACKER</p>
           <p class="hero-copy">SCAD Bros Trip · Joshua Tree Desert Festival · Oct 22–25</p>
-          <div class="hero-add-tip" id="hero-add-tip" role="status">
-            <p class="hero-add-tip-copy">
-              Eyes up — hit the orange <span class="hero-add-tip-plus" aria-hidden="true">+</span> to bank reps
-            </p>
-            <button
-              type="button"
-              class="hero-add-tip-dismiss"
-              id="hero-add-tip-dismiss"
-              aria-label="Got it, dismiss tip"
-            >
-              Got it
-            </button>
-          </div>
 
           <aside class="rules-card" id="rules-card" aria-labelledby="rules-heading">
             <button
@@ -289,17 +276,41 @@
                 </div>
               </div>
             </div>
-            <div
-              class="progress-track"
-              role="progressbar"
-              aria-label="Group progress"
-              aria-valuemin="0"
-              aria-valuemax="10000"
-              aria-valuenow="0"
-            >
-              <div class="progress-target" id="progress-target" aria-hidden="true"></div>
-              <div class="progress-fill" id="progress-fill"></div>
-              <span class="progress-pace" id="progress-pace" aria-hidden="true"></span>
+            <div class="progress-track-wrap">
+              <div
+                class="progress-track"
+                id="progress-track"
+                role="progressbar"
+                aria-label="Group progress"
+                aria-describedby="progress-breakdown"
+                aria-valuemin="0"
+                aria-valuemax="10000"
+                aria-valuenow="0"
+                tabindex="0"
+              >
+                <div class="progress-target" id="progress-target" aria-hidden="true"></div>
+                <div class="progress-honorary" id="progress-honorary" aria-hidden="true"></div>
+                <div class="progress-fill" id="progress-fill"></div>
+                <span class="progress-pace" id="progress-pace" aria-hidden="true"></span>
+              </div>
+              <div class="progress-breakdown" id="progress-breakdown" role="tooltip">
+                <div class="progress-breakdown__row">
+                  <span>Goal</span>
+                  <strong id="progress-breakdown-goal">0</strong>
+                </div>
+                <div class="progress-breakdown__row">
+                  <span>Daily target</span>
+                  <strong id="progress-breakdown-daily">0</strong>
+                </div>
+                <div class="progress-breakdown__row is-bros">
+                  <span>Bro Reps</span>
+                  <strong id="progress-breakdown-bros">0</strong>
+                </div>
+                <div class="progress-breakdown__row is-honorary">
+                  <span>Honorary Reps</span>
+                  <strong id="progress-breakdown-honorary">0</strong>
+                </div>
+              </div>
             </div>
             <div class="goal-meta">
               <span><strong id="remaining-total">0</strong> reps to go</span>
@@ -552,24 +563,48 @@
               </div>
             </div>
           </div>
-          <div
-            class="progress-track"
-            id="activity-progress-track"
-            role="progressbar"
-            aria-label="Group progress"
-            aria-valuemin="0"
-            aria-valuemax="10000"
-            aria-valuenow="0"
-          >
-            <div class="progress-target" id="activity-progress-target" aria-hidden="true"></div>
-            <div class="progress-fill" id="activity-progress-fill"></div>
-            <span class="progress-pace" id="activity-progress-pace" aria-hidden="true"></span>
+          <div class="progress-track-wrap">
+            <div
+              class="progress-track"
+              id="activity-progress-track"
+              role="progressbar"
+              aria-label="Group progress"
+              aria-describedby="activity-progress-breakdown"
+              aria-valuemin="0"
+              aria-valuemax="10000"
+              aria-valuenow="0"
+              tabindex="0"
+            >
+              <div class="progress-target" id="activity-progress-target" aria-hidden="true"></div>
+              <div class="progress-honorary" id="activity-progress-honorary" aria-hidden="true"></div>
+              <div class="progress-fill" id="activity-progress-fill"></div>
+              <span class="progress-pace" id="activity-progress-pace" aria-hidden="true"></span>
+            </div>
+            <div class="progress-breakdown" id="activity-progress-breakdown" role="tooltip">
+              <div class="progress-breakdown__row">
+                <span>Goal</span>
+                <strong id="activity-progress-breakdown-goal">0</strong>
+              </div>
+              <div class="progress-breakdown__row">
+                <span>Daily target</span>
+                <strong id="activity-progress-breakdown-daily">0</strong>
+              </div>
+              <div class="progress-breakdown__row is-bros">
+                <span>Bro Reps</span>
+                <strong id="activity-progress-breakdown-bros">0</strong>
+              </div>
+              <div class="progress-breakdown__row is-honorary">
+                <span>Honorary Reps</span>
+                <strong id="activity-progress-breakdown-honorary">0</strong>
+              </div>
+            </div>
           </div>
           <div class="goal-meta">
             <span><strong id="activity-remaining-total">0</strong> reps to go</span>
             <span id="activity-pace-copy">Oldchella awaits</span>
           </div>
           <div class="activity-pace-legend" aria-hidden="true">
+            <span class="is-honorary"><i></i> Honorary</span>
             <span class="is-actual"><i></i> Actual</span>
             <span class="is-pace"><i></i> Pace mark</span>
           </div>

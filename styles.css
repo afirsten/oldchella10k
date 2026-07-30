@@ -489,6 +489,10 @@ body.is-menu-open {
   height: 4px;
   border-radius: 99px;
 }
+.activity-pace-legend .is-honorary i {
+  background: linear-gradient(90deg, #7a5fb8, var(--honorary));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--honorary) 40%, transparent);
+}
 .activity-pace-legend .is-actual i {
   background: linear-gradient(90deg, var(--terra), var(--lime));
   box-shadow: 0 0 8px rgba(245, 200, 66, .35);
@@ -1323,70 +1327,6 @@ body.is-menu-open {
   min-width: 0;
   margin: 0;
 }
-.hero-add-tip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  align-items: baseline;
-  justify-content: space-between;
-  width: 100%;
-  margin: -4px 0 18px;
-  padding: 0 0 14px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  box-shadow: none;
-}
-.hero-add-tip[hidden] {
-  display: none;
-}
-.hero-add-tip-copy {
-  margin: 0;
-  flex: 1 1 12rem;
-  color: var(--lavender);
-  font-family: "Cormorant Garamond", serif;
-  font-style: italic;
-  font-weight: 300;
-  font-size: 17px;
-  letter-spacing: .03em;
-  line-height: 1.35;
-}
-.hero-add-tip-plus {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.15em;
-  height: 1.15em;
-  margin: 0 .12em;
-  border-radius: 4px;
-  background: linear-gradient(135deg, var(--terra), var(--lime));
-  color: #fff8f0;
-  font-family: "Manrope", sans-serif;
-  font-style: normal;
-  font-weight: 800;
-  font-size: .72em;
-  line-height: 1;
-  vertical-align: .05em;
-}
-.hero-add-tip-dismiss {
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--quiet);
-  font: 700 10px/1 "Manrope", sans-serif;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.hero-add-tip-dismiss:hover {
-  color: var(--muted);
-}
-.hero-add-tip-dismiss:focus-visible {
-  outline: 2px solid var(--terra);
-  outline-offset: 3px;
-}
 .eyebrow, .label {
   margin: 0 0 9px;
   color: var(--label);
@@ -1560,6 +1500,11 @@ h1 .logo-chella {
   background: linear-gradient(145deg, rgba(232,118,58,.06), transparent 55%), var(--surface);
   box-shadow: var(--shadow-soft), inset 0 1px rgba(255,160,80,.05);
 }
+.goal-card:has(.progress-track-wrap:hover),
+.goal-card:has(.progress-track-wrap:focus-within) {
+  overflow: visible;
+  z-index: 2;
+}
 .goal-card__top, .goal-meta, .section-heading, .dialog-heading {
   display: flex;
   align-items: center;
@@ -1611,12 +1556,94 @@ h1 .logo-chella {
   letter-spacing: .12em;
   opacity: .85;
 }
+.progress-track-wrap {
+  position: relative;
+  z-index: 1;
+}
 .progress-track {
   position: relative;
-  height: 9px;
+  height: 12px;
   overflow: hidden;
   border-radius: 99px;
   background: var(--progress-track);
+  cursor: help;
+}
+.progress-track:focus-visible {
+  outline: 2px solid var(--terra);
+  outline-offset: 3px;
+}
+.progress-breakdown {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 12px);
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  width: max-content;
+  min-width: 168px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 14px;
+  background: #000;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .55);
+  color: rgba(253, 240, 224, .72);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 6px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.progress-breakdown::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-right: 1px solid rgba(255, 255, 255, .12);
+  border-bottom: 1px solid rgba(255, 255, 255, .12);
+  background: #000;
+  transform: translate(-50%, -55%) rotate(45deg);
+}
+.progress-track-wrap:hover .progress-breakdown,
+.progress-track-wrap:focus-within .progress-breakdown {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.progress-breakdown__row {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  justify-content: space-between;
+  font: 700 10px/1 "Manrope", sans-serif;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.progress-breakdown__row strong {
+  color: #fdf0e0;
+  font: 800 14px/1 "Manrope", sans-serif;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+}
+.progress-breakdown__row.is-bros strong {
+  color: var(--lime);
+}
+.progress-breakdown__row.is-honorary strong {
+  color: var(--honorary);
+}
+@media (hover: none) {
+  .progress-track-wrap:hover .progress-breakdown {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  .progress-track-wrap:focus-within .progress-breakdown {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-breakdown {
+    transition: none;
+  }
 }
 .progress-target {
   position: absolute;
@@ -1628,23 +1655,50 @@ h1 .logo-chella {
   background: rgba(245,200,66,.2);
   transition: width 700ms cubic-bezier(.22,1,.36,1);
 }
-.progress-fill {
-  position: relative;
+.progress-honorary {
+  position: absolute;
+  top: 0;
+  left: 0;
   z-index: 1;
   width: 0;
   height: 100%;
-  border-radius: inherit;
+  border-radius: 99px 0 0 99px;
+  background: linear-gradient(90deg, #7a5fb8, var(--honorary));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--honorary) 35%, transparent);
+  transition: width 700ms cubic-bezier(.22,1,.36,1);
+}
+.progress-honorary[hidden],
+.progress-honorary.is-empty {
+  display: none;
+}
+.progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  width: 0;
+  height: 100%;
+  border-radius: 99px;
   background: linear-gradient(90deg, var(--terra), var(--lime));
   box-shadow: 0 0 20px rgba(245,200,66,.3);
-  transition: width 700ms cubic-bezier(.22,1,.36,1);
+  transition:
+    width 700ms cubic-bezier(.22,1,.36,1),
+    left 700ms cubic-bezier(.22,1,.36,1),
+    border-radius 700ms cubic-bezier(.22,1,.36,1);
+}
+.progress-track.has-honorary .progress-fill {
+  border-radius: 0 99px 99px 0;
+}
+.progress-track.has-honorary:not(.has-primary) .progress-honorary {
+  border-radius: 99px;
 }
 .progress-pace {
   position: absolute;
   top: 0;
   bottom: 0;
   z-index: 2;
-  width: 2px;
-  margin-left: -1px;
+  width: 3px;
+  margin-left: -1.5px;
   border-radius: 99px;
   background: var(--ink);
   box-shadow: 0 0 0 1px rgba(18,10,6,.45);
@@ -4283,9 +4337,6 @@ input:focus, select:focus {
     grid-template-columns: 1fr;
   }
   .hero-copy {
-    margin-bottom: 14px;
-  }
-  .hero-add-tip {
     margin-bottom: 14px;
   }
   .rules-card {

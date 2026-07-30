@@ -22,7 +22,6 @@ const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
 const RULES_COLLAPSE_KEY = "rippedchella-rules-collapsed-v1";
-const ADD_REPS_TIP_DISMISS_KEY = "rippedchella-add-reps-tip-dismissed-v1";
 
 function getPreferredTheme() {
   try {
@@ -1004,10 +1003,16 @@ function render({ skipScroll = false } = {}) {
       a.name.localeCompare(b.name),
   );
   const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
+  const honoraryMembers = ranking.filter((person) => person.honorary);
   const optedOut = ranking.filter((person) => person.status === "out" && !person.honorary);
   const goal = participants.length * GOAL_PER_PERSON;
   const total = participants.reduce((sum, person) => sum + person.total, 0);
+  const honoraryTotal = honoraryMembers.reduce((sum, person) => sum + person.total, 0);
   const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
+  let honoraryPercent = goal ? Math.min(100, Math.round((honoraryTotal / goal) * 100)) : 0;
+  if (honoraryPercent + percent > 100) {
+    honoraryPercent = Math.max(0, 100 - percent);
+  }
   const groupTarget = participants.length * onTargetReps();
   const targetPercent = goal ? Math.min(100, Math.round((groupTarget / goal) * 100)) : 0;
   const paceDelta = total - groupTarget;
@@ -1022,6 +1027,37 @@ function render({ skipScroll = false } = {}) {
     { pushups: 0, squats: 0, planks: 0, other: 0 },
   );
 
+  const applyGroupProgressBar = ({
+    track,
+    fill,
+    honoraryFill,
+    target,
+    pace,
+    breakdown = {},
+  }) => {
+    if (!track || !fill) return;
+    const hasHonorary = honoraryPercent > 0;
+    const hasPrimary = percent > 0;
+    track.classList.toggle("has-honorary", hasHonorary);
+    track.classList.toggle("has-primary", hasPrimary);
+    if (honoraryFill) {
+      honoraryFill.style.width = `${honoraryPercent}%`;
+      honoraryFill.classList.toggle("is-empty", !hasHonorary);
+      honoraryFill.hidden = !hasHonorary;
+    }
+    fill.style.left = `${honoraryPercent}%`;
+    fill.style.width = `${percent}%`;
+    if (target) target.style.width = `${targetPercent}%`;
+    if (pace) pace.style.left = `${targetPercent}%`;
+    const setBreakdown = (el, value) => {
+      if (el) el.textContent = number.format(value);
+    };
+    setBreakdown(breakdown.goal, goal);
+    setBreakdown(breakdown.daily, groupTarget);
+    setBreakdown(breakdown.bros, total);
+    setBreakdown(breakdown.honorary, honoraryTotal);
+  };
+
   $("#group-total").textContent = number.format(total);
   $("#goal-target").textContent = number.format(goal);
   $("#pushups-total").textContent = number.format(categoryTotals.pushups);
@@ -1032,15 +1068,30 @@ function render({ skipScroll = false } = {}) {
   $("#remaining-total").textContent = number.format(Math.max(0, goal - total));
   $("#goal-percent-value").textContent = `${percent}%`;
   $("#goal-percent").setAttribute("aria-label", `${percent}% done`);
-  $("#progress-fill").style.width = `${percent}%`;
-  $("#progress-target").style.width = `${targetPercent}%`;
-  $("#progress-pace").style.left = `${targetPercent}%`;
-  $(".progress-track").setAttribute("aria-valuenow", String(total));
-  $(".progress-track").setAttribute("aria-valuemax", String(goal));
-  $(".progress-track").setAttribute(
-    "aria-valuetext",
-    `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
-  );
+  applyGroupProgressBar({
+    track: $("#progress-track") || $(".progress-track"),
+    fill: $("#progress-fill"),
+    honoraryFill: $("#progress-honorary"),
+    target: $("#progress-target"),
+    pace: $("#progress-pace"),
+    breakdown: {
+      goal: $("#progress-breakdown-goal"),
+      daily: $("#progress-breakdown-daily"),
+      bros: $("#progress-breakdown-bros"),
+      honorary: $("#progress-breakdown-honorary"),
+    },
+  });
+  const homeTrack = $("#progress-track") || $(".progress-track");
+  if (homeTrack) {
+    homeTrack.setAttribute("aria-valuenow", String(total));
+    homeTrack.setAttribute("aria-valuemax", String(goal));
+    homeTrack.setAttribute(
+      "aria-valuetext",
+      honoraryTotal > 0
+        ? `${number.format(total)} of ${number.format(goal)}, plus ${number.format(honoraryTotal)} honorary`
+        : `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
+    );
+  }
   $("#pace-copy").textContent =
     goal > 0 && total >= goal
       ? "Challenge complete!"
@@ -1156,19 +1207,28 @@ function render({ skipScroll = false } = {}) {
   setText("#activity-goal-percent-value", `${percent}%`);
   const activityGoalPercent = $("#activity-goal-percent");
   if (activityGoalPercent) activityGoalPercent.setAttribute("aria-label", `${percent}% done`);
-  const activityFill = $("#activity-progress-fill");
-  if (activityFill) activityFill.style.width = `${percent}%`;
-  const activityTarget = $("#activity-progress-target");
-  if (activityTarget) activityTarget.style.width = `${targetPercent}%`;
-  const activityPace = $("#activity-progress-pace");
-  if (activityPace) activityPace.style.left = `${targetPercent}%`;
+  applyGroupProgressBar({
+    track: $("#activity-progress-track"),
+    fill: $("#activity-progress-fill"),
+    honoraryFill: $("#activity-progress-honorary"),
+    target: $("#activity-progress-target"),
+    pace: $("#activity-progress-pace"),
+    breakdown: {
+      goal: $("#activity-progress-breakdown-goal"),
+      daily: $("#activity-progress-breakdown-daily"),
+      bros: $("#activity-progress-breakdown-bros"),
+      honorary: $("#activity-progress-breakdown-honorary"),
+    },
+  });
   const activityTrack = $("#activity-progress-track");
   if (activityTrack) {
     activityTrack.setAttribute("aria-valuenow", String(total));
     activityTrack.setAttribute("aria-valuemax", String(goal));
     activityTrack.setAttribute(
       "aria-valuetext",
-      `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
+      honoraryTotal > 0
+        ? `${number.format(total)} of ${number.format(goal)}, plus ${number.format(honoraryTotal)} honorary`
+        : `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
     );
   }
   setText(
@@ -1544,37 +1604,10 @@ function menuHomePersonId() {
   return rememberedPersonId() || currentPersonId() || storedLastPersonId();
 }
 
-function isAddRepsTipDismissed() {
-  try {
-    return localStorage.getItem(ADD_REPS_TIP_DISMISS_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function dismissAddRepsTip() {
-  try {
-    localStorage.setItem(ADD_REPS_TIP_DISMISS_KEY, "1");
-  } catch {
-    /* ignore */
-  }
-  const tip = $("#hero-add-tip");
-  if (tip) tip.hidden = true;
-}
-
-function updateAddRepsTip() {
-  const tip = $("#hero-add-tip");
-  if (!tip) return;
-  // Tip lives inside #dashboard-page (already hidden off-home). Only dismiss hides it.
-  tip.hidden = isAddRepsTipDismissed();
-}
-
 function updateQuickAddButton() {
   const navButton = $("#nav-add-reps-button");
   const personId = rememberedPersonId();
   const first = personId ? getPerson(personId).name.split(" ")[0].toUpperCase() : "";
-
-  updateAddRepsTip();
 
   if (navButton) {
     if (personId) navButton.dataset.personId = personId;
@@ -3776,7 +3809,6 @@ $("#feed-day-filter")?.addEventListener("click", (event) => {
   renderFeedClearedToday({ smoothDayScroll: true });
 });
 $("#nav-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
-$("#hero-add-tip-dismiss")?.addEventListener("click", () => dismissAddRepsTip());
 $("#person-picker-grid").addEventListener("click", (event) => {
   const option = event.target.closest("[data-person-id]");
   if (!option) return;
@@ -4341,29 +4373,6 @@ function isCookiedVisitor() {
 }
 
 let wasShowingPersonPage = Boolean(parsePersonRoute());
-let homeNestleDone = false;
-
-function nestleAddRepsTip({ force = false } = {}) {
-  updateAddRepsTip();
-  if (currentPersonId() || !isCookiedVisitor()) return;
-  if (!force && homeNestleDone) return;
-  const target = $("#hero-add-tip");
-  if (!target || target.hidden) return;
-  homeNestleDone = true;
-
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const run = () => {
-    if (currentPersonId() || target.hidden) return;
-    const navHeight = $(".site-nav")?.offsetHeight || 64;
-    const top = Math.max(0, target.getBoundingClientRect().top + window.scrollY - navHeight - 12);
-    if (Math.abs(window.scrollY - top) < 6) return;
-    window.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
-  };
-
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(run);
-  });
-}
 
 function rulesShouldStartCollapsed() {
   try {
@@ -4404,7 +4413,6 @@ initThemeToggle();
 initRulesCollapse();
 wireRecipesSheetCta();
 render();
-nestleAddRepsTip();
 loadSharedState();
 tickOldchellaCountdown();
 window.setInterval(tickOldchellaCountdown, 1000);
