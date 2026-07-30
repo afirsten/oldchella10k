@@ -1214,7 +1214,17 @@ body.is-menu-open {
     gap: 12px 10px;
   }
   .activity-fun__grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 10px 6px;
+  }
+  .activity-fun__grid > div {
+    grid-column: span 2;
+  }
+  .activity-fun__grid > div:nth-child(4) {
+    grid-column: 2 / span 2;
+  }
+  .activity-fun__grid > div:nth-child(5) {
+    grid-column: 4 / span 2;
   }
   .activity-pulse {
     grid-template-columns: 1fr;
@@ -1248,7 +1258,6 @@ body.is-menu-open {
 }
 @media (max-width: 380px) {
   .activity-fun__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px 8px;
   }
 }
