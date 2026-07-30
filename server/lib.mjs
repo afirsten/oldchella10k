@@ -66,14 +66,9 @@ export async function authorize(request, personId, suppliedPin) {
   if (!PEOPLE.has(personId)) {
     throw httpError(400, "Unknown participant.");
   }
-  if (typeof pins[personId] !== "string") {
-    throw httpError(
-      400,
-      "PIN not configured for this participant. Add them to PARTICIPANT_PINS in Vercel, then redeploy.",
-    );
-  }
+
   const masterPin = process.env.MASTER_PIN || "";
-  if (!/^\d{4}$/.test(pins[personId]) || !/^\d{6}$/.test(masterPin)) {
+  if (!/^\d{6}$/.test(masterPin)) {
     throw httpError(500, "PIN protection is not configured.");
   }
 
@@ -88,6 +83,14 @@ export async function authorize(request, personId, suppliedPin) {
     return;
   }
 
+  const personPin = typeof pins[personId] === "string" ? pins[personId] : "";
+  if (!/^\d{4}$/.test(personPin)) {
+    throw httpError(
+      400,
+      "PIN not configured for this participant. Add them to PARTICIPANT_PINS in Vercel, then redeploy. (Master PIN still works.)",
+    );
+  }
+
   const attempts = Number((await redis(["GET", rateKey])) || 0);
   if (attempts >= RATE_LIMIT) {
     const error = httpError(429, LOCKOUT_MESSAGE);
@@ -95,7 +98,7 @@ export async function authorize(request, personId, suppliedPin) {
     throw error;
   }
 
-  if (timingSafeEqual(candidate, pins[personId])) {
+  if (timingSafeEqual(candidate, personPin)) {
     await redis(["DEL", rateKey]);
     return;
   }
