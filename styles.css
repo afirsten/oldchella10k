@@ -865,7 +865,7 @@ body.is-menu-open {
   position: absolute;
   left: 20px;
   right: 20px;
-  bottom: 0;
+  bottom: 16px;
   height: 1px;
   background: var(--line);
 }
@@ -1207,6 +1207,7 @@ body.is-menu-open {
   .activity-fun::after {
     left: 16px;
     right: 16px;
+    bottom: 24px;
   }
   .activity-mix__legend {
     grid-template-columns: repeat(2, minmax(0, 1fr));
