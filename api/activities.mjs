@@ -37,10 +37,13 @@ function parseActivityFields(body) {
     throw httpError(400, "Describe the other activity in 50 characters or fewer.");
   }
 
+  const injuryInput = exercise === "other" && Boolean(body.injuryInput);
+
   return {
     exercise,
     reps,
     otherActivity: exercise === "other" ? otherActivity : "",
+    injuryInput,
     percent: exercise === "other" ? reps : null,
     createdAt: parsedActivityDate.toISOString(),
   };

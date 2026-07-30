@@ -902,14 +902,39 @@
           <input id="exercise-input" name="exercise" type="hidden" value="pushups" />
         </div>
         <div id="other-field" hidden>
-          <input
-            id="other-input"
-            name="otherActivity"
-            type="text"
-            maxlength="50"
-            placeholder="Name your activity"
-            aria-label="Name your activity"
-          />
+          <div class="other-field-row">
+            <input
+              id="other-input"
+              name="otherActivity"
+              type="text"
+              maxlength="50"
+              placeholder="Name your activity"
+              aria-label="Name your activity"
+            />
+            <label class="injury-toggle">
+              <span class="injury-toggle__copy">
+                <span class="injury-toggle__label">
+                  Injury Input
+                  <span class="injury-toggle__beta">Beta</span>
+                  <span class="injury-toggle__tip" role="tooltip" id="injury-input-tip">
+                    Nursing a wing? Flip this on — it lets you chalk up pushups towards the 10k goal.
+                  </span>
+                </span>
+                <span class="injury-toggle__hint">Credits push-ups</span>
+              </span>
+              <input
+                id="injury-input-toggle"
+                name="injuryInput"
+                type="checkbox"
+                role="switch"
+                aria-label="Injury input — credit this other workout toward push-ups"
+                aria-describedby="injury-input-tip"
+              />
+              <span class="injury-toggle__track" aria-hidden="true">
+                <span class="injury-toggle__thumb"></span>
+              </span>
+            </label>
+          </div>
         </div>
         <div id="counter-field">
           <div class="amount-display">
@@ -927,11 +952,12 @@
                   id="reps-input"
                   class="amount-input"
                   name="reps"
-                  type="number"
+                  type="text"
                   inputmode="numeric"
-                  min="0"
-                  max="1000"
-                  step="1"
+                  pattern="[0-9]*"
+                  autocomplete="off"
+                  enterkeyhint="done"
+                  maxlength="4"
                   value="0"
                   aria-label="Activity amount"
                 />
@@ -993,35 +1019,38 @@
     </dialog>
 
     <dialog class="pin-dialog" id="pin-dialog">
-      <form id="pin-form">
-        <div class="dialog-heading">
-          <div>
-            <p class="eyebrow">PROTECTED CHANGE</p>
-            <h2>Enter your PIN</h2>
-          </div>
-          <button class="icon-button close-button" id="close-pin-button" type="button" aria-label="Cancel">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
-          </button>
-        </div>
-        <p class="pin-copy">
-          Use <strong id="pin-person-name"></strong>’s participant PIN or the master PIN.
-        </p>
-        <label for="pin-input">
-          PIN
+      <form id="pin-form" class="pin-form">
+        <button class="icon-button close-button pin-form__close" id="close-pin-button" type="button" aria-label="Cancel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+        </button>
+        <p class="pin-kicker">Protected change for <strong id="pin-person-name"></strong></p>
+        <h2 class="pin-title" id="pin-title">Enter your PIN code</h2>
+        <div class="pin-code" id="pin-code" data-digits="0">
           <input
             id="pin-input"
+            class="pin-code__input"
             name="pin"
-            type="password"
+            type="text"
             inputmode="numeric"
+            pattern="[0-9]*"
             autocomplete="one-time-code"
-            pattern="(?:[0-9]{4}|[0-9]{6})"
             maxlength="6"
+            enterkeyhint="done"
+            aria-labelledby="pin-title"
             required
           />
-        </label>
+          <div class="pin-code__cells" aria-hidden="true">
+            <span class="pin-code__cell" data-index="0"></span>
+            <span class="pin-code__cell" data-index="1"></span>
+            <span class="pin-code__cell" data-index="2"></span>
+            <span class="pin-code__cell" data-index="3"></span>
+            <span class="pin-code__cell pin-code__cell--extra" data-index="4"></span>
+            <span class="pin-code__cell pin-code__cell--extra" data-index="5"></span>
+          </div>
+        </div>
+        <p class="pin-hint">4-digit crew PIN, or keep typing for the 6-digit master PIN.</p>
         <p class="pin-error" id="pin-error" role="alert" hidden></p>
-        <p class="pin-help">A successful PIN is remembered on this browser until you clear site data.</p>
-        <button class="submit-button" type="submit">CONFIRM CHANGE</button>
+        <button class="submit-button" type="submit">CONFIRM</button>
       </form>
     </dialog>
 

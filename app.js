@@ -231,11 +231,28 @@ function activityExercise(activity) {
   return activity.exercise ?? "pushups";
 }
 
+function isInjuryInput(activity) {
+  return activityExercise(activity) === "other" && Boolean(activity.injuryInput);
+}
+
+/** Push-up credit when Other is logged as injury substitute (percent of daily push-up goal). */
+function injuryPushupCredit(activity) {
+  if (!isInjuryInput(activity)) return 0;
+  return Math.round(((Number(activity.reps) || 0) / 100) * DAILY_GOALS.pushups);
+}
+
+function dayHasInjuryPushupCredit(dayActivities) {
+  return dayActivities.some((activity) => injuryPushupCredit(activity) > 0);
+}
+
 function exerciseName(activity) {
   const exercise = activityExercise(activity);
   if (exercise === "squats") return "Squats";
   if (exercise === "planks") return "Plank";
-  if (exercise === "other") return activity.otherActivity || "Other activity";
+  if (exercise === "other") {
+    const name = activity.otherActivity || "Other activity";
+    return isInjuryInput(activity) ? `${name} + Injury Credits` : name;
+  }
   return "Push-ups";
 }
 
@@ -300,7 +317,10 @@ function formatShortDayLabel(isoDate) {
 function dayGoalProgress(dayActivities) {
   const totals = dayActivities.reduce(
     (sums, activity) => {
-      sums[activityExercise(activity)] += Number(activity.reps) || 0;
+      const exercise = activityExercise(activity);
+      const reps = Number(activity.reps) || 0;
+      sums[exercise] += reps;
+      sums.pushups += injuryPushupCredit(activity);
       return sums;
     },
     { pushups: 0, squats: 0, planks: 0, other: 0 },
@@ -430,7 +450,7 @@ function renderFeedDayFilter({ smoothScroll = false } = {}) {
       const { num, dow } = feedDayParts(key);
       const selected = key === selectedKey;
       const isToday = key === todayKey;
-      const label = isToday ? `Today, ${formatFeedDayLabel(key)}` : formatFeedDayLabel(key);
+      const label = formatFeedDayLabel(key);
       return `
         <button
           type="button"
@@ -442,7 +462,7 @@ function renderFeedDayFilter({ smoothScroll = false } = {}) {
           ${selected ? 'tabindex="0"' : 'tabindex="-1"'}
         >
           <span class="feed-day-filter__num">${num}</span>
-          <span class="feed-day-filter__dow">${isToday ? "NOW" : dow}</span>
+          <span class="feed-day-filter__dow">${isToday ? "TODAY" : dow}</span>
         </button>
       `;
     })
@@ -630,6 +650,7 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
   const compact = Boolean(options.compact);
   const { totals, percents, complete } = dayGoalProgress(dayActivities);
   const { lines } = dayGoalProgressLines(dayActivities);
+  const hasInjuryPushupCredit = dayHasInjuryPushupCredit(dayActivities);
   const boardScore = Math.round((percents.pushups + percents.squats + percents.planks) / 3);
   const fromPercents =
     !compact && pendingPulseReveal?.previousPercents ? pendingPulseReveal.previousPercents : null;
@@ -639,6 +660,7 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
       label: "PUSH-UPS",
       value: `${number.format(totals.pushups)} / ${number.format(DAILY_GOALS.pushups)}`,
       percent: percents.pushups,
+      injury: hasInjuryPushupCredit,
     },
     {
       key: "squats",
@@ -702,10 +724,14 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
           .map((meter) => {
             const to = meter.percent;
             const from = fromPercents ? Math.min(to, Number(fromPercents[meter.key]) || 0) : to;
+            const injuryClass = meter.injury ? " is-injury" : "";
+            const injuryTag = meter.injury
+              ? ` <span class="daily-pulse-injury-tag">INJURY</span>`
+              : "";
             return `
-              <div class="daily-pulse-row is-${meter.key}">
+              <div class="daily-pulse-row is-${meter.key}${injuryClass}">
                 <div class="daily-pulse-meta">
-                  <span>${meter.label}</span>
+                  <span>${meter.label}${injuryTag}</span>
                   <strong>${escapeHtml(meter.value)}</strong>
                 </div>
                 <div class="daily-pulse-track" aria-hidden="true">
@@ -769,6 +795,7 @@ function totalsByPerson() {
     const metrics = personActivities.reduce(
       (totals, activity) => {
         totals[activityExercise(activity)] += activity.reps;
+        totals.pushups += injuryPushupCredit(activity);
         return totals;
       },
       { pushups: 0, squats: 0, planks: 0, other: 0 },
@@ -1021,6 +1048,7 @@ function render({ skipScroll = false } = {}) {
     .reduce(
     (totals, activity) => {
       totals[activityExercise(activity)] += activity.reps;
+      totals.pushups += injuryPushupCredit(activity);
       return totals;
     },
     { pushups: 0, squats: 0, planks: 0, other: 0 },
@@ -1646,14 +1674,49 @@ function closePersonPicker() {
 
 let resolvePinPrompt = null;
 
+function syncPinCodeCells() {
+  const input = $("#pin-input");
+  const code = $("#pin-code");
+  if (!input || !code) return "";
+  const digits = String(input.value || "").replace(/\D+/g, "").slice(0, 6);
+  if (input.value !== digits) input.value = digits;
+  code.dataset.digits = String(digits.length);
+  const expanded = digits.length > 4;
+  const complete = digits.length === 4 || digits.length === 6;
+  code.querySelectorAll(".pin-code__cell").forEach((cell) => {
+    const index = Number(cell.dataset.index);
+    cell.classList.toggle("is-filled", index < digits.length);
+    cell.classList.toggle(
+      "is-active",
+      !complete && index === digits.length && (expanded || index < 4),
+    );
+  });
+  return digits;
+}
+
+let pinAutoSubmitTimer = null;
+
+function resetPinCodeUI() {
+  window.clearTimeout(pinAutoSubmitTimer);
+  pinAutoSubmitTimer = null;
+  const input = $("#pin-input");
+  if (input) input.value = "";
+  syncPinCodeCells();
+}
+
 function requestPin(personId, errorMessage = "") {
   const person = getPerson(personId);
   $("#pin-person-name").textContent = person.name;
   $("#pin-error").textContent = errorMessage;
   $("#pin-error").hidden = !errorMessage;
-  $("#pin-form").reset();
+  resetPinCodeUI();
   $("#pin-dialog").showModal();
-  window.setTimeout(() => $("#pin-input").focus(), 0);
+  window.setTimeout(() => {
+    const input = $("#pin-input");
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    syncPinCodeCells();
+  }, 0);
 
   return new Promise((resolve) => {
     resolvePinPrompt = resolve;
@@ -1661,6 +1724,8 @@ function requestPin(personId, errorMessage = "") {
 }
 
 function closePinPrompt(value = null) {
+  window.clearTimeout(pinAutoSubmitTimer);
+  pinAutoSubmitTimer = null;
   const resolve = resolvePinPrompt;
   resolvePinPrompt = null;
   $("#pin-dialog").close();
@@ -1699,10 +1764,13 @@ function parseLocalActivityFields(body) {
     throw new ApiError("Describe the other activity in 50 characters or fewer.", 400);
   }
 
+  const injuryInput = exercise === "other" && Boolean(body.injuryInput);
+
   return {
     exercise,
     reps,
     otherActivity: exercise === "other" ? otherActivity : "",
+    injuryInput,
     percent: exercise === "other" ? reps : null,
     createdAt: parsedActivityDate.toISOString(),
   };
@@ -2452,7 +2520,7 @@ function emptyLogDrafts() {
     pushups: { reps: 0 },
     squats: { reps: 0 },
     planks: { reps: 0 },
-    other: { reps: 0, otherActivity: "" },
+    other: { reps: 0, otherActivity: "", injuryInput: false },
   };
 }
 
@@ -2486,6 +2554,7 @@ function readCurrentExerciseDraft() {
     return {
       reps: Math.max(0, Math.min(100, reps)),
       otherActivity: $("#other-input").value.trim(),
+      injuryInput: Boolean($("#injury-input-toggle")?.checked),
     };
   }
   return { reps };
@@ -2505,10 +2574,11 @@ function draftEntries() {
     if (!Number.isInteger(reps) || reps < 1 || reps > 1000) return null;
     if (exercise === "other") {
       const otherActivity = (draft.otherActivity || "").trim();
-      if (!otherActivity) return { exercise, reps, otherActivity: "", invalid: "name" };
-      return { exercise, reps, otherActivity };
+      const injuryInput = Boolean(draft.injuryInput);
+      if (!otherActivity) return { exercise, reps, otherActivity: "", injuryInput, invalid: "name" };
+      return { exercise, reps, otherActivity, injuryInput };
     }
-    return { exercise, reps, otherActivity: "" };
+    return { exercise, reps, otherActivity: "", injuryInput: false };
   }).filter(Boolean);
 }
 
@@ -2540,9 +2610,11 @@ function updateAddSubmitLabel() {
 }
 
 function applyDraftToFields(exercise) {
-  const draft = logDrafts[exercise] || { reps: 0, otherActivity: "" };
+  const draft = logDrafts[exercise] || { reps: 0, otherActivity: "", injuryInput: false };
   if (exercise === "other") {
     $("#other-input").value = draft.otherActivity || "";
+    const injuryToggle = $("#injury-input-toggle");
+    if (injuryToggle) injuryToggle.checked = Boolean(draft.injuryInput);
   }
   setAmount(draft.reps || 0);
 }
@@ -2574,7 +2646,7 @@ function updateExerciseFields({ keepAmount = false } = {}) {
     suffix.setAttribute("aria-hidden", exercise === "other" ? "false" : "true");
   }
   $("#reps-input").setAttribute("aria-label", settings.label);
-  $("#reps-input").max = exercise === "other" ? "100" : "1000";
+  $("#reps-input").setAttribute("maxlength", exercise === "other" ? "3" : "4");
   $("#other-field").hidden = exercise !== "other";
   $("#other-input").required = false;
   quickButtons.forEach((button, index) => {
@@ -2688,6 +2760,8 @@ function openLogDialog(personId, options = {}) {
   if (activity) {
     exerciseInput.value = activityExercise(activity);
     $("#other-input").value = activity.otherActivity || "";
+    const injuryToggle = $("#injury-input-toggle");
+    if (injuryToggle) injuryToggle.checked = Boolean(activity.injuryInput);
     setAmount(activity.reps);
     updateExerciseFields({ keepAmount: true });
   } else {
@@ -3839,14 +3913,36 @@ dialog.addEventListener("close", () => {
 
 $("#pin-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  const pin = $("#pin-input").value.trim();
+  const pin = syncPinCodeCells();
   if (!/^(?:\d{4}|\d{6})$/.test(pin)) {
     $("#pin-error").textContent = "Enter a 4-digit participant PIN or 6-digit master PIN.";
     $("#pin-error").hidden = false;
+    $("#pin-input")?.focus();
     return;
   }
   closePinPrompt(pin);
 });
+$("#pin-input")?.addEventListener("input", () => {
+  const pin = syncPinCodeCells();
+  if ($("#pin-error") && !$("#pin-error").hidden) {
+    $("#pin-error").hidden = true;
+    $("#pin-error").textContent = "";
+  }
+  window.clearTimeout(pinAutoSubmitTimer);
+  pinAutoSubmitTimer = null;
+  if (pin.length === 6) {
+    closePinPrompt(pin);
+    return;
+  }
+  if (pin.length === 4) {
+    // Brief pause so a master PIN can continue to 6 digits.
+    pinAutoSubmitTimer = window.setTimeout(() => {
+      if (syncPinCodeCells() === pin) closePinPrompt(pin);
+    }, 520);
+  }
+});
+$("#pin-input")?.addEventListener("focus", () => syncPinCodeCells());
+$("#pin-code")?.addEventListener("click", () => $("#pin-input")?.focus());
 $("#close-pin-button").addEventListener("click", () => closePinPrompt());
 pinDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
@@ -3854,6 +3950,9 @@ pinDialog.addEventListener("cancel", (event) => {
 });
 pinDialog.addEventListener("click", (event) => {
   if (event.target === pinDialog) closePinPrompt();
+});
+pinDialog.addEventListener("close", () => {
+  resetPinCodeUI();
 });
 
 quickButtons.forEach((button) => {
@@ -3866,7 +3965,13 @@ quickButtons.forEach((button) => {
 $("#amount-minus")?.addEventListener("click", () => nudgeAmount(-1));
 $("#amount-plus")?.addEventListener("click", () => nudgeAmount(1));
 
-$("#reps-input").addEventListener("input", () => {
+$("#reps-input").addEventListener("focus", (event) => {
+  event.currentTarget.select();
+});
+$("#reps-input").addEventListener("input", (event) => {
+  const input = event.currentTarget;
+  const digits = String(input.value || "").replace(/\D+/g, "");
+  if (input.value !== digits) input.value = digits;
   saveCurrentDraft();
 });
 $("#reps-input").addEventListener("blur", (event) => {
@@ -3877,6 +3982,9 @@ $("#activity-date-input").addEventListener("change", () => {
   saveCurrentDraft();
 });
 $("#other-input").addEventListener("input", () => {
+  saveCurrentDraft();
+});
+$("#injury-input-toggle")?.addEventListener("change", () => {
   saveCurrentDraft();
 });
 
@@ -3913,6 +4021,7 @@ $("#log-form").addEventListener("submit", async (event) => {
         activityId,
         exercise,
         otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
+        injuryInput: exercise === "other" && Boolean($("#injury-input-toggle")?.checked),
         reps,
         activityDate,
       });
@@ -3927,7 +4036,12 @@ $("#log-form").addEventListener("submit", async (event) => {
       queuePulseReveal(personId, activityDate, boardCleared, previousPercents);
       showLogSuccess(
         personId,
-        [{ exercise, reps, otherActivity: result.activity.otherActivity || "" }],
+        [{
+          exercise,
+          reps,
+          otherActivity: result.activity.otherActivity || "",
+          injuryInput: Boolean(result.activity.injuryInput),
+        }],
         { boardCleared, activityDate },
       );
       render();
@@ -3960,6 +4074,7 @@ $("#log-form").addEventListener("submit", async (event) => {
         const result = await protectedRequest("/api/activities", "POST", personId, {
           exercise: entry.exercise,
           otherActivity: entry.otherActivity,
+          injuryInput: Boolean(entry.injuryInput),
           reps: entry.reps,
           activityDate,
         });
