@@ -63,8 +63,14 @@ export async function authorize(request, personId, suppliedPin) {
   } catch {
     throw httpError(500, "PIN protection is not configured.");
   }
-  if (!PEOPLE.has(personId) || typeof pins[personId] !== "string") {
+  if (!PEOPLE.has(personId)) {
     throw httpError(400, "Unknown participant.");
+  }
+  if (typeof pins[personId] !== "string") {
+    throw httpError(
+      400,
+      "PIN not configured for this participant. Add them to PARTICIPANT_PINS in Vercel, then redeploy.",
+    );
   }
   const masterPin = process.env.MASTER_PIN || "";
   if (!/^\d{4}$/.test(pins[personId]) || !/^\d{6}$/.test(masterPin)) {
