@@ -857,7 +857,7 @@ body.is-menu-open {
   grid-template-rows: auto 1fr;
   gap: var(--as-gap-sm, 12px);
   min-height: 174px;
-  padding: 14px 20px 36px;
+  padding: 14px 20px 52px;
   position: relative;
 }
 .activity-fun::after {
@@ -1198,9 +1198,11 @@ body.is-menu-open {
   .activity-active {
     min-height: 120px;
   }
-  .activity-mix,
-  .activity-fun {
+  .activity-mix {
     padding: 20px 16px 16px;
+  }
+  .activity-fun {
+    padding: 20px 16px 40px;
   }
   .activity-fun::after {
     left: 16px;
