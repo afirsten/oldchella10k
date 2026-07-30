@@ -555,7 +555,6 @@ body.is-menu-open {
   row-gap: 0;
   align-items: stretch;
   min-height: 164px;
-  border-bottom: 1px solid var(--line);
 }
 .activity-gauge,
 .activity-best,
@@ -570,9 +569,16 @@ body.is-menu-open {
   padding: 16px 14px 16px;
   min-width: 0;
 }
-.activity-gauge,
-.activity-best {
-  border-right: 1px solid var(--line);
+.activity-gauge::before,
+.activity-best::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 1px;
+  height: 58%;
+  transform: translateY(-50%);
+  background: var(--line);
 }
 .activity-gauge__label,
 .activity-best__label,
@@ -757,7 +763,6 @@ body.is-menu-open {
   display: grid;
   gap: var(--as-gap-sm, 12px);
   padding: var(--as-gap-lg, 24px) 20px 20px;
-  border-bottom: 1px solid var(--line);
 }
 .activity-mix__head {
   display: flex;
@@ -849,9 +854,20 @@ body.is-menu-open {
 }
 .activity-fun {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: var(--as-gap-sm, 12px);
-  padding: var(--as-gap-lg, 24px) 20px 20px;
-  border-bottom: 1px solid var(--line);
+  min-height: 174px;
+  padding: 14px 20px 36px;
+  position: relative;
+}
+.activity-fun::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: 1px;
+  background: var(--line);
 }
 .activity-fun__head {
   display: flex;
@@ -863,6 +879,8 @@ body.is-menu-open {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px 4px;
+  align-content: center;
+  min-height: 0;
 }
 .activity-fun__grid > div {
   display: flex;
@@ -903,6 +921,7 @@ body.is-menu-open {
   font-weight: 700;
   letter-spacing: .06em;
   line-height: 1.25;
+  opacity: 0.65;
   text-wrap: balance;
 }
 .activity-fun__grid .is-beers > span { color: var(--terra); }
@@ -923,6 +942,7 @@ body.is-menu-open {
   font-size: 6.5px;
   font-weight: 700;
   letter-spacing: .08em;
+  opacity: 0.6;
 }
 .activity-pulse {
   display: grid;
@@ -933,10 +953,19 @@ body.is-menu-open {
 .activity-sessions {
   display: grid;
   gap: 10px;
-  align-content: center;
-  padding: 18px 16px;
-  border-right: 1px solid var(--line);
-  background: linear-gradient(160deg, rgba(232, 118, 58, .07), transparent 70%);
+  align-content: start;
+  align-self: stretch;
+  position: relative;
+  padding: 12px 16px 18px;
+}
+.activity-sessions::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 18px;
+  right: 0;
+  width: 1px;
+  background: var(--line);
 }
 .activity-sessions__ticks {
   display: grid;
@@ -944,6 +973,7 @@ body.is-menu-open {
   grid-template-rows: repeat(4, auto);
   gap: 3px 2px;
   width: 100%;
+  margin: 0;
 }
 .activity-sessions__ticks i {
   display: block;
@@ -990,11 +1020,19 @@ body.is-menu-open {
   grid-template-rows: auto 1fr;
   gap: 5px;
   justify-items: center;
-  padding: 16px 6px;
-  border-right: 1px solid var(--line);
+  position: relative;
+  padding: 12px 6px 16px;
   text-align: center;
 }
-.activity-pulse__stat:last-child { border-right: 0; }
+.activity-pulse__stat:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 16px;
+  right: 0;
+  width: 1px;
+  background: var(--line);
+}
 .activity-pulse__stat > span {
   overflow: hidden;
   color: var(--quiet);
@@ -1143,10 +1181,10 @@ body.is-menu-open {
   }
   .activity-gauge {
     grid-column: 1 / -1;
-    border-right: 0;
     border-bottom: 1px solid var(--line);
     padding-bottom: 20px;
   }
+  .activity-gauge::before { content: none; }
   .activity-gauge__label,
   .activity-best__label,
   .activity-active__label {
@@ -1157,15 +1195,16 @@ body.is-menu-open {
   .activity-active__body {
     grid-row: auto;
   }
-  .activity-best {
-    border-right: 1px solid var(--line);
-  }
   .activity-active {
     min-height: 120px;
   }
   .activity-mix,
   .activity-fun {
     padding: 20px 16px 16px;
+  }
+  .activity-fun::after {
+    left: 16px;
+    right: 16px;
   }
   .activity-mix__legend {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1178,9 +1217,11 @@ body.is-menu-open {
     grid-template-columns: 1fr;
   }
   .activity-sessions {
-    padding: 16px;
-    border-right: 0;
+    padding: 12px 16px 16px;
     border-bottom: 1px solid var(--line);
+  }
+  .activity-sessions::after {
+    content: none;
   }
   .activity-sessions__ticks {
     gap: 2px;
@@ -1192,9 +1233,9 @@ body.is-menu-open {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .activity-pulse__stat {
-    padding: 14px 6px;
+    padding: 12px 6px 14px;
   }
-  .activity-pulse__stat:nth-child(2n) { border-right: 0; }
+  .activity-pulse__stat:nth-child(2n)::before { content: none; }
   .activity-pulse__stat:nth-child(-n + 2) {
     border-bottom: 1px solid var(--line);
   }

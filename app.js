@@ -314,15 +314,16 @@ function setCompactMagnitude(el, ...values) {
 }
 
 /**
- * Rough kcal rates for crew burn (~BURN + SCAD OFFSETS). Generic means only.
- * - Push-ups / squats: kcal per rep
+ * Rough kcal rates for crew burn (~BURN + SCAD OFFSETS). Generic means only —
+ * generous fun scale (~2–2.5× conservative estimates), not a lab measurement.
+ * - Push-ups / squats: kcal per rep (~85 per 100 push-ups)
  * - Planks: kcal per minute (activity.reps stored as seconds)
  * - Other/workouts: logged as % of daily goal; 100% ≈ one daily push-up
  *   goal's burn → (other% / 100) * DAILY_GOALS.pushups * KCAL_PER_PUSHUP
  */
-const KCAL_PER_PUSHUP = 0.36;
-const KCAL_PER_SQUAT = 0.42;
-const KCAL_PER_PLANK_MIN = 3.5;
+const KCAL_PER_PUSHUP = 0.85;
+const KCAL_PER_SQUAT = 1.0;
+const KCAL_PER_PLANK_MIN = 6;
 
 function estimateCategoryCalories(categoryTotals) {
   const pushupCals = (categoryTotals.pushups || 0) * KCAL_PER_PUSHUP;
@@ -340,7 +341,7 @@ function estimateCategoryCalories(categoryTotals) {
  * of that item the crew's burn would offset / buy.
  */
 const KCAL_PER_RAIL_PUB_BEER = 150; // typical draft pint
-const KCAL_PER_VINNIE_PIZZA_SLICE = 285; // one Vinnie Van GoGo's slice
+const KCAL_PER_VINNIE_PIZZA_SLICE = 285; // one large Vinnie Van GoGo's slice
 const KCAL_PER_WET_WILLIES_CALL_A_CAB = 380; // frozen Call-a-Cab cocktail
 const KCAL_PER_LADY_AND_SONS_BISCUIT = 200; // cheese biscuit
 const KCAL_PER_WAREHOUSE_WING = 90; // one sauced wing
