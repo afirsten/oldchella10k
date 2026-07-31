@@ -264,16 +264,20 @@ body.is-menu-open .site-menu-panel {
   text-decoration: none;
   transition: background 120ms ease, border-color 120ms ease;
 }
-.site-menu-link:hover,
-.site-menu-link:focus-visible {
-  border-color: rgba(245, 200, 66, .28);
+.site-menu-link:hover {
   background: rgba(255, 160, 80, .08);
-  outline: none;
+}
+.site-menu-link:focus-visible {
+  outline: 2px solid rgba(245, 200, 66, .55);
+  outline-offset: 2px;
 }
 .site-menu-link[aria-current="page"] {
   border-color: rgba(245, 200, 66, .35);
   background:
     linear-gradient(105deg, rgba(255, 45, 120, .12), rgba(245, 200, 66, .08));
+}
+.site-menu-link[aria-current="page"]:focus-visible {
+  outline-color: rgba(245, 200, 66, .7);
 }
 .site-menu-link__icon {
   display: grid;
