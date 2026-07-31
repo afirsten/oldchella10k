@@ -4211,11 +4211,11 @@ function fireQuickAddConfetti(host, { boardCleared = false } = {}) {
 }
 
 $("#person-quick-add")?.addEventListener(
-  "touchend",
+  "touchstart",
   (event) => {
     const button = event.target.closest("[data-quick-exercise]");
     if (!button || button.disabled) return;
-    if (event.changedTouches.length !== 1 || event.targetTouches.length > 0) return;
+    if (event.touches.length !== 1) return;
     event.preventDefault();
     button.dataset.touchedAt = String(Date.now());
     quickAddActivity(button);
@@ -4226,7 +4226,7 @@ $("#person-quick-add")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-quick-exercise]");
   if (!button) return;
   const touchedAt = Number(button.dataset.touchedAt || 0);
-  if (touchedAt && Date.now() - touchedAt < 400) return;
+  if (touchedAt && Date.now() - touchedAt < 450) return;
   quickAddActivity(button);
 });
 
@@ -4343,17 +4343,18 @@ pinDialog.addEventListener("close", () => {
 function onPress(element, handler) {
   if (!element) return;
   let touchedRecently = false;
+  // touchstart + preventDefault is the reliable iOS path: each rapid tap fires
+  // the action and Safari never gets a chance to treat it as double-tap zoom.
   element.addEventListener(
-    "touchend",
+    "touchstart",
     (event) => {
-      if (event.changedTouches.length !== 1 || event.targetTouches.length > 0) return;
-      // Prevent the ghost click and iOS double-tap zoom; run the action on touch.
+      if (event.touches.length !== 1) return;
       event.preventDefault();
       touchedRecently = true;
       handler(event);
       window.setTimeout(() => {
         touchedRecently = false;
-      }, 400);
+      }, 450);
     },
     { passive: false }
   );
