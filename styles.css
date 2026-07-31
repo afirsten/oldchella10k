@@ -98,7 +98,11 @@ body {
   font-size: 14.5px;
 }
 button, input, select { font: inherit; }
-button { color: inherit; }
+button {
+  color: inherit;
+  /* Prevent iOS/Android double-tap zoom when rapidly tapping add-rep controls. */
+  touch-action: manipulation;
+}
 
 .app-shell {
   width: min(100%, 760px);
