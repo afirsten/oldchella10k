@@ -4210,9 +4210,23 @@ function fireQuickAddConfetti(host, { boardCleared = false } = {}) {
   return fire;
 }
 
+$("#person-quick-add")?.addEventListener(
+  "touchend",
+  (event) => {
+    const button = event.target.closest("[data-quick-exercise]");
+    if (!button || button.disabled) return;
+    if (event.changedTouches.length !== 1 || event.targetTouches.length > 0) return;
+    event.preventDefault();
+    button.dataset.touchedAt = String(Date.now());
+    quickAddActivity(button);
+  },
+  { passive: false }
+);
 $("#person-quick-add")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-quick-exercise]");
   if (!button) return;
+  const touchedAt = Number(button.dataset.touchedAt || 0);
+  if (touchedAt && Date.now() - touchedAt < 400) return;
   quickAddActivity(button);
 });
 
