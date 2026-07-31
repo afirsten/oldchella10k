@@ -62,20 +62,18 @@
     <script>
       // Kill iOS double-tap zoom early. Safari often ignores viewport user-scalable.
       (function () {
-        var lastTouch = 0;
+        var lastTouchEnd = 0;
         var opts = { capture: true, passive: false };
-        function blockDoubleTap(event) {
+        function blockIfDoubleTap(event) {
           if (event.touches && event.touches.length > 1) return;
-          var now = Date.now();
-          if (now - lastTouch <= 350) event.preventDefault();
-          lastTouch = now;
+          if (Date.now() - lastTouchEnd <= 350) event.preventDefault();
         }
-        document.addEventListener("touchstart", blockDoubleTap, opts);
-        document.addEventListener("touchend", blockDoubleTap, opts);
+        document.addEventListener("touchstart", blockIfDoubleTap, opts);
         document.addEventListener(
-          "gesturestart",
+          "touchend",
           function (event) {
-            event.preventDefault();
+            blockIfDoubleTap(event);
+            lastTouchEnd = Date.now();
           },
           opts
         );
