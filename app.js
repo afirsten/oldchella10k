@@ -4852,8 +4852,17 @@ function openSiteMenu() {
     reveal();
   }
 
-  const first = menu.querySelector(".site-menu-link:not([hidden])");
-  if (first) window.setTimeout(() => first.focus(), 0);
+  // Focus the current route (not always the first row). Autofocusing "My home"
+  // while Home is aria-current made two items look selected on open.
+  const current = menu.querySelector('.site-menu-link[aria-current="page"]:not([hidden])');
+  const fallback = menu.querySelector(".site-menu-panel");
+  const focusTarget = current || fallback;
+  if (focusTarget) {
+    if (focusTarget === fallback && !fallback.hasAttribute("tabindex")) {
+      fallback.tabIndex = -1;
+    }
+    window.setTimeout(() => focusTarget.focus({ preventScroll: true }), 0);
+  }
 }
 
 function toggleSiteMenu() {
