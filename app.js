@@ -4210,9 +4210,23 @@ function fireQuickAddConfetti(host, { boardCleared = false } = {}) {
   return fire;
 }
 
+$("#person-quick-add")?.addEventListener(
+  "touchstart",
+  (event) => {
+    const button = event.target.closest("[data-quick-exercise]");
+    if (!button || button.disabled) return;
+    if (event.touches.length !== 1) return;
+    event.preventDefault();
+    button.dataset.touchedAt = String(Date.now());
+    quickAddActivity(button);
+  },
+  { passive: false }
+);
 $("#person-quick-add")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-quick-exercise]");
   if (!button) return;
+  const touchedAt = Number(button.dataset.touchedAt || 0);
+  if (touchedAt && Date.now() - touchedAt < 450) return;
   quickAddActivity(button);
 });
 
@@ -4326,15 +4340,39 @@ pinDialog.addEventListener("close", () => {
   resetPinCodeUI();
 });
 
+function onPress(element, handler) {
+  if (!element) return;
+  let touchedRecently = false;
+  // touchstart + preventDefault is the reliable iOS path: each rapid tap fires
+  // the action and Safari never gets a chance to treat it as double-tap zoom.
+  element.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length !== 1) return;
+      event.preventDefault();
+      touchedRecently = true;
+      handler(event);
+      window.setTimeout(() => {
+        touchedRecently = false;
+      }, 450);
+    },
+    { passive: false }
+  );
+  element.addEventListener("click", (event) => {
+    if (touchedRecently) return;
+    handler(event);
+  });
+}
+
 quickButtons.forEach((button) => {
-  button.addEventListener("click", () => {
+  onPress(button, () => {
     setAmount(Number($("#reps-input").value) + Number(button.dataset.increment));
     saveCurrentDraft();
   });
 });
 
-$("#amount-minus")?.addEventListener("click", () => nudgeAmount(-1));
-$("#amount-plus")?.addEventListener("click", () => nudgeAmount(1));
+onPress($("#amount-minus"), () => nudgeAmount(-1));
+onPress($("#amount-plus"), () => nudgeAmount(1));
 
 $("#reps-input").addEventListener("focus", (event) => {
   event.currentTarget.select();
