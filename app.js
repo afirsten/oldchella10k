@@ -4326,15 +4326,38 @@ pinDialog.addEventListener("close", () => {
   resetPinCodeUI();
 });
 
+function onPress(element, handler) {
+  if (!element) return;
+  let touchedRecently = false;
+  element.addEventListener(
+    "touchend",
+    (event) => {
+      if (event.changedTouches.length !== 1 || event.targetTouches.length > 0) return;
+      // Prevent the ghost click and iOS double-tap zoom; run the action on touch.
+      event.preventDefault();
+      touchedRecently = true;
+      handler(event);
+      window.setTimeout(() => {
+        touchedRecently = false;
+      }, 400);
+    },
+    { passive: false }
+  );
+  element.addEventListener("click", (event) => {
+    if (touchedRecently) return;
+    handler(event);
+  });
+}
+
 quickButtons.forEach((button) => {
-  button.addEventListener("click", () => {
+  onPress(button, () => {
     setAmount(Number($("#reps-input").value) + Number(button.dataset.increment));
     saveCurrentDraft();
   });
 });
 
-$("#amount-minus")?.addEventListener("click", () => nudgeAmount(-1));
-$("#amount-plus")?.addEventListener("click", () => nudgeAmount(1));
+onPress($("#amount-minus"), () => nudgeAmount(-1));
+onPress($("#amount-plus"), () => nudgeAmount(1));
 
 $("#reps-input").addEventListener("focus", (event) => {
   event.currentTarget.select();

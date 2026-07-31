@@ -85,6 +85,8 @@
 html {
   background: var(--background);
   font-size: 90%;
+  /* Disable double-tap zoom site-wide; pinch zoom still works where supported. */
+  touch-action: manipulation;
 }
 body {
   margin: 0;
@@ -96,11 +98,11 @@ body {
     var(--background);
   color: var(--ink);
   font-size: 14.5px;
+  touch-action: manipulation;
 }
 button, input, select { font: inherit; }
 button {
   color: inherit;
-  /* Prevent iOS/Android double-tap zoom when rapidly tapping add-rep controls. */
   touch-action: manipulation;
 }
 
