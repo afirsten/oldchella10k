@@ -4695,9 +4695,9 @@ function challengeDaysLeftInclusive(asOf = new Date()) {
 }
 
 function tickOldchellaCountdown() {
+  // Match https://goingtoliveforever.com/ exactly: floor(ms) + 3-digit days.
   const diff = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
-  // Calendar remaining (not floor(ms)): stays aligned with Day D so D + days === 100.
-  const dayCount = challengeDaysRemaining();
+  const dayCount = Math.floor(diff / 86400000);
   const hourCount = Math.floor((diff % 86400000) / 3600000);
   const minCount = Math.floor((diff % 3600000) / 60000);
   const secCount = Math.floor((diff % 60000) / 1000);
@@ -4724,7 +4724,7 @@ function tickOldchellaCountdown() {
   const mins = $("#activity-cd-mins");
   const secs = $("#activity-cd-secs");
   if (days && hours && mins && secs) {
-    days.textContent = String(dayCount);
+    days.textContent = String(dayCount).padStart(3, "0");
     hours.textContent = String(hourCount).padStart(2, "0");
     mins.textContent = String(minCount).padStart(2, "0");
     secs.textContent = String(secCount).padStart(2, "0");
@@ -4732,7 +4732,7 @@ function tickOldchellaCountdown() {
     if (activityCountdown) {
       activityCountdown.setAttribute(
         "aria-label",
-        `${dayCount} days, ${hourCount} hours, ${minCount} minutes, ${secCount} seconds left in the challenge — open Going To Live Forever`,
+        `${dayCount} days, ${hourCount} hours, ${minCount} minutes, ${secCount} seconds until Old-Chella — open Going To Live Forever`,
       );
     }
   }
