@@ -156,6 +156,12 @@ const seedActivities = [
 const $ = (selector) => document.querySelector(selector);
 const number = new Intl.NumberFormat("en-US");
 const durationNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
+/** Other workouts are logged as % effort; 100% = 1 workout unit (e.g. 50+50+75 → 1.75). */
+const workoutNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+
+function otherWorkoutUnits(otherPercentSum) {
+  return (Number(otherPercentSum) || 0) / 100;
+}
 
 function loadActivities() {
   try {
@@ -2658,15 +2664,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const targetPercent = Math.round((targetReps / GOAL_PER_PERSON) * 100);
   const paceDelta = personStats.total - targetReps;
   const plankMinutes = personStats.metrics.planks / 60;
-  const fullOtherDays = new Set(
-    history
-      .filter(
-        (activity) =>
-          activityExercise(activity) === "other" &&
-          Number(activity.percent ?? activity.reps) >= 100,
-      )
-      .map((activity) => activity.createdAt.slice(0, 10)),
-  ).size;
+  const workoutUnits = otherWorkoutUnits(personStats.metrics.other);
 
   $("#person-avatar").src = person.image;
   $("#person-avatar").alt = `${person.name} profile photo`;
@@ -2735,13 +2733,13 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-squats-total").textContent = number.format(personStats.metrics.squats);
   $("#person-plank-minutes").innerHTML =
     `${durationNumber.format(plankMinutes)}<span class="stat-unit">MIN</span>`;
-  $("#person-other-days").textContent = number.format(fullOtherDays);
+  $("#person-other-days").textContent = workoutNumber.format(workoutUnits);
   setCompactMagnitude(
     $(".personal-breakdown"),
     personStats.metrics.pushups,
     personStats.metrics.squats,
     plankMinutes,
-    fullOtherDays,
+    workoutUnits,
   );
   $("#person-sessions").textContent = number.format(personStats.sessions);
   $("#person-sessions-label").textContent = personStats.sessions === 1 ? "day" : "days";
@@ -2754,8 +2752,8 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-avg-planks").textContent = durationNumber.format(
     averageFor("planks", plankMinutes),
   );
-  $("#person-avg-other").textContent = number.format(
-    Math.round(averageFor("other", personStats.metrics.other)),
+  $("#person-avg-other").textContent = workoutNumber.format(
+    averageFor("other", workoutUnits),
   );
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   const historyGroups = [...historyByDate];
@@ -3579,24 +3577,16 @@ function personChallengeStats(personId) {
   };
   const metrics = personStats?.metrics || { pushups: 0, squats: 0, planks: 0, other: 0 };
   const plankMinutes = metrics.planks / 60;
-  const fullOtherDays = new Set(
-    history
-      .filter(
-        (activity) =>
-          activityExercise(activity) === "other" &&
-          Number(activity.percent ?? activity.reps) >= 100,
-      )
-      .map((activity) => activity.createdAt.slice(0, 10)),
-  ).size;
+  const workoutUnits = otherWorkoutUnits(metrics.other);
   return {
     pushups: metrics.pushups,
     squats: metrics.squats,
     plankMinutes,
-    workouts: fullOtherDays,
+    workouts: workoutUnits,
     avgPushups: Math.round(averageFor("pushups", metrics.pushups)),
     avgSquats: Math.round(averageFor("squats", metrics.squats)),
     avgPlanks: averageFor("planks", plankMinutes),
-    avgOther: Math.round(averageFor("other", metrics.other)),
+    avgOther: averageFor("other", workoutUnits),
   };
 }
 
@@ -3824,8 +3814,8 @@ async function buildDailyGoalMetImage(personId, dateKey) {
     },
     {
       label: "WORKOUTS",
-      value: number.format(stats.workouts),
-      avg: number.format(stats.avgOther),
+      value: workoutNumber.format(stats.workouts),
+      avg: workoutNumber.format(stats.avgOther),
     },
   ];
   const colW = statsW / cols.length;
