@@ -1,7 +1,7 @@
 function workout(personId, date, { pushups, squats, plankMinutes, pushupNote, setNote, run = false }) {
   const createdAt = `${date}T18:00:00`;
   const entries = [];
-  const add = (exercise, reps, note = "", otherActivity = "", percent = null) =>
+  const add = (exercise, reps, note = "", otherActivity = "", percent = null, extra = {}) =>
     entries.push({
       id: `${personId}-${date}-${exercise === "other" ? "run" : exercise}`,
       personId,
@@ -11,12 +11,13 @@ function workout(personId, date, { pushups, squats, plankMinutes, pushupNote, se
       percent,
       note,
       createdAt,
+      ...extra,
     });
 
   if (pushups) add("pushups", pushups, pushupNote || setNote || "");
   if (squats) add("squats", squats, setNote || "");
   if (plankMinutes) add("planks", plankMinutes * 60, `${plankMinutes} × 1 min`);
-  if (run) add("other", 100, "", "Run", 100);
+  if (run) add("other", 100, "", "Run", 100, { otherType: "workouts" });
   return entries;
 }
 

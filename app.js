@@ -22,6 +22,10 @@ const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
 const RULES_COLLAPSE_KEY = "rippedchella-rules-collapsed-v1";
+const DAY_CHART_RANGE_KEY = "rippedchella-day-chart-range-v1";
+const DAY_CHART_OFFSET_KEY = "rippedchella-day-chart-offset-v1";
+const DAY_CHART_RANGES = [10, 25, 50, 100];
+const DEFAULT_DAY_CHART_RANGE = 100;
 
 function getPreferredTheme() {
   try {
@@ -123,6 +127,7 @@ function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setN
       personId,
       exercise: "other",
       otherActivity: "Run",
+      otherType: "workouts",
       reps: 100,
       percent: 100,
       note: "",
@@ -237,14 +242,35 @@ function activityExercise(activity) {
   return activity.exercise ?? "pushups";
 }
 
+function isWeightActivity(activity) {
+  return activityExercise(activity) === "weight";
+}
+
+/** Other subtype: workouts (%) | reps (misc count) | time (minutes). Legacy Other → workouts. */
+function otherTypeOf(activity) {
+  if (activityExercise(activity) !== "other") return "";
+  const type = activity.otherType;
+  if (type === "reps" || type === "time") return type;
+  return "workouts";
+}
+
 function isInjuryInput(activity) {
   return activityExercise(activity) === "other" && Boolean(activity.injuryInput);
 }
 
-/** Push-up credit when Other is logged as injury substitute (percent of daily push-up goal). */
+/**
+ * Push-up credit when Other is logged with Injury Input on:
+ * - Workouts %: 100% → 100 reps (percent/100 × daily push-up goal)
+ * - Misc reps: count as-is (100 → 100)
+ * - Time: minutes × (100/30)
+ */
 function injuryPushupCredit(activity) {
   if (!isInjuryInput(activity)) return 0;
-  return Math.round(((Number(activity.reps) || 0) / 100) * DAILY_GOALS.pushups);
+  const amount = Number(activity.reps) || 0;
+  const type = otherTypeOf(activity);
+  if (type === "reps") return Math.round(amount);
+  if (type === "time") return Math.round(amount * (100 / 30));
+  return Math.round((amount / 100) * DAILY_GOALS.pushups);
 }
 
 function dayHasInjuryPushupCredit(dayActivities) {
@@ -255,6 +281,7 @@ function exerciseName(activity) {
   const exercise = activityExercise(activity);
   if (exercise === "squats") return "Squats";
   if (exercise === "planks") return "Plank";
+  if (exercise === "weight") return "Weight";
   if (exercise === "other") {
     const name = activity.otherActivity || "Other activity";
     return isInjuryInput(activity) ? `${name} + Injury Credits` : name;
@@ -263,8 +290,15 @@ function exerciseName(activity) {
 }
 
 function exerciseUnit(activity) {
-  if (activityExercise(activity) === "planks") return "MIN";
-  if (activityExercise(activity) === "other") return "% GOAL";
+  const exercise = activityExercise(activity);
+  if (exercise === "planks") return "MIN";
+  if (exercise === "weight") return "LB";
+  if (exercise === "other") {
+    const type = otherTypeOf(activity);
+    if (type === "reps") return "REPS";
+    if (type === "time") return "MIN";
+    return "% GOAL";
+  }
   return "REPS";
 }
 
@@ -278,8 +312,30 @@ function formatActivityAmount(activity) {
 
 function formatActivityLead(activity) {
   const amount = formatActivityAmount(activity);
-  if (activityExercise(activity) === "planks") return `+${amount} MIN`;
+  const exercise = activityExercise(activity);
+  if (exercise === "planks") return `+${amount} MIN`;
+  if (exercise === "weight") return `${amount} LB`;
+  if (exercise === "other") {
+    const type = otherTypeOf(activity);
+    if (type === "time") return `+${amount} MIN`;
+    if (type === "workouts") return `+${amount}%`;
+  }
   return `+${amount}`;
+}
+
+/** Add activity amounts into challenge metrics (skips personal-only weight). */
+function accumulateChallengeMetrics(totals, activity) {
+  const exercise = activityExercise(activity);
+  if (exercise === "weight") return totals;
+  if (exercise === "other") {
+    if (otherTypeOf(activity) === "workouts") {
+      totals.other += Number(activity.reps) || 0;
+    }
+  } else if (Object.prototype.hasOwnProperty.call(totals, exercise)) {
+    totals[exercise] += Number(activity.reps) || 0;
+  }
+  totals.pushups += injuryPushupCredit(activity);
+  return totals;
 }
 
 function formatPlankMinutes(seconds) {
@@ -326,6 +382,7 @@ function setCompactMagnitude(el, ...values) {
  * - Planks: kcal per minute (activity.reps stored as seconds)
  * - Other/workouts: logged as % of daily goal; 100% ≈ one daily push-up
  *   goal's burn → (other% / 100) * DAILY_GOALS.pushups * KCAL_PER_PUSHUP
+ *   (misc reps / time Other entries are excluded from this other% sum)
  */
 const KCAL_PER_PUSHUP = 0.85;
 const KCAL_PER_SQUAT = 1.0;
@@ -384,6 +441,7 @@ function bestGroupDay(participantIds) {
   for (const activity of activities) {
     if (!participantIds.has(activity.personId)) continue;
     if (activityExercise(activity) === "planks") continue;
+    if (isWeightActivity(activity)) continue;
     // Local calendar day so bucketing matches weekDateKeys / feed.
     const day = activityDateKey(activity);
     if (!byDay.has(day)) continue;
@@ -407,15 +465,242 @@ function bestGroupDay(participantIds) {
   return { days, reps: bestReps, date: bestDate, label: bestLabel };
 }
 
+/**
+ * Local calendar date key for challenge day N (1 = CHALLENGE_START … CHALLENGE_DAYS).
+ */
+function challengeDayDateKey(dayNumber) {
+  const start = new Date(`${CHALLENGE_START}T12:00:00`);
+  start.setDate(start.getDate() + (dayNumber - 1));
+  return localDateValue(start);
+}
+
+/**
+ * Per-day stack for the person chart: goal-fraction units so categories are comparable.
+ * 1.0 = one daily goal (100 PU / 100 SQ / 4 min plank / 100% Other workouts).
+ * Weight logs skipped; Other misc reps/time only affect stacks via injury → pushups.
+ */
+function personChallengeDayStacks(personId) {
+  const days = Array.from({ length: CHALLENGE_DAYS }, (_, index) => ({
+    day: index + 1,
+    dateKey: challengeDayDateKey(index + 1),
+    totals: { pushups: 0, squats: 0, planks: 0, other: 0 },
+  }));
+  const startMs = new Date(`${CHALLENGE_START}T12:00:00`).getTime();
+
+  for (const activity of activities) {
+    if (activity.personId !== personId) continue;
+    if (isWeightActivity(activity)) continue;
+    const key = activityDateKey(activity);
+    const idx = Math.floor((new Date(`${key}T12:00:00`).getTime() - startMs) / 86400000);
+    if (idx < 0 || idx >= CHALLENGE_DAYS) continue;
+    accumulateChallengeMetrics(days[idx].totals, activity);
+  }
+
+  return days.map((day) => {
+    const { totals } = day;
+    const units = {
+      pushups: totals.pushups / DAILY_GOALS.pushups,
+      squats: totals.squats / DAILY_GOALS.squats,
+      planks: totals.planks / DAILY_GOALS.planks,
+      other: totals.other / 100,
+    };
+    const totalUnits = units.pushups + units.squats + units.planks + units.other;
+    return { ...day, units, totalUnits };
+  });
+}
+
+function formatDayChartTitle(day) {
+  const { day: n, totals, totalUnits } = day;
+  if (totalUnits <= 0) return `Day ${n} · no activity`;
+  const parts = [];
+  if (totals.pushups) parts.push(`${number.format(totals.pushups)} PU`);
+  if (totals.squats) parts.push(`${number.format(totals.squats)} SQ`);
+  if (totals.planks) parts.push(`${formatPlankMinutes(totals.planks)} MIN PL`);
+  if (totals.other) parts.push(`${number.format(totals.other)}% OT`);
+  return `Day ${n} · ${parts.join(" · ")}`;
+}
+
+function normalizeDayChartRange(value) {
+  const n = Number(value);
+  return DAY_CHART_RANGES.includes(n) ? n : DEFAULT_DAY_CHART_RANGE;
+}
+
+function getPersonDayChartRange() {
+  try {
+    return normalizeDayChartRange(localStorage.getItem(DAY_CHART_RANGE_KEY));
+  } catch {
+    return DEFAULT_DAY_CHART_RANGE;
+  }
+}
+
+function getPersonDayChartOffsetRaw() {
+  try {
+    const raw = Number(localStorage.getItem(DAY_CHART_OFFSET_KEY));
+    if (!Number.isFinite(raw) || raw < 0) return 0;
+    return Math.floor(raw);
+  } catch {
+    return 0;
+  }
+}
+
+/** Latest inclusive end day for the chart (through today; pads to range while early). */
+function personDayChartLatestEnd(range = getPersonDayChartRange()) {
+  const n = normalizeDayChartRange(range);
+  const today = currentChallengeDay();
+  return Math.min(CHALLENGE_DAYS, Math.max(today, n));
+}
+
+/**
+ * Visible window of `range` challenge days, paged back from the latest end by `offset`
+ * windows. Offset 0 = through today (or early pad); higher offset = earlier days.
+ */
+function personDayChartWindow(range = getPersonDayChartRange(), offset = getPersonDayChartOffsetRaw()) {
+  const n = normalizeDayChartRange(range);
+  const latestEnd = personDayChartLatestEnd(n);
+  const latestStart = latestEnd - n + 1;
+  const maxOffset = Math.max(0, Math.ceil((latestStart - 1) / n));
+  const o = Math.min(Math.max(0, Math.floor(Number(offset) || 0)), maxOffset);
+  let start = latestStart - o * n;
+  if (start < 1) start = 1;
+  const end = start + n - 1;
+  return { start, end, offset: o, maxOffset, range: n };
+}
+
+function getPersonDayChartOffset() {
+  return personDayChartWindow().offset;
+}
+
+function persistPersonDayChartOffset(offset) {
+  try {
+    localStorage.setItem(DAY_CHART_OFFSET_KEY, String(Math.max(0, Math.floor(Number(offset) || 0))));
+  } catch {
+    /* preference optional if storage blocked */
+  }
+}
+
+function slicePersonDayChartDays(days, range, offset) {
+  const { start, end } = personDayChartWindow(range, offset);
+  return days.slice(start - 1, end);
+}
+
+function syncPersonDayChartRangeUI(range, offset) {
+  const win = personDayChartWindow(range, offset);
+  const { start, end, offset: o, maxOffset, range: n } = win;
+  const chart = $("#person-day-chart");
+  if (chart) {
+    chart.setAttribute(
+      "aria-label",
+      `Challenge day composition — days ${start}–${end}`,
+    );
+  }
+  const tabs = $(".personal-day-chart__range");
+  if (tabs) tabs.dataset.active = String(n);
+  document.querySelectorAll("[data-day-range]").forEach((button) => {
+    const selected = Number(button.dataset.dayRange) === n;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", selected ? "true" : "false");
+  });
+
+  const pager = $("#person-day-chart-pager");
+  const prev = $("#person-day-chart-prev");
+  const next = $("#person-day-chart-next");
+  if (pager) pager.hidden = maxOffset === 0;
+  if (prev) {
+    prev.disabled = o >= maxOffset;
+    prev.setAttribute(
+      "aria-label",
+      o >= maxOffset ? "Earlier days unavailable" : `Earlier days before day ${start}`,
+    );
+  }
+  if (next) {
+    next.disabled = o <= 0;
+    next.setAttribute(
+      "aria-label",
+      o <= 0 ? "Later days unavailable" : `Later days after day ${end}`,
+    );
+  }
+}
+
+function setPersonDayChartRange(range) {
+  const n = normalizeDayChartRange(range);
+  try {
+    localStorage.setItem(DAY_CHART_RANGE_KEY, String(n));
+  } catch {
+    /* preference optional if storage blocked */
+  }
+  persistPersonDayChartOffset(0);
+  syncPersonDayChartRangeUI(n, 0);
+  const personId = currentPersonId();
+  if (personId) renderPersonDayChart(personId);
+}
+
+function setPersonDayChartOffset(offset) {
+  const win = personDayChartWindow(getPersonDayChartRange(), offset);
+  persistPersonDayChartOffset(win.offset);
+  syncPersonDayChartRangeUI(win.range, win.offset);
+  const personId = currentPersonId();
+  if (personId) renderPersonDayChart(personId);
+}
+
+function initPersonDayChartRange() {
+  const range = getPersonDayChartRange();
+  const offset = getPersonDayChartOffset();
+  syncPersonDayChartRangeUI(range, offset);
+  document.querySelectorAll("[data-day-range]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const next = normalizeDayChartRange(button.dataset.dayRange);
+      if (next === getPersonDayChartRange()) return;
+      setPersonDayChartRange(next);
+    });
+  });
+  const prev = $("#person-day-chart-prev");
+  const next = $("#person-day-chart-next");
+  if (prev) {
+    prev.addEventListener("click", () => {
+      setPersonDayChartOffset(getPersonDayChartOffset() + 1);
+    });
+  }
+  if (next) {
+    next.addEventListener("click", () => {
+      setPersonDayChartOffset(getPersonDayChartOffset() - 1);
+    });
+  }
+}
+
+function renderPersonDayChart(personId) {
+  const barsEl = $("#person-day-chart-bars");
+  if (!barsEl) return;
+
+  const range = getPersonDayChartRange();
+  const offset = getPersonDayChartOffset();
+  syncPersonDayChartRangeUI(range, offset);
+  const days = slicePersonDayChartDays(personChallengeDayStacks(personId), range, offset);
+  const maxUnits = Math.max(1, ...days.map((day) => day.totalUnits));
+  const todayKey = localDateValue();
+
+  barsEl.innerHTML = days
+    .map((day) => {
+      const isToday = day.dateKey === todayKey;
+      const title = escapeHtml(formatDayChartTitle(day));
+      if (day.totalUnits <= 0) {
+        return `<div class="personal-day-chart__col is-empty${isToday ? " is-today" : ""}" title="${title}"><div class="personal-day-chart__bar is-empty"></div></div>`;
+      }
+      const heightPct = Math.max(4, (day.totalUnits / maxUnits) * 100);
+      const segs = ["pushups", "squats", "planks", "other"]
+        .filter((key) => day.units[key] > 0)
+        .map(
+          (key) =>
+            `<span class="is-${key}" style="flex:${day.units[key].toFixed(4)} 0 0"></span>`,
+        )
+        .join("");
+      return `<div class="personal-day-chart__col${isToday ? " is-today" : ""}" title="${title}"><div class="personal-day-chart__bar" style="height:${heightPct.toFixed(2)}%">${segs}</div></div>`;
+    })
+    .join("");
+}
+
 function dayGoalProgress(dayActivities) {
   const totals = dayActivities.reduce(
-    (sums, activity) => {
-      const exercise = activityExercise(activity);
-      const reps = Number(activity.reps) || 0;
-      sums[exercise] += reps;
-      sums.pushups += injuryPushupCredit(activity);
-      return sums;
-    },
+    (sums, activity) => accumulateChallengeMetrics(sums, activity),
     { pushups: 0, squats: 0, planks: 0, other: 0 },
   );
   const percents = {
@@ -789,7 +1074,7 @@ function renderFeedPageActivityList() {
 
   const dateKey = ensureFeedSelectedDate();
   const dayActivities = [...activities]
-    .filter((activity) => activityDateKey(activity) === dateKey)
+    .filter((activity) => activityDateKey(activity) === dateKey && !isWeightActivity(activity))
     .sort(compareActivitiesRecentFirst);
   const isToday = dateKey === localDateValue();
   const emptyFeed = isToday
@@ -973,6 +1258,7 @@ function exerciseIcon(activity) {
     squats: "SQ",
     planks: "PL",
     other: "O",
+    weight: "WT",
   };
   const label = labels[exercise] || "PU";
   return `<span class="activity-icon is-${exercise}" aria-hidden="true">${label}</span>`;
@@ -1000,11 +1286,7 @@ function totalsByPerson() {
       (activity) => activityExercise(activity) === "pushups",
     );
     const metrics = personActivities.reduce(
-      (totals, activity) => {
-        totals[activityExercise(activity)] += activity.reps;
-        totals.pushups += injuryPushupCredit(activity);
-        return totals;
-      },
+      (totals, activity) => accumulateChallengeMetrics(totals, activity),
       { pushups: 0, squats: 0, planks: 0, other: 0 },
     );
     const primaryType = metrics.pushups > 0 ? "pushups" : metrics.other > 0 ? "other" : "pushups";
@@ -1014,7 +1296,11 @@ function totalsByPerson() {
       primaryType,
       total: metrics[primaryType],
       status: personStatus(person.id),
-      sessions: new Set(personActivities.map((activity) => activity.createdAt.slice(0, 10))).size,
+      sessions: new Set(
+        personActivities
+          .filter((activity) => !isWeightActivity(activity))
+          .map((activity) => activity.createdAt.slice(0, 10)),
+      ).size,
       pushupSessions: pushupActivities.length,
     };
   });
@@ -1126,12 +1412,32 @@ function activityCallout(activity) {
     return lines[seed % lines.length];
   }
   if (exercise === "other") {
+    const type = otherTypeOf(activity);
+    if (type === "reps") {
+      const lines = [
+        `Fresh drop: ${first} just logged ${amount} misc reps — ${label}.`,
+        `${first} banked ${amount} other reps (${label}). Side quest secured.`,
+        `+${amount} other reps from ${first}: ${label}.`,
+      ];
+      return lines[seed % lines.length];
+    }
+    if (type === "time") {
+      const lines = [
+        `Fresh drop: ${first} just logged ${amount} min on Other — ${label}.`,
+        `${first} put in ${amount} min Other (${label}). Clock still counts.`,
+        `+${amount} min Other from ${first}: ${label}.`,
+      ];
+      return lines[seed % lines.length];
+    }
     const lines = [
       `Fresh drop: ${first} just added ${amount}% on Other — ${label}.`,
       `${first} slipped in ${amount}% Other (${label}). The side quest counts.`,
       `+${amount}% Other from ${first}: ${label}.`,
     ];
     return lines[seed % lines.length];
+  }
+  if (exercise === "weight") {
+    return null;
   }
   if (exercise === "squats") {
     const lines = [
@@ -1298,11 +1604,7 @@ function render({ skipScroll = false } = {}) {
   const categoryTotals = activities
     .filter((activity) => participantIds.has(activity.personId))
     .reduce(
-    (totals, activity) => {
-      totals[activityExercise(activity)] += activity.reps;
-      totals.pushups += injuryPushupCredit(activity);
-      return totals;
-    },
+    (totals, activity) => accumulateChallengeMetrics(totals, activity),
     { pushups: 0, squats: 0, planks: 0, other: 0 },
   );
 
@@ -1463,7 +1765,9 @@ function render({ skipScroll = false } = {}) {
   const leaderboardPageList = $("#leaderboard-page-list");
   if (leaderboardPageList) leaderboardPageList.innerHTML = leaderboardHtml;
 
-  const recent = [...activities].sort(compareActivitiesRecentFirst);
+  const recent = [...activities]
+    .filter((activity) => !isWeightActivity(activity))
+    .sort(compareActivitiesRecentFirst);
   const emptyFeed = '<div class="empty-state">No reps yet. Be the first to get moving.</div>';
   $("#activity-list").innerHTML = recent.length
     ? recent.slice(0, 8).map(activityFeedItemHtml).join("")
@@ -2040,7 +2344,9 @@ function parseLocalActivityFields(body) {
     typeof body.otherActivity === "string" ? body.otherActivity.trim() : "";
   const activityDate = typeof body.activityDate === "string" ? body.activityDate : "";
   const parsedActivityDate = new Date(`${activityDate}T12:00:00.000Z`);
-  const allowed = new Set(["pushups", "squats", "planks", "other"]);
+  const allowed = new Set(["pushups", "squats", "planks", "other", "weight"]);
+  const otherTypes = new Set(["workouts", "reps", "time"]);
+  const rawOtherType = typeof body.otherType === "string" ? body.otherType.trim() : "";
 
   if (!allowed.has(exercise)) throw new ApiError("Choose a valid activity type.", 400);
   if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
@@ -2059,15 +2365,21 @@ function parseLocalActivityFields(body) {
   if (exercise === "other" && (!otherActivity || otherActivity.length > 50)) {
     throw new ApiError("Describe the other activity in 50 characters or fewer.", 400);
   }
+  if (exercise === "other" && rawOtherType && !otherTypes.has(rawOtherType)) {
+    throw new ApiError("Choose a valid other activity type.", 400);
+  }
 
   const injuryInput = exercise === "other" && Boolean(body.injuryInput);
+  const otherType =
+    exercise === "other" ? (otherTypes.has(rawOtherType) ? rawOtherType : "workouts") : "";
 
   return {
     exercise,
     reps,
     otherActivity: exercise === "other" ? otherActivity : "",
+    otherType,
     injuryInput,
-    percent: exercise === "other" ? reps : null,
+    percent: exercise === "other" && otherType === "workouts" ? reps : null,
     createdAt: parsedActivityDate.toISOString(),
   };
 }
@@ -2653,7 +2965,10 @@ function renderPersonPage({ skipScroll = false } = {}) {
   });
   const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
   history.forEach((activity) => {
-    sessionDays[activityExercise(activity)].add(activity.createdAt.slice(0, 10));
+    const exercise = activityExercise(activity);
+    if (exercise === "weight") return;
+    if (exercise === "other" && otherTypeOf(activity) !== "workouts") return;
+    sessionDays[exercise].add(activity.createdAt.slice(0, 10));
   });
   const averageFor = (exercise, value) => {
     const days = sessionDays[exercise].size;
@@ -2665,6 +2980,10 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const paceDelta = personStats.total - targetReps;
   const plankMinutes = personStats.metrics.planks / 60;
   const workoutUnits = otherWorkoutUnits(personStats.metrics.other);
+  const weightHistory = history
+    .filter((activity) => isWeightActivity(activity))
+    .sort(compareActivitiesRecentFirst);
+  const latestWeight = weightHistory[0] || null;
 
   $("#person-avatar").src = person.image;
   $("#person-avatar").alt = `${person.name} profile photo`;
@@ -2755,6 +3074,30 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-avg-other").textContent = workoutNumber.format(
     averageFor("other", workoutUnits),
   );
+  renderPersonDayChart(personId);
+  const weightBlock = $("#person-weight");
+  if (weightBlock) {
+    weightBlock.hidden = !latestWeight;
+    if (latestWeight) {
+      $("#person-weight-latest").textContent = `${number.format(latestWeight.reps)} lb`;
+      const recentWeights = weightHistory.slice(0, 5);
+      const historyEl = $("#person-weight-history");
+      if (historyEl) {
+        historyEl.textContent =
+          recentWeights.length > 1
+            ? recentWeights
+                .map((entry) => {
+                  const day = new Date(entry.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  });
+                  return `${number.format(entry.reps)} (${day})`;
+                })
+                .join(" · ")
+            : formatDate(latestWeight.createdAt);
+      }
+    }
+  }
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   const historyGroups = [...historyByDate];
   if (showProgress && !historyGroups.some((group) => group.dateKey === todayKey)) {
@@ -2873,25 +3216,56 @@ const personInput = $("#person-input");
 const exerciseInput = $("#exercise-input");
 const exerciseButtons = [...document.querySelectorAll("[data-exercise]")];
 const quickButtons = [...document.querySelectorAll("[data-increment]")];
-const EXERCISE_ORDER = ["pushups", "squats", "planks", "other"];
+const EXERCISE_ORDER = ["pushups", "squats", "planks", "other", "weight"];
+const OTHER_TYPE_ORDER = ["workouts", "reps", "time"];
 
 function emptyLogDrafts() {
   return {
     pushups: { reps: 0 },
     squats: { reps: 0 },
     planks: { reps: 0 },
-    other: { reps: 0, otherActivity: "", injuryInput: false },
+    other: { reps: 0, otherActivity: "", injuryInput: false, otherType: "workouts" },
+    weight: { reps: 0 },
   };
 }
 
 let logDrafts = emptyLogDrafts();
 
+function currentOtherType() {
+  const input = $("#other-type-input");
+  const value = input?.value || "workouts";
+  return OTHER_TYPE_ORDER.includes(value) ? value : "workouts";
+}
+
+function setOtherType(type, { syncDraft = true } = {}) {
+  const next = OTHER_TYPE_ORDER.includes(type) ? type : "workouts";
+  const input = $("#other-type-input");
+  if (input) input.value = next;
+  document.querySelectorAll("[data-other-type]").forEach((button) => {
+    const selected = button.dataset.otherType === next;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", selected ? "true" : "false");
+  });
+  const tabs = $(".other-type-tabs");
+  if (tabs) tabs.dataset.active = next;
+  if (exerciseInput.value === "other") {
+    updateExerciseFields({ keepAmount: true });
+  }
+  if (syncDraft) saveCurrentDraft();
+}
+
+function amountMaxForExercise(exercise, otherType = currentOtherType()) {
+  if (exercise === "other" && otherType === "workouts") return 100;
+  return 1000;
+}
+
 function setAmount(value) {
-  const max = exerciseInput.value === "other" ? 100 : 1000;
+  const max = amountMaxForExercise(exerciseInput.value);
   const amount = Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
   const input = $("#reps-input");
   input.value = amount;
-  if (exerciseInput.value === "other") {
+  const showCompact = exerciseInput.value === "other" && currentOtherType() === "workouts";
+  if (showCompact) {
     input.style.width = `${Math.max(1, String(amount).length)}ch`;
   } else {
     input.style.width = "";
@@ -2911,10 +3285,12 @@ function readCurrentExerciseDraft() {
   const exercise = exerciseInput.value;
   const reps = Math.max(0, Math.min(1000, Math.round(Number($("#reps-input").value) || 0)));
   if (exercise === "other") {
+    const otherType = currentOtherType();
     return {
-      reps: Math.max(0, Math.min(100, reps)),
+      reps: Math.max(0, Math.min(amountMaxForExercise("other", otherType), reps)),
       otherActivity: $("#other-input").value.trim(),
       injuryInput: Boolean($("#injury-input-toggle")?.checked),
+      otherType,
     };
   }
   return { reps };
@@ -2935,10 +3311,13 @@ function draftEntries() {
     if (exercise === "other") {
       const otherActivity = (draft.otherActivity || "").trim();
       const injuryInput = Boolean(draft.injuryInput);
-      if (!otherActivity) return { exercise, reps, otherActivity: "", injuryInput, invalid: "name" };
-      return { exercise, reps, otherActivity, injuryInput };
+      const otherType = OTHER_TYPE_ORDER.includes(draft.otherType) ? draft.otherType : "workouts";
+      if (!otherActivity) {
+        return { exercise, reps, otherActivity: "", injuryInput, otherType, invalid: "name" };
+      }
+      return { exercise, reps, otherActivity, injuryInput, otherType };
     }
-    return { exercise, reps, otherActivity: "", injuryInput: false };
+    return { exercise, reps, otherActivity: "", injuryInput: false, otherType: "" };
   }).filter(Boolean);
 }
 
@@ -2970,22 +3349,47 @@ function updateAddSubmitLabel() {
 }
 
 function applyDraftToFields(exercise) {
-  const draft = logDrafts[exercise] || { reps: 0, otherActivity: "", injuryInput: false };
+  const draft = logDrafts[exercise] || emptyLogDrafts()[exercise] || { reps: 0 };
   if (exercise === "other") {
     $("#other-input").value = draft.otherActivity || "";
     const injuryToggle = $("#injury-input-toggle");
     if (injuryToggle) injuryToggle.checked = Boolean(draft.injuryInput);
+    setOtherType(draft.otherType || "workouts", { syncDraft: false });
   }
   setAmount(draft.reps || 0);
 }
 
 function updateExerciseFields({ keepAmount = false } = {}) {
   const exercise = exerciseInput.value;
+  const otherType = currentOtherType();
   const settings = {
-    pushups: { label: "Push-up reps", unit: "REPS", quick: [5, 10, 25, 50] },
-    squats: { label: "Squat reps", unit: "REPS", quick: [5, 10, 25, 50] },
-    planks: { label: "Plank time", unit: "SECONDS", quick: [30, 60, 90, 120] },
-    other: { label: "Percent of daily goal", unit: "% EFFORT", quick: [25, 50, 75, 100] },
+    pushups: { label: "Push-up reps", unit: "REPS", quick: [5, 10, 25, 50], percent: false },
+    squats: { label: "Squat reps", unit: "REPS", quick: [5, 10, 25, 50], percent: false },
+    planks: { label: "Plank time", unit: "SECONDS", quick: [30, 60, 90, 120], percent: false },
+    other: {
+      workouts: {
+        label: "Percent of daily goal",
+        unit: "% EFFORT",
+        quick: [25, 50, 75, 100],
+        percent: true,
+        quickLabel: (n) => `+${n}%`,
+      },
+      reps: {
+        label: "Misc reps",
+        unit: "REPS",
+        quick: [10, 25, 50, 100],
+        percent: false,
+        quickLabel: (n) => `+${n}`,
+      },
+      time: {
+        label: "Minutes",
+        unit: "MIN",
+        quick: [10, 20, 30, 45],
+        percent: false,
+        quickLabel: (n) => `+${n}`,
+      },
+    }[otherType],
+    weight: { label: "Body weight", unit: "LB", quick: [5, 10, 25, 50], percent: false },
   }[exercise];
 
   exerciseButtons.forEach((button) => {
@@ -2996,28 +3400,31 @@ function updateExerciseFields({ keepAmount = false } = {}) {
   const tabs = $(".exercise-tabs");
   if (tabs) tabs.dataset.active = exercise;
   const quickReps = $(".quick-reps");
-  if (quickReps) quickReps.dataset.active = exercise;
+  if (quickReps) quickReps.dataset.active = exercise === "other" ? `other-${otherType}` : exercise;
   $("#amount-unit").textContent = settings.unit;
   const amountValue = $(".amount-value");
-  if (amountValue) amountValue.classList.toggle("is-percent", exercise === "other");
+  if (amountValue) amountValue.classList.toggle("is-percent", Boolean(settings.percent));
   const suffix = $("#amount-suffix");
   if (suffix) {
-    suffix.hidden = exercise !== "other";
-    suffix.setAttribute("aria-hidden", exercise === "other" ? "false" : "true");
+    suffix.hidden = !settings.percent;
+    suffix.setAttribute("aria-hidden", settings.percent ? "false" : "true");
   }
   $("#reps-input").setAttribute("aria-label", settings.label);
-  $("#reps-input").setAttribute("maxlength", exercise === "other" ? "3" : "4");
-  $("#other-field").hidden = exercise !== "other";
+  $("#reps-input").setAttribute("maxlength", settings.percent ? "3" : "4");
+  const isOther = exercise === "other";
+  $("#other-field").hidden = !isOther;
+  const injuryField = $("#injury-input-field");
+  if (injuryField) injuryField.hidden = !isOther;
   $("#other-input").required = false;
   quickButtons.forEach((button, index) => {
     const amount = settings.quick[index] || 0;
     button.hidden = !amount;
     button.dataset.increment = amount;
-    button.textContent = exercise === "other" ? `+${amount}%` : `+${amount}`;
+    button.textContent = settings.quickLabel ? settings.quickLabel(amount) : `+${amount}`;
   });
   if (!keepAmount) {
     setAmount(0);
-  } else if (exercise === "other") {
+  } else {
     setAmount($("#reps-input").value);
   }
   syncDraftTabIndicators();
@@ -3059,11 +3466,13 @@ function lockLogDialogHeight() {
   const form = $("#log-form");
   const success = $("#log-success");
   const otherField = $("#other-field");
+  const injuryField = $("#injury-input-field");
   if (!form) return;
 
   const formHidden = form.hidden;
   const successHidden = success?.hidden;
   const otherHidden = otherField?.hidden;
+  const injuryHidden = injuryField?.hidden;
 
   form.hidden = false;
   if (success) success.hidden = true;
@@ -3071,12 +3480,15 @@ function lockLogDialogHeight() {
   dialog.style.minHeight = "";
 
   let height = 0;
-  if (otherField) {
-    otherField.hidden = true;
+  if (otherField || injuryField) {
+    if (otherField) otherField.hidden = true;
+    if (injuryField) injuryField.hidden = true;
     height = Math.max(height, dialog.getBoundingClientRect().height);
-    otherField.hidden = false;
+    if (otherField) otherField.hidden = false;
+    if (injuryField) injuryField.hidden = false;
     height = Math.max(height, dialog.getBoundingClientRect().height);
-    otherField.hidden = otherHidden;
+    if (otherField) otherField.hidden = otherHidden;
+    if (injuryField) injuryField.hidden = injuryHidden;
   } else {
     height = dialog.getBoundingClientRect().height;
   }
@@ -3122,10 +3534,12 @@ function openLogDialog(personId, options = {}) {
     $("#other-input").value = activity.otherActivity || "";
     const injuryToggle = $("#injury-input-toggle");
     if (injuryToggle) injuryToggle.checked = Boolean(activity.injuryInput);
+    setOtherType(otherTypeOf(activity) || "workouts", { syncDraft: false });
     setAmount(activity.reps);
     updateExerciseFields({ keepAmount: true });
   } else {
     exerciseInput.value = "pushups";
+    setOtherType("workouts", { syncDraft: false });
     updateExerciseFields();
   }
   updateAddSubmitLabel();
@@ -3273,10 +3687,24 @@ function fillNormalLogSuccess(personId, list, activityDate = localDateValue()) {
     const entry = list[0];
     const amount =
       entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
-    const unit = entry.exercise === "planks" ? "MIN" : entry.exercise === "other" ? "% GOAL" : "REPS";
-    $("#success-amount").textContent = `+${amount}`;
+    const unit =
+      entry.exercise === "planks"
+        ? "MIN"
+        : entry.exercise === "weight"
+          ? "LB"
+          : entry.exercise === "other"
+            ? entry.otherType === "time"
+              ? "MIN"
+              : entry.otherType === "reps"
+                ? "REPS"
+                : "% GOAL"
+            : "REPS";
+    $("#success-amount").textContent = entry.exercise === "weight" ? amount : `+${amount}`;
     $("#success-unit").textContent = unit;
-    $("#success-copy").textContent = `Added to ${person.name.split(" ")[0]}’s personal progress.`;
+    $("#success-copy").textContent =
+      entry.exercise === "weight"
+        ? `Saved to ${person.name.split(" ")[0]}’s personal log.`
+        : `Added to ${person.name.split(" ")[0]}’s personal progress.`;
   } else {
     $("#success-amount").textContent = `+${list.length}`;
     $("#success-unit").textContent = "ACTIVITIES";
@@ -3289,11 +3717,22 @@ function fillNormalLogSuccess(personId, list, activityDate = localDateValue()) {
               ? "squats"
               : entry.exercise === "planks"
                 ? "plank"
-                : entry.otherActivity || "other";
+                : entry.exercise === "weight"
+                  ? "weight"
+                  : entry.otherActivity || "other";
         const amount =
           entry.exercise === "planks" ? formatPlankMinutes(entry.reps) : number.format(entry.reps);
-        const unit = entry.exercise === "planks" ? "min" : "";
-        return `+${amount}${unit ? ` ${unit}` : ""} ${label}`;
+        const unit =
+          entry.exercise === "planks"
+            ? "min"
+            : entry.exercise === "weight"
+              ? "lb"
+              : entry.exercise === "other" && entry.otherType === "time"
+                ? "min"
+                : entry.exercise === "other" && entry.otherType !== "reps"
+                  ? "%"
+                  : "";
+        return `${entry.exercise === "weight" ? "" : "+"}${amount}${unit ? ` ${unit}` : ""} ${label}`;
       })
       .join(" · ");
   }
@@ -3569,7 +4008,10 @@ function personChallengeStats(personId) {
   const history = activities.filter((activity) => activity.personId === personId);
   const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
   history.forEach((activity) => {
-    sessionDays[activityExercise(activity)].add(activity.createdAt.slice(0, 10));
+    const exercise = activityExercise(activity);
+    if (exercise === "weight") return;
+    if (exercise === "other" && otherTypeOf(activity) !== "workouts") return;
+    sessionDays[exercise].add(activity.createdAt.slice(0, 10));
   });
   const averageFor = (exercise, value) => {
     const days = sessionDays[exercise].size;
@@ -4111,6 +4553,7 @@ async function quickAddActivity(button) {
     const result = await protectedRequest("/api/activities", "POST", personId, {
       exercise,
       otherActivity: exercise === "other" ? otherActivity || "Workout" : "",
+      otherType: exercise === "other" ? "workouts" : "",
       reps,
       activityDate,
     });
@@ -4387,6 +4830,13 @@ $("#injury-input-toggle")?.addEventListener("change", () => {
   saveCurrentDraft();
 });
 
+document.querySelectorAll("[data-other-type]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (button.dataset.otherType === currentOtherType()) return;
+    setOtherType(button.dataset.otherType);
+  });
+});
+
 $("#log-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -4405,6 +4855,7 @@ $("#log-form").addEventListener("submit", async (event) => {
     if (activityId) {
       const reps = Number($("#reps-input").value);
       const exercise = exerciseInput.value;
+      const otherType = currentOtherType();
       if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
         showToast("Enter an amount from 1 to 1,000.");
         return;
@@ -4420,6 +4871,7 @@ $("#log-form").addEventListener("submit", async (event) => {
         activityId,
         exercise,
         otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
+        otherType: exercise === "other" ? otherType : "",
         injuryInput: exercise === "other" && Boolean($("#injury-input-toggle")?.checked),
         reps,
         activityDate,
@@ -4439,6 +4891,7 @@ $("#log-form").addEventListener("submit", async (event) => {
           exercise,
           reps,
           otherActivity: result.activity.otherActivity || "",
+          otherType: result.activity.otherType || otherType,
           injuryInput: Boolean(result.activity.injuryInput),
         }],
         { boardCleared, activityDate },
@@ -4473,6 +4926,7 @@ $("#log-form").addEventListener("submit", async (event) => {
         const result = await protectedRequest("/api/activities", "POST", personId, {
           exercise: entry.exercise,
           otherActivity: entry.otherActivity,
+          otherType: entry.otherType || "",
           injuryInput: Boolean(entry.injuryInput),
           reps: entry.reps,
           activityDate,
@@ -4490,7 +4944,10 @@ $("#log-form").addEventListener("submit", async (event) => {
         }
         activities.push(result.activity);
         participation[personId] = result.status;
-        added.push(entry);
+        added.push({
+          ...entry,
+          otherType: result.activity.otherType || entry.otherType || "",
+        });
       }
     } catch (error) {
       if (added.length) render();
@@ -4963,6 +5420,7 @@ function initRulesCollapse() {
 updateExerciseFields();
 initThemeToggle();
 initRulesCollapse();
+initPersonDayChartRange();
 render();
 loadSharedState();
 tickOldchellaCountdown();

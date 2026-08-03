@@ -9,7 +9,8 @@ import {
   sendError,
 } from "../server/lib.mjs";
 
-const EXERCISES = new Set(["pushups", "squats", "planks", "other"]);
+const EXERCISES = new Set(["pushups", "squats", "planks", "other", "weight"]);
+const OTHER_TYPES = new Set(["workouts", "reps", "time"]);
 
 function parseActivityFields(body) {
   const exercise = typeof body.exercise === "string" ? body.exercise : "";
@@ -18,6 +19,7 @@ function parseActivityFields(body) {
     typeof body.otherActivity === "string" ? body.otherActivity.trim() : "";
   const activityDate = typeof body.activityDate === "string" ? body.activityDate : "";
   const parsedActivityDate = new Date(`${activityDate}T12:00:00.000Z`);
+  const rawOtherType = typeof body.otherType === "string" ? body.otherType.trim() : "";
 
   if (!EXERCISES.has(exercise)) throw httpError(400, "Choose a valid activity type.");
   if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
@@ -36,15 +38,20 @@ function parseActivityFields(body) {
   if (exercise === "other" && (!otherActivity || otherActivity.length > 50)) {
     throw httpError(400, "Describe the other activity in 50 characters or fewer.");
   }
+  if (exercise === "other" && rawOtherType && !OTHER_TYPES.has(rawOtherType)) {
+    throw httpError(400, "Choose a valid other activity type.");
+  }
 
   const injuryInput = exercise === "other" && Boolean(body.injuryInput);
+  const otherType = exercise === "other" ? (OTHER_TYPES.has(rawOtherType) ? rawOtherType : "workouts") : "";
 
   return {
     exercise,
     reps,
     otherActivity: exercise === "other" ? otherActivity : "",
+    otherType,
     injuryInput,
-    percent: exercise === "other" ? reps : null,
+    percent: exercise === "other" && otherType === "workouts" ? reps : null,
     createdAt: parsedActivityDate.toISOString(),
   };
 }
