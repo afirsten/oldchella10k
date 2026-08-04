@@ -2436,6 +2436,78 @@ h1 .logo-chella {
   gap: 10px;
   min-width: 0;
 }
+.person-history-more {
+  display: flex;
+  width: 100%;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font: 800 11px/1 "Manrope", sans-serif;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.person-history-more:hover,
+.person-history-more:focus-visible {
+  border-color: color-mix(in srgb, var(--lime) 35%, var(--line));
+  color: var(--ink);
+  outline: none;
+}
+.person-history-more:focus-visible {
+  outline: 2px solid var(--terra);
+  outline-offset: 2px;
+}
+.person-history-heading {
+  margin: 28px 0 4px;
+  font: 800 26px/1 var(--font-heading);
+  letter-spacing: -.04em;
+}
+.history-timeline {
+  --history-timeline-x: 17.5px;
+  --history-timeline-line: color-mix(in srgb, var(--label) 28%, transparent);
+  position: relative;
+}
+/* Per-day rail segments (not one continuous ::before) so the line
+   stops after Add reps and does not run through the inter-day gap. */
+.history-timeline .history-day-activities.is-condensed,
+.history-timeline .add-to-date-button.is-on-timeline {
+  position: relative;
+}
+.history-timeline .history-day-activities.is-condensed::before,
+.history-timeline .add-to-date-button.is-on-timeline::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--history-timeline-x);
+  z-index: 1;
+  width: 1px;
+  background: var(--history-timeline-line);
+  pointer-events: none;
+}
+.history-timeline .history-day-activities.is-condensed::before {
+  bottom: 0;
+}
+/* Rail ends at the + center; icon halo covers the terminus. */
+.history-timeline .add-to-date-button.is-on-timeline::before {
+  bottom: 50%;
+}
+.history-timeline .history-condensed-dot {
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 0 3px var(--inset-panel);
+}
+.history-timeline .history-condensed-text,
+.history-timeline .history-condensed-row .delete-activity-button,
+.history-timeline .history-day-goal,
+.history-timeline .add-to-date-button.is-on-timeline {
+  position: relative;
+  z-index: 2;
+}
 .history-day {
   display: grid;
   gap: 10px;
@@ -2461,19 +2533,34 @@ h1 .logo-chella {
 }
 .history-day-breakdown {
   position: relative;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   color: var(--quiet);
-  font-size: 7px;
+  font-size: 9px;
   font-weight: 700;
-  letter-spacing: .03em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
   text-align: right;
-  line-height: 1.35;
+  line-height: 1;
   cursor: help;
   outline: none;
 }
 .history-day-breakdown-inline {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.history-day-breakdown-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted, var(--quiet));
+}
+.history-day-breakdown-chip .history-condensed-dot {
+  width: 6px;
+  height: 6px;
 }
 .history-day-breakdown-card {
   position: absolute;
@@ -2547,6 +2634,90 @@ h1 .logo-chella {
   display: grid;
   gap: 10px;
 }
+.history-day-activities.is-condensed {
+  gap: 0;
+}
+.history-day-empty {
+  margin: 0;
+  padding: 4px 2px 2px;
+  color: var(--quiet);
+  font: 500 13px/1.4 "Manrope", sans-serif;
+  letter-spacing: .01em;
+}
+.history-day-condensed {
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: var(--inset-panel);
+}
+.history-condensed-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.history-condensed-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  font: 600 12px/1.35 "Manrope", sans-serif;
+  letter-spacing: .01em;
+}
+.history-condensed-row.is-editable {
+  grid-template-columns: 8px minmax(0, 1fr) 28px;
+  cursor: pointer;
+}
+.history-condensed-row.is-editable:hover,
+.history-condensed-row.is-editable:focus-visible {
+  color: var(--ink);
+  background: var(--row-press);
+  outline: none;
+}
+.history-condensed-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--quiet);
+  flex-shrink: 0;
+}
+.history-condensed-dot.is-pushups { background: var(--pink); }
+.history-condensed-dot.is-squats { background: var(--terra); }
+.history-condensed-dot.is-planks { background: var(--lime); }
+.history-condensed-dot.is-other { background: var(--green); }
+.history-condensed-dot.is-weight { background: var(--lavender); }
+.history-condensed-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.history-condensed-row .delete-activity-button {
+  width: 28px;
+  height: 28px;
+  opacity: .45;
+}
+.history-condensed-row:hover .delete-activity-button,
+.history-condensed-row:focus-within .delete-activity-button {
+  opacity: .85;
+}
+.history-condensed-row .delete-activity-button svg {
+  width: 13px;
+}
+.history-condensed-row.is-deleting {
+  pointer-events: none;
+  cursor: default;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  overflow: hidden;
+  border-color: transparent;
+  background: rgba(255, 45, 120, .1);
+  color: var(--pink);
+}
 .add-to-date-button {
   display: flex;
   gap: 7px;
@@ -2559,6 +2730,7 @@ h1 .logo-chella {
   color: var(--quiet);
   font: 700 8px "Manrope", sans-serif;
   letter-spacing: .1em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 .add-to-date-button:hover,
@@ -2566,9 +2738,93 @@ h1 .logo-chella {
   border-color: rgba(245,200,66,.55);
   color: var(--lime);
 }
-.add-to-date-button span {
+.add-to-date-button .add-to-date-icon {
   font-size: 16px;
   font-weight: 400;
+  line-height: 1;
+}
+/* Timeline: drop panel bottom pad so last row → Add reps matches row rhythm. */
+.history-timeline .history-day-condensed {
+  padding-bottom: 0;
+}
+/*
+  Condensed timeline Add reps — class on the button itself so these win over
+  base .add-to-date-button even if an ancestor wrapper is missing/cached.
+  Type matches .history-condensed-row; + sits on the rail like dots.
+*/
+.add-to-date-button.is-on-timeline,
+.history-timeline .add-to-date-button.is-on-timeline {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  justify-content: start;
+  justify-items: start;
+  width: 100%;
+  min-height: 0;
+  height: auto;
+  /* Cancel .history-day gap (10px) so spacing matches condensed rows. */
+  margin-top: -10px;
+  /* Match .history-day-condensed (8px) + .history-condensed-row (6px) */
+  padding: 8px 14px;
+  border: 0;
+  border-style: none;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  /* Same computed type as .history-condensed-row */
+  color: var(--muted);
+  font: 600 12px/1.35 "Manrope", sans-serif;
+  letter-spacing: .01em;
+  text-align: left;
+  text-transform: uppercase;
+}
+.add-to-date-button.is-on-timeline .add-to-date-icon,
+.history-timeline .add-to-date-button.is-on-timeline .add-to-date-icon {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Plate sized to the glyph so the rail cannot show through the + */
+  width: 14px;
+  height: 14px;
+  margin: 0 0 0 -3px; /* keep centered on the 8px rail column */
+  padding: 0;
+  overflow: visible;
+  font-family: "Manrope", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 0;
+  color: var(--muted);
+  /* Opaque plate + halo (same pattern as condensed dots) */
+  background: var(--background);
+  box-shadow: 0 0 0 3px var(--background);
+}
+.add-to-date-button.is-on-timeline .add-to-date-label,
+.history-timeline .add-to-date-button.is-on-timeline .add-to-date-label {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+.add-to-date-button.is-on-timeline:hover,
+.add-to-date-button.is-on-timeline:focus-visible,
+.history-timeline .add-to-date-button.is-on-timeline:hover,
+.history-timeline .add-to-date-button.is-on-timeline:focus-visible {
+  border: 0;
+  border-style: none;
+  color: var(--ink);
+  background: var(--row-press);
+  outline: none;
+}
+.add-to-date-button.is-on-timeline:hover .add-to-date-icon,
+.add-to-date-button.is-on-timeline:focus-visible .add-to-date-icon,
+.history-timeline .add-to-date-button.is-on-timeline:hover .add-to-date-icon,
+.history-timeline .add-to-date-button.is-on-timeline:focus-visible .add-to-date-icon {
+  color: var(--ink);
 }
 .activity-item {
   display: grid;
@@ -3376,11 +3632,6 @@ a.activity-item:focus-visible {
   letter-spacing: -.055em;
   vertical-align: -4px;
 }
-.person-total-line #person-sessions {
-  color: var(--ink);
-  font: 800 22px/1 "Manrope", sans-serif;
-  letter-spacing: -.03em;
-}
 .personal-goal {
   display: grid;
   gap: 4px;
@@ -3553,6 +3804,10 @@ a.activity-item:focus-visible {
 .personal-day-chart__bar > span.is-squats { background: var(--terra); }
 .personal-day-chart__bar > span.is-other { background: var(--green); }
 .personal-day-chart__bar > span.is-planks { background: var(--lime); }
+/* Today: ~2× sibling bar width (58% → 100% of col); callout stays col-centered */
+.personal-day-chart__col.is-today .personal-day-chart__bar {
+  width: 100%;
+}
 /* Today: progress-track fill when empty + lime outline (filled or empty) */
 .personal-day-chart__col.is-today .personal-day-chart__bar.is-empty {
   background: var(--progress-track);
@@ -3641,27 +3896,6 @@ a.activity-item:focus-visible {
 }
 .personal-breakdown.is-10k .daily-avg strong {
   font-size: 11px;
-}
-.personal-weight {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-.personal-weight .label {
-  margin: 0 0 6px;
-}
-.personal-weight-latest {
-  margin: 0;
-}
-.personal-weight-latest strong {
-  color: var(--ink);
-  font: 800 28px/1 "DM Sans", sans-serif;
-  letter-spacing: -.02em;
-}
-.personal-weight-history {
-  margin: 6px 0 0;
-  color: var(--quiet);
-  font: 600 12px/1.35 "Manrope", sans-serif;
 }
 .person-log-button {
   display: flex;

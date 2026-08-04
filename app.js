@@ -665,6 +665,31 @@ function shiftLocalDateKey(dateKey, deltaDays) {
   return localDateValue(date);
 }
 
+/** Full local-calendar days between dateKey and today (0 = today). */
+function historyDayAgeDays(dateKey, todayKey = localDateValue()) {
+  const today = new Date(`${todayKey}T12:00:00`);
+  const day = new Date(`${dateKey}T12:00:00`);
+  return Math.round((today.getTime() - day.getTime()) / 86400000);
+}
+
+/** Days younger than 3 keep full cards; age ≥ 3 → condensed list. */
+function isCondensedHistoryDay(dateKey, todayKey = localDateValue()) {
+  return historyDayAgeDays(dateKey, todayKey) >= 3;
+}
+
+const PERSON_HISTORY_PAGE_SIZE = 10;
+/** How many condensed History days are visible on the person page (session memory). */
+let personHistoryVisibleDays = PERSON_HISTORY_PAGE_SIZE;
+let personHistoryForPersonId = null;
+
+/** Compact one-line summary: Plank · +3 MIN · 3×1 min */
+function formatCondensedActivityLine(activity) {
+  const bits = [exerciseName(activity), formatActivityLead(activity)];
+  const note = activityNoteText(activity);
+  if (note) bits.push(note);
+  return bits.join(" · ");
+}
+
 function feedDayKeys() {
   const todayKey = localDateValue();
   const keys = [];
@@ -1091,9 +1116,21 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
 
 function dayGoalBreakdown(dayActivities) {
   const { lines } = dayGoalProgressLines(dayActivities);
+  const { totals } = dayGoalProgress(dayActivities);
+  const chips = [
+    { key: "pushups", value: number.format(totals.pushups) },
+    { key: "squats", value: number.format(totals.squats) },
+    { key: "planks", value: formatPlankMinutes(totals.planks) },
+    { key: "other", value: number.format(totals.other) },
+  ];
   return `
     <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
-      <span class="history-day-breakdown-inline">${escapeHtml(lines.join(" / "))}</span>
+      <span class="history-day-breakdown-inline" aria-hidden="true">${chips
+        .map(
+          (chip) =>
+            `<span class="history-day-breakdown-chip"><span class="history-condensed-dot is-${chip.key}"></span>${escapeHtml(chip.value)}</span>`,
+        )
+        .join("")}</span>
       <span class="history-day-breakdown-card" role="tooltip">
         ${dayGoalSummaryCard(dayActivities, "", "", { compact: true })}
       </span>
@@ -2893,10 +2930,10 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const paceDelta = personStats.total - targetReps;
   const plankMinutes = personStats.metrics.planks / 60;
   const workoutUnits = otherWorkoutUnits(personStats.metrics.other);
-  const weightHistory = history
-    .filter((activity) => isWeightActivity(activity))
-    .sort(compareActivitiesRecentFirst);
-  const latestWeight = weightHistory[0] || null;
+  const latestWeight =
+    history
+      .filter((activity) => isWeightActivity(activity))
+      .sort(compareActivitiesRecentFirst)[0] || null;
 
   $("#person-avatar").src = person.image;
   $("#person-avatar").alt = `${person.name} profile photo`;
@@ -2973,8 +3010,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
     plankMinutes,
     workoutUnits,
   );
-  $("#person-sessions").textContent = number.format(personStats.sessions);
-  $("#person-sessions-label").textContent = personStats.sessions === 1 ? "day" : "days";
   $("#person-avg-pushups").textContent = number.format(
     Math.round(averageFor("pushups", personStats.metrics.pushups)),
   );
@@ -2988,29 +3023,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
     averageFor("other", workoutUnits),
   );
   renderPersonDayChart(personId);
-  const weightBlock = $("#person-weight");
-  if (weightBlock) {
-    weightBlock.hidden = !latestWeight;
-    if (latestWeight) {
-      $("#person-weight-latest").textContent = `${number.format(latestWeight.reps)} lb`;
-      const recentWeights = weightHistory.slice(0, 5);
-      const historyEl = $("#person-weight-history");
-      if (historyEl) {
-        historyEl.textContent =
-          recentWeights.length > 1
-            ? recentWeights
-                .map((entry) => {
-                  const day = new Date(entry.createdAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                  });
-                  return `${number.format(entry.reps)} (${day})`;
-                })
-                .join(" · ")
-            : formatDate(latestWeight.createdAt);
-      }
-    }
-  }
   const weightSection = $("#person-weight-section");
   const updateWeightBtn = $("#person-update-weight");
   const canTrackWeight = isOwner && personStats.status === "in";
@@ -3033,25 +3045,82 @@ function renderPersonPage({ skipScroll = false } = {}) {
       activities: [],
     });
   }
-  $("#person-activity-list").innerHTML = historyGroups.length
-    ? historyGroups
-        .map((group) => {
+  if (personHistoryForPersonId !== personId) {
+    personHistoryForPersonId = personId;
+    personHistoryVisibleDays = PERSON_HISTORY_PAGE_SIZE;
+  }
+  const recentHistoryGroups = historyGroups.filter(
+    (group) => !isCondensedHistoryDay(group.dateKey, todayKey),
+  );
+  const condensedHistoryGroups = historyGroups.filter((group) =>
+    isCondensedHistoryDay(group.dateKey, todayKey),
+  );
+  const visibleCondensedHistory = condensedHistoryGroups.slice(0, personHistoryVisibleDays);
+  const hasMoreHistoryDays = condensedHistoryGroups.length > personHistoryVisibleDays;
+  const visibleHistoryGroups = [...recentHistoryGroups, ...visibleCondensedHistory];
+  const historyMoreBtn = $("#person-history-more");
+  if (historyMoreBtn) historyMoreBtn.hidden = !hasMoreHistoryDays;
+  $("#person-activity-list").innerHTML = visibleHistoryGroups.length
+    ? (() => {
+        const parts = [];
+        let timelineStarted = false;
+        let yesterdayHeadingStarted = false;
+        visibleHistoryGroups.forEach((group) => {
           const isToday = group.dateKey === todayKey;
-          return `
-            <div class="history-day${isToday ? " is-today" : ""}">
-              <div class="history-date-divider">
-                ${dayGoalCheck(dayGoalProgress(group.activities).complete)}
-                <span class="history-day-date">${group.date.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}</span>
-                <span class="history-day-rule" aria-hidden="true"></span>
-                ${isToday ? "" : dayGoalBreakdown(group.activities)}
-              </div>
-              ${isToday ? dayGoalSummaryCard(group.activities, group.dateKey, personId) : ""}
-              <div class="history-day-activities">
-                ${group.activities
+          const dayAge = historyDayAgeDays(group.dateKey, todayKey);
+          const condensed = isCondensedHistoryDay(group.dateKey, todayKey);
+          const emptyDayCopy =
+            '<p class="history-day-empty" role="status">No reps recorded</p>';
+          const activitiesHtml = !group.activities.length
+            ? emptyDayCopy
+            : condensed
+              ? `<div class="history-day-condensed${person.honorary ? " is-honorary" : ""}">
+                  <ul class="history-condensed-list">
+                    ${group.activities
+                      .map((activity) => {
+                        const line = escapeHtml(formatCondensedActivityLine(activity));
+                        const name = escapeHtml(exerciseName(activity));
+                        const exercise = activityExercise(activity);
+                        const colorDot = `<span class="history-condensed-dot is-${escapeHtml(exercise)}" aria-hidden="true"></span>`;
+                        if (isOwner) {
+                          return `
+                            <li
+                              class="history-condensed-row is-editable"
+                              data-activity-id="${escapeHtml(activity.id)}"
+                              role="button"
+                              tabindex="0"
+                              aria-label="Edit ${name} entry"
+                            >
+                              ${colorDot}
+                              <span class="history-condensed-text">${line}</span>
+                              <button
+                                class="delete-activity-button"
+                                type="button"
+                                data-delete-activity-id="${escapeHtml(activity.id)}"
+                                aria-label="Delete ${name} entry"
+                              >
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" />
+                                </svg>
+                              </button>
+                            </li>
+                          `;
+                        }
+                        return `
+                          <li
+                            class="history-condensed-row is-readonly"
+                            data-activity-id="${escapeHtml(activity.id)}"
+                            aria-label="${name} entry"
+                          >
+                            ${colorDot}
+                            <span class="history-condensed-text">${line}</span>
+                          </li>
+                        `;
+                      })
+                      .join("")}
+                  </ul>
+                </div>`
+              : group.activities
                   .map((activity) => {
                     const justAdded = isJustAdded(activity);
                     const note = activityNoteText(activity);
@@ -3099,20 +3168,47 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       </article>
                     `;
                   })
-                  .join("")}
+                  .join("");
+          const dayHtml = `
+            <div class="history-day${isToday ? " is-today" : ""}${condensed ? " is-condensed" : ""}">
+              <div class="history-date-divider">
+                ${dayGoalCheck(dayGoalProgress(group.activities).complete)}
+                <span class="history-day-date">${group.date.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}</span>
+                <span class="history-day-rule" aria-hidden="true"></span>
+                ${isToday ? "" : dayGoalBreakdown(group.activities)}
+              </div>
+              ${isToday ? dayGoalSummaryCard(group.activities, group.dateKey, personId) : ""}
+              <div class="history-day-activities${condensed ? " is-condensed" : ""}">
+                ${activitiesHtml}
               </div>
               ${
                 isOwner
-                  ? `<button class="add-to-date-button" type="button" data-log-date="${group.dateKey}">
-                <span aria-hidden="true">+</span>
-                ADD REPS TO THIS DAY
+                  ? `<button class="add-to-date-button${condensed ? " is-on-timeline" : ""}" type="button" data-log-date="${group.dateKey}">
+                <span class="add-to-date-icon" aria-hidden="true">+</span>
+                <span class="add-to-date-label">Add Reps</span>
               </button>`
                   : ""
               }
             </div>
           `;
-        })
-        .join("")
+          if (dayAge === 1 && !yesterdayHeadingStarted) {
+            parts.push('<h2 class="person-history-heading">Yesterday</h2>');
+            yesterdayHeadingStarted = true;
+          }
+          if (condensed && !timelineStarted) {
+            parts.push('<h2 class="person-history-heading">History</h2>');
+            parts.push('<div class="history-timeline">');
+            timelineStarted = true;
+          }
+          parts.push(dayHtml);
+        });
+        if (timelineStarted) parts.push("</div>");
+        return parts.join("");
+      })()
     : '<div class="empty-state">No sessions yet. Time to get on the board.</div>';
 
   const justAddedMs = history
@@ -3290,7 +3386,13 @@ function updateExerciseFields({ keepAmount = false } = {}) {
   const settings = {
     pushups: { label: "Push-up reps", unit: "REPS", quick: [5, 10, 25, 50], percent: false },
     squats: { label: "Squat reps", unit: "REPS", quick: [5, 10, 25, 50], percent: false },
-    planks: { label: "Plank time", unit: "SECONDS", quick: [30, 60, 90, 120], percent: false },
+    planks: {
+      label: "Plank time",
+      unit: "SECONDS",
+      quick: [30, 60, 90, 120],
+      percent: false,
+      quickLabel: (seconds) => `+${seconds / 60}`.replace(/^\+0/, "+") + "min",
+    },
     other: {
       workouts: {
         label: "Percent of daily goal",
@@ -5624,6 +5726,11 @@ document.querySelectorAll("[data-participation]").forEach((button) => {
       button.disabled = false;
     }
   });
+});
+
+$("#person-history-more")?.addEventListener("click", () => {
+  personHistoryVisibleDays += PERSON_HISTORY_PAGE_SIZE;
+  renderPersonPage({ skipScroll: true });
 });
 
 $("#person-activity-list").addEventListener("click", async (event) => {
