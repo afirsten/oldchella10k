@@ -3093,12 +3093,21 @@ function renderPersonPage({ skipScroll = false } = {}) {
   }
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   const historyGroups = [...historyByDate];
-  if (showProgress && !historyGroups.some((group) => group.dateKey === todayKey)) {
-    historyGroups.unshift({
-      dateKey: todayKey,
-      date: new Date(`${todayKey}T12:00:00`),
-      activities: [],
-    });
+  if (showProgress) {
+    const presentKeys = new Set(historyGroups.map((group) => group.dateKey));
+    const ensureEmptyDay = (dateKey) => {
+      if (!dateKey || dateKey < CHALLENGE_START || presentKeys.has(dateKey)) return;
+      historyGroups.push({
+        dateKey,
+        date: new Date(`${dateKey}T12:00:00`),
+        activities: [],
+      });
+      presentKeys.add(dateKey);
+    };
+    ensureEmptyDay(todayKey);
+    // Always show Yesterday so empty days still offer Add Reps.
+    ensureEmptyDay(shiftLocalDateKey(todayKey, -1));
+    historyGroups.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }
   if (personHistoryForPersonId !== personId) {
     personHistoryForPersonId = personId;
