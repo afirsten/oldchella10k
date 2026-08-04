@@ -374,7 +374,7 @@ function setCompactMagnitude(el, ...values) {
 }
 
 /**
- * Rough kcal rates for crew burn (~BURN + SCAD OFFSETS). Generic means only —
+ * Rough kcal rates for crew burn (~BURN + SAV OFFSETS). Generic means only —
  * generous fun scale (~2–2.5× conservative estimates), not a lab measurement.
  * - Push-ups / squats: kcal per rep (~85 per 100 push-ups)
  * - Planks: kcal per minute (activity.reps stored as seconds)
@@ -397,7 +397,7 @@ function estimateCategoryCalories(categoryTotals) {
 }
 
 /**
- * Cheeky Savannah food/drink offsets for the Stats "SCAD Offsets" row.
+ * Cheeky Savannah food/drink offsets for the Stats "SAV Offsets" row.
  * Each constant is a rough kcal per item; burned calories ÷ kcal = how many
  * of that item the crew's burn would offset / buy.
  */
@@ -637,6 +637,44 @@ function peopleWhoClearedDailyGoal(dateKey = localDateValue()) {
     .filter((person) => !person.honorary && personStatus(person.id) !== "out")
     .filter((person) => personBoardProgress(person.id, dateKey).complete)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Group closeout tallies across in-crew person-days.
+ * Uses the same board rules as daily pulse / Daily closers feed:
+ * a category is closed at ≥100% of DAILY_GOALS; a trifecta is all three (PU/SQ/PL).
+ * - pushupClosers: person-days with push-ups closed
+ * - repClosers: sum of PU+SQ+PL category closes across person-days
+ * - trifectas: person-days with full board clear (all three closed)
+ */
+function groupCloseoutStats(participantIds) {
+  const byPersonDay = new Map();
+  for (const activity of activities) {
+    if (!participantIds.has(activity.personId)) continue;
+    if (isWeightActivity(activity)) continue;
+    const dateKey = activityDateKey(activity);
+    const key = `${activity.personId}|${dateKey}`;
+    let dayActivities = byPersonDay.get(key);
+    if (!dayActivities) {
+      dayActivities = [];
+      byPersonDay.set(key, dayActivities);
+    }
+    dayActivities.push(activity);
+  }
+
+  let pushupClosers = 0;
+  let repClosers = 0;
+  let trifectas = 0;
+
+  for (const dayActivities of byPersonDay.values()) {
+    const { percents, complete } = dayGoalProgress(dayActivities);
+    const closed = closedBoardCategories(percents);
+    if (closed.pushups) pushupClosers += 1;
+    repClosers += closedBoardCount(closed);
+    if (complete) trifectas += 1;
+  }
+
+  return { pushupClosers, repClosers, trifectas };
 }
 
 /** Bros who locked ≥1 of push / squat / plank for the day (includes full clears). */
@@ -1753,6 +1791,10 @@ function render({ skipScroll = false } = {}) {
   setText("#activity-fun-cabs", number.format(desertMath.callACabs));
   setText("#activity-fun-biscuits", number.format(desertMath.biscuits));
   setText("#activity-fun-wings", number.format(desertMath.wings));
+  const closeouts = groupCloseoutStats(participantIds);
+  setText("#activity-closeout-pushups", number.format(closeouts.pushupClosers));
+  setText("#activity-closeout-reps", number.format(closeouts.repClosers));
+  setText("#activity-closeout-trifectas", number.format(closeouts.trifectas));
   setText("#activity-sessions-total", number.format(daysLogged));
   setText("#activity-days-goal", number.format(daysGoal));
   if (bestDay.reps > 0 && bestDay.label) {
@@ -3065,6 +3107,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
         const parts = [];
         let timelineStarted = false;
         let yesterdayHeadingStarted = false;
+        let historyHeadingStarted = false;
         visibleHistoryGroups.forEach((group) => {
           const isToday = group.dateKey === todayKey;
           const dayAge = historyDayAgeDays(group.dateKey, todayKey);
@@ -3199,8 +3242,11 @@ function renderPersonPage({ skipScroll = false } = {}) {
             parts.push('<h2 class="person-history-heading">Yesterday</h2>');
             yesterdayHeadingStarted = true;
           }
-          if (condensed && !timelineStarted) {
+          if (dayAge >= 2 && !historyHeadingStarted) {
             parts.push('<h2 class="person-history-heading">History</h2>');
+            historyHeadingStarted = true;
+          }
+          if (condensed && !timelineStarted) {
             parts.push('<div class="history-timeline">');
             timelineStarted = true;
           }

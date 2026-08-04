@@ -870,17 +870,8 @@ body.is-menu-open {
   grid-template-rows: auto 1fr;
   gap: var(--as-gap-sm, 12px);
   min-height: 174px;
-  padding: 14px 20px 52px;
+  padding: 14px 20px 20px;
   position: relative;
-}
-.activity-fun::after {
-  content: "";
-  position: absolute;
-  left: 20px;
-  right: 20px;
-  bottom: 16px;
-  height: 1px;
-  background: var(--line);
 }
 .activity-fun__head {
   display: flex;
@@ -956,6 +947,67 @@ body.is-menu-open {
   font-weight: 700;
   letter-spacing: .08em;
   opacity: 0.6;
+}
+.activity-closeouts {
+  display: grid;
+  gap: var(--as-gap-sm, 12px);
+  padding: 14px 20px 52px;
+  position: relative;
+}
+.activity-closeouts::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 16px;
+  height: 1px;
+  background: var(--line);
+}
+.activity-closeouts__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -4px;
+}
+.activity-closeouts__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 6px;
+  align-content: center;
+}
+.activity-closeouts__grid > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+  position: relative;
+}
+.activity-closeouts__grid > div:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  right: -3px;
+  width: 1px;
+  background: var(--line);
+}
+.activity-closeouts__grid strong {
+  color: var(--ink);
+  font: 800 30px/1 "Manrope", sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+}
+.activity-closeouts__grid span {
+  color: var(--quiet);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1.3;
+  opacity: 0.7;
+  text-wrap: balance;
 }
 .activity-pulse {
   display: grid;
@@ -1215,12 +1267,25 @@ body.is-menu-open {
     padding: 20px 16px 16px;
   }
   .activity-fun {
-    padding: 20px 16px 40px;
+    padding: 20px 16px 16px;
   }
-  .activity-fun::after {
+  .activity-closeouts {
+    padding: 18px 16px 40px;
+  }
+  .activity-closeouts::after {
     left: 16px;
     right: 16px;
     bottom: 24px;
+  }
+  .activity-closeouts__grid {
+    gap: 10px 4px;
+  }
+  .activity-closeouts__grid strong {
+    font-size: 26px;
+  }
+  .activity-closeouts__grid span {
+    font-size: 7px;
+    letter-spacing: .06em;
   }
   .activity-mix__legend {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2787,13 +2852,13 @@ h1 .logo-chella {
   align-items: center;
   justify-content: center;
   /* Plate sized to the glyph so the rail cannot show through the + */
-  width: 14px;
-  height: 14px;
-  margin: 0 0 0 -3px; /* keep centered on the 8px rail column */
+  width: 17.5px; /* 14px × 1.25 */
+  height: 17.5px;
+  margin: 0 0 0 -4.75px; /* keep centered on the 8px rail column */
   padding: 0;
   overflow: visible;
   font-family: "Manrope", sans-serif;
-  font-size: 13px;
+  font-size: 16.25px; /* 13px × 1.25 */
   font-weight: 500;
   line-height: 0;
   color: var(--muted);
@@ -3764,7 +3829,7 @@ a.activity-item:focus-visible {
   left: 50%;
   bottom: calc(100% + 3px);
   transform: translateX(-50%);
-  color: var(--lime);
+  color: #fff;
   font: 700 7px/1 "Manrope", sans-serif;
   letter-spacing: .12em;
   white-space: nowrap;
@@ -3808,15 +3873,15 @@ a.activity-item:focus-visible {
 .personal-day-chart__col.is-today .personal-day-chart__bar {
   width: 100%;
 }
-/* Today: progress-track fill when empty + lime outline (filled or empty) */
+/* Today: progress-track fill when empty + white outline (filled or empty) */
 .personal-day-chart__col.is-today .personal-day-chart__bar.is-empty {
   background: var(--progress-track);
   box-shadow:
-    inset 0 -2px 0 color-mix(in srgb, var(--lime) 45%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--lime) 40%, transparent);
+    inset 0 -2px 0 color-mix(in srgb, #fff 45%, transparent),
+    0 0 0 1px color-mix(in srgb, #fff 40%, transparent);
 }
 .personal-day-chart__col.is-today .personal-day-chart__bar:not(.is-empty) {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lime) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 55%, transparent);
 }
 .personal-breakdown {
   display: grid;
