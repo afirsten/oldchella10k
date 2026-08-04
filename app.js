@@ -19,6 +19,8 @@ const DAILY_GOALS = {
   squats: 100,
   planks: 240,
 };
+/** 30 min misc timed ≈ 100% Other / 100 push-up injury credit. */
+const OTHER_TIME_GOAL_MIN = 30;
 const STORAGE_KEY = "oldchella-10k-activities-v3";
 const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
@@ -257,6 +259,20 @@ function isInjuryInput(activity) {
 }
 
 /**
+ * Convert any Other subtype into % effort for WORKOUTS / OTHER totals.
+ * Same scale as injury push-up credit: 100% misc workout, 100 misc rep,
+ * or 30 min misc timed → 100%.
+ */
+function otherPercentContribution(activity) {
+  if (activityExercise(activity) !== "other") return 0;
+  const amount = Number(activity.reps) || 0;
+  const type = otherTypeOf(activity);
+  if (type === "time") return Math.round(amount * (100 / OTHER_TIME_GOAL_MIN));
+  // Misc Workout (%) and Misc Rep share the 100 → 100% scale.
+  return amount;
+}
+
+/**
  * Push-up credit when Other is logged with Injury Input on:
  * - Workouts %: 100% → 100 reps (percent/100 × daily push-up goal)
  * - Misc reps: count as-is (100 → 100)
@@ -267,7 +283,7 @@ function injuryPushupCredit(activity) {
   const amount = Number(activity.reps) || 0;
   const type = otherTypeOf(activity);
   if (type === "reps") return Math.round(amount);
-  if (type === "time") return Math.round(amount * (100 / 30));
+  if (type === "time") return Math.round(amount * (100 / OTHER_TIME_GOAL_MIN));
   return Math.round((amount / 100) * DAILY_GOALS.pushups);
 }
 
@@ -326,9 +342,7 @@ function accumulateChallengeMetrics(totals, activity) {
   const exercise = activityExercise(activity);
   if (exercise === "weight") return totals;
   if (exercise === "other") {
-    if (otherTypeOf(activity) === "workouts") {
-      totals.other += Number(activity.reps) || 0;
-    }
+    totals.other += otherPercentContribution(activity);
   } else if (Object.prototype.hasOwnProperty.call(totals, exercise)) {
     totals[exercise] += Number(activity.reps) || 0;
   }
@@ -380,7 +394,7 @@ function setCompactMagnitude(el, ...values) {
  * - Planks: kcal per minute (activity.reps stored as seconds)
  * - Other/workouts: logged as % of daily goal; 100% ≈ one daily push-up
  *   goal's burn → (other% / 100) * DAILY_GOALS.pushups * KCAL_PER_PUSHUP
- *   (misc reps / time Other entries are excluded from this other% sum)
+ *   (Misc Rep / Misc Timed convert into other% on the same 100→100% scale)
  */
 const KCAL_PER_PUSHUP = 0.85;
 const KCAL_PER_SQUAT = 1.0;
@@ -474,8 +488,8 @@ function challengeDayDateKey(dayNumber) {
 
 /**
  * Per-day stack for the person chart: goal-fraction units so categories are comparable.
- * 1.0 = one daily goal (100 PU / 100 SQ / 4 min plank / 100% Other workouts).
- * Weight logs skipped; Other misc reps/time only affect stacks via injury → pushups.
+ * 1.0 = one daily goal (100 PU / 100 SQ / 4 min plank / 100% Other).
+ * Weight logs skipped. Misc Rep / Misc Timed convert into Other % (100 reps or 30 min ≈ 100%).
  */
 function personChallengeDayStacks(personId) {
   const days = Array.from({ length: CHALLENGE_DAYS }, (_, index) => ({
@@ -2959,7 +2973,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
   history.forEach((activity) => {
     const exercise = activityExercise(activity);
     if (exercise === "weight") return;
-    if (exercise === "other" && otherTypeOf(activity) !== "workouts") return;
     sessionDays[exercise].add(activity.createdAt.slice(0, 10));
   });
   const averageFor = (exercise, value) => {
@@ -4600,7 +4613,6 @@ function personChallengeStats(personId) {
   history.forEach((activity) => {
     const exercise = activityExercise(activity);
     if (exercise === "weight") return;
-    if (exercise === "other" && otherTypeOf(activity) !== "workouts") return;
     sessionDays[exercise].add(activity.createdAt.slice(0, 10));
   });
   const averageFor = (exercise, value) => {
