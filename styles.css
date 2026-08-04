@@ -3811,7 +3811,7 @@ a.activity-item:focus-visible {
   content: "";
   width: 6px;
   height: 6px;
-  border-radius: 1px;
+  border-radius: 50%;
   background: currentColor;
 }
 .personal-day-chart__legend .is-pushups { color: var(--pink); }
