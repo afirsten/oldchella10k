@@ -5308,6 +5308,11 @@ $("#close-dialog-button").addEventListener("click", () => {
 $("#close-weight-dialog-button")?.addEventListener("click", () => {
   closeLogDialog();
 });
+document.querySelectorAll("#log-dialog .sheet-handle").forEach((handle) => {
+  handle.addEventListener("click", () => {
+    closeLogDialog();
+  });
+});
 $("#open-weight-card")?.addEventListener("click", () => {
   if (editingActivityId) return;
   const person = getPerson(personInput.value);

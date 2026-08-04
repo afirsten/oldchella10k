@@ -42,7 +42,7 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=262" />
+    <link rel="stylesheet" href="./styles.css?v=265" />
     <script>
       (function () {
         try {
@@ -1089,7 +1089,7 @@
     <dialog id="log-dialog">
       <div class="log-dialog-shell">
       <form id="log-form">
-        <div class="sheet-handle" aria-hidden="true"></div>
+        <button type="button" class="sheet-handle" aria-label="Close"></button>
         <div class="dialog-heading">
           <div class="log-heading-identity">
             <img id="log-person-image" class="log-person-avatar" src="" alt="" />
@@ -1193,21 +1193,21 @@
             </div>
             <span id="amount-unit">REPS</span>
           </div>
-          <div class="quick-reps" aria-label="Add amount" data-active="pushups">
-            <button type="button" data-increment="5">+5</button>
-            <button type="button" data-increment="10">+10</button>
-            <button type="button" data-increment="25">+25</button>
-            <button type="button" data-increment="50">+50</button>
-          </div>
         </div>
         <p class="log-form-error" id="log-form-error" hidden role="alert"></p>
         <button class="submit-button" type="submit">ADD TO THE TOTAL</button>
+        <div class="quick-reps" aria-label="Add amount" data-active="pushups">
+          <button type="button" data-increment="5">+5</button>
+          <button type="button" data-increment="10">+10</button>
+          <button type="button" data-increment="25">+25</button>
+          <button type="button" data-increment="50">+50</button>
+        </div>
         <button type="button" class="log-weight-link" id="open-weight-card" hidden>
           Track weight
         </button>
       </form>
       <form id="weight-form" hidden>
-        <div class="sheet-handle" aria-hidden="true"></div>
+        <button type="button" class="sheet-handle" aria-label="Close"></button>
         <div class="dialog-heading">
           <div class="log-heading-identity">
             <img id="weight-person-image" class="log-person-avatar" src="" alt="" />

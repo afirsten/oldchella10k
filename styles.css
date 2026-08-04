@@ -3827,14 +3827,27 @@ a.activity-item:focus-visible {
   content: "TODAY";
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 3px);
+  bottom: calc(100% + 8px);
   transform: translateX(-50%);
   color: #fff;
   font: 700 7px/1 "Manrope", sans-serif;
   letter-spacing: .12em;
   white-space: nowrap;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
+}
+/* Thin rule from TODAY label bottom to current bar top (bar covers the rest) */
+.personal-day-chart__col.is-today::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  bottom: 0;
+  width: 1px;
+  transform: translateX(-50%);
+  background: #fff;
+  pointer-events: none;
+  z-index: 0;
 }
 .personal-day-chart__col.is-empty {
   background: transparent;
@@ -3869,19 +3882,16 @@ a.activity-item:focus-visible {
 .personal-day-chart__bar > span.is-squats { background: var(--terra); }
 .personal-day-chart__bar > span.is-other { background: var(--green); }
 .personal-day-chart__bar > span.is-planks { background: var(--lime); }
-/* Today: ~2× sibling bar width (58% → 100% of col); callout stays col-centered */
+/* Today: ~2× sibling bar width (58% → 100% of col); covers connector below bar top */
 .personal-day-chart__col.is-today .personal-day-chart__bar {
+  position: relative;
+  z-index: 1;
   width: 100%;
 }
-/* Today: progress-track fill when empty + white outline (filled or empty) */
+/* Today: progress-track fill when empty */
 .personal-day-chart__col.is-today .personal-day-chart__bar.is-empty {
   background: var(--progress-track);
-  box-shadow:
-    inset 0 -2px 0 color-mix(in srgb, #fff 45%, transparent),
-    0 0 0 1px color-mix(in srgb, #fff 40%, transparent);
-}
-.personal-day-chart__col.is-today .personal-day-chart__bar:not(.is-empty) {
-  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 55%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--line) 35%, transparent);
 }
 .personal-breakdown {
   display: grid;
@@ -4179,7 +4189,7 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   display: grid;
   gap: 18px;
   align-content: start;
-  padding: 10px 22px calc(24px + env(safe-area-inset-bottom));
+  padding: 0 22px calc(24px + env(safe-area-inset-bottom));
 }
 #weight-form:not([hidden]) {
   display: flex;
@@ -4536,13 +4546,40 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   display: none !important;
 }
 .sheet-handle {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 28px;
+  margin: -6px auto -3px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.sheet-handle::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 40px;
   height: 4px;
-  margin: 0 auto 8px;
   border-radius: 99px;
   background: var(--quiet);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.sheet-handle:focus-visible {
+  outline: 2px solid rgba(245, 200, 66, 0.7);
+  outline-offset: 2px;
 }
 .dialog-heading { margin-bottom: 4px; }
+#log-form > .dialog-heading,
+#weight-form > .dialog-heading {
+  margin-top: -15px;
+}
 .log-heading-identity {
   display: flex;
   min-width: 0;
