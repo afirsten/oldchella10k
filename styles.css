@@ -2778,17 +2778,6 @@ h1 .logo-chella {
 .history-condensed-row .delete-activity-button svg {
   width: 13px;
 }
-.history-condensed-row.is-deleting {
-  pointer-events: none;
-  cursor: default;
-  display: grid;
-  grid-template-columns: 1fr;
-  place-items: center;
-  overflow: hidden;
-  border-color: transparent;
-  background: rgba(255, 45, 120, .1);
-  color: var(--pink);
-}
 .add-to-date-button {
   display: flex;
   gap: 7px;
@@ -3124,7 +3113,8 @@ a.activity-item:focus-visible {
   stroke-linejoin: round;
   stroke-width: 1.7;
 }
-.activity-item.is-deleting {
+.activity-item.is-deleting,
+.history-condensed-row.is-deleting {
   pointer-events: none;
   cursor: default;
   display: grid;
@@ -3136,9 +3126,21 @@ a.activity-item:focus-visible {
   transform-origin: center center;
   will-change: transform, height, opacity;
 }
+.activity-item.is-deleting {
+  --delete-radius: 15px;
+}
+.history-condensed-row.is-deleting {
+  --delete-radius: 8px;
+  border: 1px solid rgba(255, 45, 120, .5);
+  color: var(--pink);
+}
 .activity-item.is-deleting:hover,
-.activity-item.is-deleting:focus-visible {
+.activity-item.is-deleting:focus-visible,
+.history-condensed-row.is-deleting:hover,
+.history-condensed-row.is-deleting:focus-visible {
   border-color: rgba(255, 45, 120, .5);
+  background: rgba(255, 45, 120, .12);
+  color: var(--pink);
   outline: none;
 }
 .activity-deleting-label {
@@ -3147,10 +3149,12 @@ a.activity-item:focus-visible {
   letter-spacing: .16em;
   text-transform: uppercase;
 }
-.activity-item.is-tv-off {
+.activity-item.is-tv-off,
+.history-condensed-row.is-tv-off {
   animation: activity-tv-off 720ms cubic-bezier(.45, 0, .2, 1) forwards;
 }
-.activity-item.is-tv-off .activity-deleting-label {
+.activity-item.is-tv-off .activity-deleting-label,
+.history-condensed-row.is-tv-off .activity-deleting-label {
   opacity: 0;
   transition: opacity 80ms linear;
 }
@@ -3161,7 +3165,7 @@ a.activity-item:focus-visible {
     transform: scaleX(1);
     border-color: rgba(255, 45, 120, .5);
     background: rgba(255, 45, 120, .12);
-    border-radius: 15px;
+    border-radius: var(--delete-radius, 15px);
   }
   12% {
     background: #ff2d78;
@@ -3205,7 +3209,8 @@ a.activity-item:focus-visible {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .activity-item.is-tv-off { animation: none; }
+  .activity-item.is-tv-off,
+  .history-condensed-row.is-tv-off { animation: none; }
 }
 .empty-state {
   padding: 34px 20px;
