@@ -1340,24 +1340,24 @@ function activityCallout(activity) {
     const type = otherTypeOf(activity);
     if (type === "reps") {
       const lines = [
-        `Fresh drop: ${first} just logged ${amount} misc reps — ${label}.`,
-        `${first} banked ${amount} other reps (${label}). Side quest secured.`,
-        `+${amount} other reps from ${first}: ${label}.`,
+        `Fresh drop: ${first} just logged ${amount} misc rep — ${label}.`,
+        `${first} banked ${amount} misc rep (${label}). Side quest secured.`,
+        `+${amount} misc rep from ${first}: ${label}.`,
       ];
       return lines[seed % lines.length];
     }
     if (type === "time") {
       const lines = [
-        `Fresh drop: ${first} just logged ${amount} min on Other — ${label}.`,
-        `${first} put in ${amount} min Other (${label}). Clock still counts.`,
-        `+${amount} min Other from ${first}: ${label}.`,
+        `Fresh drop: ${first} just logged ${amount} min misc timed — ${label}.`,
+        `${first} put in ${amount} min misc timed (${label}). Clock still counts.`,
+        `+${amount} min misc timed from ${first}: ${label}.`,
       ];
       return lines[seed % lines.length];
     }
     const lines = [
-      `Fresh drop: ${first} just added ${amount}% on Other — ${label}.`,
-      `${first} slipped in ${amount}% Other (${label}). The side quest counts.`,
-      `+${amount}% Other from ${first}: ${label}.`,
+      `Fresh drop: ${first} just added ${amount}% misc workout — ${label}.`,
+      `${first} slipped in ${amount}% misc workout (${label}). The side quest counts.`,
+      `+${amount}% misc workout from ${first}: ${label}.`,
     ];
     return lines[seed % lines.length];
   }
@@ -3441,21 +3441,21 @@ function updateExerciseFields({ keepAmount = false } = {}) {
     },
     other: {
       workouts: {
-        label: "Percent of daily goal",
+        label: "Misc Workout",
         unit: "% EFFORT",
         quick: [25, 50, 75, 100],
         percent: true,
         quickLabel: (n) => `+${n}%`,
       },
       reps: {
-        label: "Misc reps",
+        label: "Misc Rep",
         unit: "REPS",
         quick: [10, 25, 50, 100],
         percent: false,
         quickLabel: (n) => `+${n}`,
       },
       time: {
-        label: "Minutes",
+        label: "Misc Timed",
         unit: "MIN",
         quick: [10, 20, 30, 45],
         percent: false,
@@ -4080,12 +4080,6 @@ function openLogDialog(personId, options = {}) {
   unlockLogDialogHeight();
   $("#log-success").hidden = true;
   $("#log-success").classList.remove("is-board-cleared");
-  const successShare = $("#success-share-button");
-  if (successShare) {
-    successShare.hidden = true;
-    successShare.disabled = false;
-    successShare.textContent = "Share to WhatsApp";
-  }
   $("#log-form").reset();
   const weightForm = $("#weight-form");
   if (weightForm) weightForm.reset();
@@ -4409,6 +4403,31 @@ function revealDailyPulseAfterLog() {
     void pulse.offsetWidth;
   }
 
+  const injectDailyPulseShare = () => {
+    const banner = pulse.querySelector(".daily-pulse-banner");
+    if (!banner) return;
+    const personId = pendingPulseReveal?.personId || currentPersonId();
+    const dateKey = pendingPulseReveal?.activityDate || localDateValue();
+    if (!personId || !isPersonPageOwner(personId)) return;
+    let share = pulse.querySelector(".daily-pulse-share");
+    if (!share) {
+      share = document.createElement("button");
+      share.type = "button";
+      share.className = "share-whatsapp-button daily-pulse-share is-entering";
+      share.dataset.personId = personId;
+      share.dataset.date = dateKey;
+      share.textContent = "Share to WhatsApp";
+      banner.insertAdjacentElement("afterend", share);
+      void share.offsetWidth;
+    }
+    share.classList.add("is-in");
+    pendingShareGoal = {
+      personId: share.dataset.personId,
+      activityDate: share.dataset.date,
+    };
+    ensureDailyGoalShareBlob(share.dataset.personId, share.dataset.date).catch(() => {});
+  };
+
   const run = () => {
     if (showBanner) {
       let banner = pulse.querySelector(".daily-pulse-banner");
@@ -4421,35 +4440,18 @@ function revealDailyPulseAfterLog() {
         void banner.offsetWidth;
       }
       banner.classList.add("is-in");
-
-      const personId = pendingPulseReveal?.personId || currentPersonId();
-      const dateKey = pendingPulseReveal?.activityDate || localDateValue();
-      if (personId && isPersonPageOwner(personId)) {
-        let share = pulse.querySelector(".daily-pulse-share");
-        if (!share) {
-          share = document.createElement("button");
-          share.type = "button";
-          share.className = "share-whatsapp-button daily-pulse-share is-entering";
-          share.dataset.personId = personId;
-          share.dataset.date = dateKey;
-          share.textContent = "Share to WhatsApp";
-          banner.insertAdjacentElement("afterend", share);
-          void share.offsetWidth;
-        }
-        share.classList.add("is-in");
-        pendingShareGoal = {
-          personId: share.dataset.personId,
-          activityDate: share.dataset.date,
-        };
-        ensureDailyGoalShareBlob(share.dataset.personId, share.dataset.date).catch(() => {});
-      }
+      // Keep Share off the LET'S GO / board-cleared overlay — only reveal after LFG exits.
+      if (!showPulseLfg) injectDailyPulseShare();
     }
 
     if (showPulseLfg) {
       playDailyPulseLfg(pulse);
       window.setTimeout(() => {
         const lfg = pulse.querySelector(".daily-pulse-lfg");
-        if (!lfg) return;
+        if (!lfg) {
+          if (showBanner) injectDailyPulseShare();
+          return;
+        }
         lfg.classList.remove("is-in");
         // Force a frame so the exit transition runs from full opacity.
         void lfg.offsetWidth;
@@ -4457,6 +4459,7 @@ function revealDailyPulseAfterLog() {
         window.setTimeout(() => {
           lfg.remove();
           pulse.classList.remove("is-lfg");
+          if (showBanner) injectDailyPulseShare();
         }, reduceMotion ? 0 : 300);
       }, reduceMotion ? 0 : 2600);
     }
@@ -4993,10 +4996,7 @@ async function ensureDailyGoalShareBlob(personId, dateKey) {
 
 async function shareDailyGoalMetToWhatsApp(personId, dateKey, buttonEl = null) {
   if (!personId || !dateKey || !isPersonPageOwner(personId)) return false;
-  const button =
-    buttonEl ||
-    $("#success-share-button") ||
-    document.querySelector(".daily-pulse-share");
+  const button = buttonEl || document.querySelector(".daily-pulse-share");
   if (button) {
     button.disabled = true;
     button.textContent = "Preparing…";
@@ -5053,20 +5053,11 @@ function showLogSuccess(personId, entries, options = {}) {
 
   const form = $("#log-form");
   const success = $("#log-success");
-  const shareButton = $("#success-share-button");
-  const canShare = boardCleared && isPersonPageOwner(personId);
   success.classList.toggle("is-board-cleared", boardCleared);
-  pendingShareGoal = canShare ? { personId, activityDate } : null;
-  pendingShareBlob = null;
-  pendingShareBlobPromise = null;
-
-  if (shareButton) {
-    shareButton.hidden = !canShare;
-    shareButton.disabled = false;
-    shareButton.textContent = "Share to WhatsApp";
-    shareButton.dataset.personId = personId;
-    shareButton.dataset.date = activityDate;
-  }
+  // Never show WhatsApp share on the log success / BOARD CLEARED sheet.
+  success.querySelectorAll(".share-whatsapp-button, .daily-pulse-share, .log-success-share").forEach((el) => {
+    el.remove();
+  });
 
   if (boardCleared) {
     $("#success-eyebrow").textContent = "BOARD CLEARED";
@@ -5077,7 +5068,6 @@ function showLogSuccess(personId, entries, options = {}) {
         ? "Daily goals locked in. Absolute menace."
         : `${list.length} activities in — daily goals locked in.`;
     setSuccessRemainingMessage(personId, activityDate, { boardCleared: true });
-    if (canShare) ensureDailyGoalShareBlob(personId, activityDate).catch(() => {});
   } else {
     fillNormalLogSuccess(personId, list, activityDate);
   }
@@ -5089,15 +5079,6 @@ function showLogSuccess(personId, entries, options = {}) {
   if (!dialog.open) {
     dialog.showModal();
     lockLogDialogHeight();
-  } else if (canShare) {
-    // Form lock can be shorter than celebration + share CTA; grow so the button stays on-screen.
-    const lockedPx = parseFloat(dialog.style.height) || 0;
-    dialog.style.height = "auto";
-    dialog.style.minHeight = "";
-    const needed = Math.ceil(dialog.getBoundingClientRect().height);
-    const next = Math.max(lockedPx, needed);
-    dialog.style.height = `${next}px`;
-    dialog.style.minHeight = `${next}px`;
   }
 
   const fire = fireLogConfetti();
@@ -5254,29 +5235,15 @@ $("#person-quick-add")?.addEventListener("click", (event) => {
 
 document.addEventListener("click", async (event) => {
   const shareButton = event.target.closest(
-    ".daily-pulse-share, .log-success-share, .share-whatsapp-button[data-person-id]",
+    ".daily-pulse-share, .share-whatsapp-button[data-person-id]",
   );
   if (!shareButton) return;
   event.preventDefault();
   const personId = shareButton.dataset.personId;
   const activityDate = shareButton.dataset.date;
   if (!personId || !activityDate || !isPersonPageOwner(personId)) return;
-  // Keep the success sheet open while the OS share sheet is up.
-  if (shareButton.classList.contains("log-success-share")) {
-    window.clearTimeout(logSuccessTimer);
-    logSuccessTimer = null;
-  }
   pendingShareGoal = { personId, activityDate };
-  const shared = await shareDailyGoalMetToWhatsApp(personId, activityDate, shareButton);
-  if (shared && shareButton.classList.contains("log-success-share") && dialog.open) {
-    logSuccessTimer = window.setTimeout(() => {
-      closeLogDialog().then(() => {
-        scrollPersonLogButtonIntoView();
-        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        window.setTimeout(() => revealDailyPulseAfterLog(), reduceMotion ? 40 : 560);
-      });
-    }, 1200);
-  }
+  await shareDailyGoalMetToWhatsApp(personId, activityDate, shareButton);
 });
 
 $("#feed-day-filter")?.addEventListener("click", (event) => {

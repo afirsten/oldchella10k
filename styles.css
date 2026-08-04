@@ -4323,13 +4323,11 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 .log-success.is-board-cleared #success-copy {
   margin-top: 14px;
 }
-.log-success.is-board-cleared .log-success-share {
-  position: relative;
-  z-index: 3;
-  width: min(100%, 320px);
-  margin: 18px auto 0;
-  flex-shrink: 0;
-  pointer-events: auto;
+/* Hard hide: share never belongs on the log success / BOARD CLEARED sheet. */
+.log-success .share-whatsapp-button,
+.log-success .daily-pulse-share,
+.log-success .log-success-share {
+  display: none !important;
 }
 .share-whatsapp-button {
   position: relative;
@@ -4704,6 +4702,10 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 }
 .daily-pulse.is-lfg {
   min-height: 270px;
+}
+/* Share must not sit under the in-card LET'S GO overlay. */
+.daily-pulse.is-lfg .daily-pulse-share {
+  display: none !important;
 }
 .daily-goals-card.is-complete {
   border-color: rgba(76,223,138,.45);
@@ -5206,11 +5208,11 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 3px;
-  margin-top: 10px;
+  margin-bottom: 10px;
   padding: 3px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--inset-panel-strong);
+  background: color-mix(in srgb, var(--inset-panel-strong) 60%, transparent);
 }
 .other-type-tabs button {
   height: 34px;
