@@ -1,6 +1,8 @@
 const GOAL_PER_PERSON = 10000;
 const CHALLENGE_START = "2026-07-14";
 const CHALLENGE_DAYS = 100;
+const WEIGHT_MIN_LB = 99;
+const WEIGHT_MAX_LB = 333;
 const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
 const OLD_CHELLA_URL = "https://goingtoliveforever.com/";
 const RECIPES_SHEET_ID = "1UkuA5apWL5PZ2XQkZP_r9horqKtial1FCrk5Vn3HK88";
@@ -22,10 +24,6 @@ const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
 const RULES_COLLAPSE_KEY = "rippedchella-rules-collapsed-v1";
-const DAY_CHART_RANGE_KEY = "rippedchella-day-chart-range-v1";
-const DAY_CHART_OFFSET_KEY = "rippedchella-day-chart-offset-v1";
-const DAY_CHART_RANGES = [10, 25, 50, 100];
-const DEFAULT_DAY_CHART_RANGE = 100;
 
 function getPreferredTheme() {
   try {
@@ -520,170 +518,22 @@ function formatDayChartTitle(day) {
   return `Day ${n} · ${parts.join(" · ")}`;
 }
 
-function normalizeDayChartRange(value) {
-  const n = Number(value);
-  return DAY_CHART_RANGES.includes(n) ? n : DEFAULT_DAY_CHART_RANGE;
-}
-
-function getPersonDayChartRange() {
-  try {
-    return normalizeDayChartRange(localStorage.getItem(DAY_CHART_RANGE_KEY));
-  } catch {
-    return DEFAULT_DAY_CHART_RANGE;
-  }
-}
-
-function getPersonDayChartOffsetRaw() {
-  try {
-    const raw = Number(localStorage.getItem(DAY_CHART_OFFSET_KEY));
-    if (!Number.isFinite(raw) || raw < 0) return 0;
-    return Math.floor(raw);
-  } catch {
-    return 0;
-  }
-}
-
-/** Latest inclusive end day for the chart (through today; pads to range while early). */
-function personDayChartLatestEnd(range = getPersonDayChartRange()) {
-  const n = normalizeDayChartRange(range);
-  const today = currentChallengeDay();
-  return Math.min(CHALLENGE_DAYS, Math.max(today, n));
-}
-
-/**
- * Visible window of `range` challenge days, paged back from the latest end by `offset`
- * windows. Offset 0 = through today (or early pad); higher offset = earlier days.
- */
-function personDayChartWindow(range = getPersonDayChartRange(), offset = getPersonDayChartOffsetRaw()) {
-  const n = normalizeDayChartRange(range);
-  const latestEnd = personDayChartLatestEnd(n);
-  const latestStart = latestEnd - n + 1;
-  const maxOffset = Math.max(0, Math.ceil((latestStart - 1) / n));
-  const o = Math.min(Math.max(0, Math.floor(Number(offset) || 0)), maxOffset);
-  let start = latestStart - o * n;
-  if (start < 1) start = 1;
-  const end = start + n - 1;
-  return { start, end, offset: o, maxOffset, range: n };
-}
-
-function getPersonDayChartOffset() {
-  return personDayChartWindow().offset;
-}
-
-function persistPersonDayChartOffset(offset) {
-  try {
-    localStorage.setItem(DAY_CHART_OFFSET_KEY, String(Math.max(0, Math.floor(Number(offset) || 0))));
-  } catch {
-    /* preference optional if storage blocked */
-  }
-}
-
-function slicePersonDayChartDays(days, range, offset) {
-  const { start, end } = personDayChartWindow(range, offset);
-  return days.slice(start - 1, end);
-}
-
-function syncPersonDayChartRangeUI(range, offset) {
-  const win = personDayChartWindow(range, offset);
-  const { start, end, offset: o, maxOffset, range: n } = win;
-  const chart = $("#person-day-chart");
-  if (chart) {
-    chart.setAttribute(
-      "aria-label",
-      `Challenge day composition — days ${start}–${end}`,
-    );
-  }
-  const tabs = $(".personal-day-chart__range");
-  if (tabs) tabs.dataset.active = String(n);
-  document.querySelectorAll("[data-day-range]").forEach((button) => {
-    const selected = Number(button.dataset.dayRange) === n;
-    button.classList.toggle("is-selected", selected);
-    button.setAttribute("aria-checked", selected ? "true" : "false");
-  });
-
-  const pager = $("#person-day-chart-pager");
-  const prev = $("#person-day-chart-prev");
-  const next = $("#person-day-chart-next");
-  if (pager) pager.hidden = maxOffset === 0;
-  if (prev) {
-    prev.disabled = o >= maxOffset;
-    prev.setAttribute(
-      "aria-label",
-      o >= maxOffset ? "Earlier days unavailable" : `Earlier days before day ${start}`,
-    );
-  }
-  if (next) {
-    next.disabled = o <= 0;
-    next.setAttribute(
-      "aria-label",
-      o <= 0 ? "Later days unavailable" : `Later days after day ${end}`,
-    );
-  }
-}
-
-function setPersonDayChartRange(range) {
-  const n = normalizeDayChartRange(range);
-  try {
-    localStorage.setItem(DAY_CHART_RANGE_KEY, String(n));
-  } catch {
-    /* preference optional if storage blocked */
-  }
-  persistPersonDayChartOffset(0);
-  syncPersonDayChartRangeUI(n, 0);
-  const personId = currentPersonId();
-  if (personId) renderPersonDayChart(personId);
-}
-
-function setPersonDayChartOffset(offset) {
-  const win = personDayChartWindow(getPersonDayChartRange(), offset);
-  persistPersonDayChartOffset(win.offset);
-  syncPersonDayChartRangeUI(win.range, win.offset);
-  const personId = currentPersonId();
-  if (personId) renderPersonDayChart(personId);
-}
-
-function initPersonDayChartRange() {
-  const range = getPersonDayChartRange();
-  const offset = getPersonDayChartOffset();
-  syncPersonDayChartRangeUI(range, offset);
-  document.querySelectorAll("[data-day-range]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const next = normalizeDayChartRange(button.dataset.dayRange);
-      if (next === getPersonDayChartRange()) return;
-      setPersonDayChartRange(next);
-    });
-  });
-  const prev = $("#person-day-chart-prev");
-  const next = $("#person-day-chart-next");
-  if (prev) {
-    prev.addEventListener("click", () => {
-      setPersonDayChartOffset(getPersonDayChartOffset() + 1);
-    });
-  }
-  if (next) {
-    next.addEventListener("click", () => {
-      setPersonDayChartOffset(getPersonDayChartOffset() - 1);
-    });
-  }
-}
-
 function renderPersonDayChart(personId) {
   const barsEl = $("#person-day-chart-bars");
   if (!barsEl) return;
 
-  const range = getPersonDayChartRange();
-  const offset = getPersonDayChartOffset();
-  syncPersonDayChartRangeUI(range, offset);
-  const days = slicePersonDayChartDays(personChallengeDayStacks(personId), range, offset);
+  const days = personChallengeDayStacks(personId);
   const maxUnits = Math.max(1, ...days.map((day) => day.totalUnits));
   const todayKey = localDateValue();
 
   barsEl.innerHTML = days
     .map((day) => {
       const isToday = day.dateKey === todayKey;
+      const isFuture = day.dateKey > todayKey;
+      const dayState = `${isToday ? " is-today" : ""}${isFuture ? " is-future" : ""}`;
       const title = escapeHtml(formatDayChartTitle(day));
       if (day.totalUnits <= 0) {
-        return `<div class="personal-day-chart__col is-empty${isToday ? " is-today" : ""}" title="${title}"><div class="personal-day-chart__bar is-empty"></div></div>`;
+        return `<div class="personal-day-chart__col is-empty${dayState}" title="${title}"><div class="personal-day-chart__bar is-empty"></div></div>`;
       }
       const heightPct = Math.max(4, (day.totalUnits / maxUnits) * 100);
       const segs = ["pushups", "squats", "planks", "other"]
@@ -693,7 +543,7 @@ function renderPersonDayChart(personId) {
             `<span class="is-${key}" style="flex:${day.units[key].toFixed(4)} 0 0"></span>`,
         )
         .join("");
-      return `<div class="personal-day-chart__col${isToday ? " is-today" : ""}" title="${title}"><div class="personal-day-chart__bar" style="height:${heightPct.toFixed(2)}%">${segs}</div></div>`;
+      return `<div class="personal-day-chart__col${dayState}" title="${title}"><div class="personal-day-chart__bar" style="height:${heightPct.toFixed(2)}%">${segs}</div></div>`;
     })
     .join("");
 }
@@ -2066,6 +1916,13 @@ function clearLogFormError() {
   el.textContent = "";
 }
 
+function clearWeightFormError() {
+  const el = $("#weight-form-error");
+  if (!el) return;
+  el.hidden = true;
+  el.textContent = "";
+}
+
 function showLogFormError(message) {
   const el = $("#log-form-error");
   if (!el || !dialog.open || $("#log-form").hidden) return false;
@@ -2075,12 +1932,64 @@ function showLogFormError(message) {
   return true;
 }
 
+function showWeightFormError(message) {
+  const el = $("#weight-form-error");
+  if (!el || !dialog.open || $("#weight-form")?.hidden) return false;
+  el.hidden = false;
+  el.textContent = message;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  return true;
+}
+
+function hideToastSoon(toast, ms = 2400) {
+  window.clearTimeout(window.__toastHideTimer);
+  window.__toastHideTimer = window.setTimeout(() => {
+    toast.classList.remove("is-visible", "is-success");
+  }, ms);
+}
+
 function showToast(message) {
   if (showLogFormError(message)) return;
+  if (showWeightFormError(message)) return;
   const toast = $("#toast");
+  if (!toast) return;
+  toast.classList.remove("is-success");
   toast.textContent = message;
   toast.classList.add("is-visible");
-  window.setTimeout(() => toast.classList.remove("is-visible"), 2400);
+  hideToastSoon(toast);
+}
+
+/** Fixed toast with check — does not change layout or scroll. */
+function showWeightUpdatedToast() {
+  const toast = $("#toast");
+  if (!toast) return;
+  toast.classList.add("is-success");
+  toast.innerHTML =
+    '<span class="toast__check" aria-hidden="true">✓</span><span class="toast__text">Weight updated</span>';
+  toast.classList.add("is-visible");
+  hideToastSoon(toast, 2600);
+}
+
+/**
+ * Close weight dialog, refresh UI, keep scroll position, then show success toast.
+ */
+async function finishWeightSave(personId) {
+  const scrollY = window.scrollY;
+  const restoreScroll = () => {
+    if (Math.abs(window.scrollY - scrollY) > 1) {
+      window.scrollTo({ top: scrollY, left: 0, behavior: "auto" });
+    }
+  };
+
+  renderWeightChart(personId);
+  editingActivityId = null;
+  await closeLogDialog();
+  render({ skipScroll: true });
+  restoreScroll();
+  requestAnimationFrame(() => {
+    restoreScroll();
+    showWeightUpdatedToast();
+  });
 }
 
 class ApiError extends Error {
@@ -2349,7 +2258,11 @@ function parseLocalActivityFields(body) {
   const rawOtherType = typeof body.otherType === "string" ? body.otherType.trim() : "";
 
   if (!allowed.has(exercise)) throw new ApiError("Choose a valid activity type.", 400);
-  if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
+  if (exercise === "weight") {
+    if (!Number.isInteger(reps) || reps < WEIGHT_MIN_LB || reps > WEIGHT_MAX_LB) {
+      throw new ApiError(`Weight must be from ${WEIGHT_MIN_LB} to ${WEIGHT_MAX_LB} lb.`, 400);
+    }
+  } else if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
     throw new ApiError("Activity amount must be from 1 to 1,000.", 400);
   }
   if (
@@ -3098,6 +3011,19 @@ function renderPersonPage({ skipScroll = false } = {}) {
       }
     }
   }
+  const weightSection = $("#person-weight-section");
+  const updateWeightBtn = $("#person-update-weight");
+  const canTrackWeight = isOwner && personStats.status === "in";
+  const showWeightSection =
+    showProgress && (Boolean(latestWeight) || canTrackWeight);
+  if (weightSection) weightSection.hidden = !showWeightSection;
+  if (updateWeightBtn) {
+    updateWeightBtn.hidden = !canTrackWeight;
+    updateWeightBtn.textContent = latestWeight ? "Update weight" : "Add weight";
+  }
+  if (showWeightSection) {
+    paintWeightChart("#person-weight-chart", personId);
+  }
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   const historyGroups = [...historyByDate];
   if (showProgress && !historyGroups.some((group) => group.dateKey === todayKey)) {
@@ -3216,7 +3142,7 @@ const personInput = $("#person-input");
 const exerciseInput = $("#exercise-input");
 const exerciseButtons = [...document.querySelectorAll("[data-exercise]")];
 const quickButtons = [...document.querySelectorAll("[data-increment]")];
-const EXERCISE_ORDER = ["pushups", "squats", "planks", "other", "weight"];
+const EXERCISE_ORDER = ["pushups", "squats", "planks", "other"];
 const OTHER_TYPE_ORDER = ["workouts", "reps", "time"];
 
 function emptyLogDrafts() {
@@ -3225,7 +3151,6 @@ function emptyLogDrafts() {
     squats: { reps: 0 },
     planks: { reps: 0 },
     other: { reps: 0, otherActivity: "", injuryInput: false, otherType: "workouts" },
-    weight: { reps: 0 },
   };
 }
 
@@ -3389,8 +3314,12 @@ function updateExerciseFields({ keepAmount = false } = {}) {
         quickLabel: (n) => `+${n}`,
       },
     }[otherType],
-    weight: { label: "Body weight", unit: "LB", quick: [5, 10, 25, 50], percent: false },
-  }[exercise];
+  }[exercise] || {
+    label: "Activity amount",
+    unit: "REPS",
+    quick: [5, 10, 25, 50],
+    percent: false,
+  };
 
   exerciseButtons.forEach((button) => {
     const selected = button.dataset.exercise === exercise;
@@ -3462,19 +3391,349 @@ function unlockLogDialogHeight() {
   dialog.style.minHeight = "";
 }
 
+/**
+ * Most recent weight log for a person by activity date, then logged timestamp.
+ */
+function latestWeightActivity(personId) {
+  if (!personId) return null;
+  let latest = null;
+  for (const activity of activities) {
+    if (activity.personId !== personId || !isWeightActivity(activity)) continue;
+    if (!latest) {
+      latest = activity;
+      continue;
+    }
+    const latestKey = activityDateKey(latest);
+    const entryKey = activityDateKey(activity);
+    if (entryKey > latestKey) {
+      latest = activity;
+      continue;
+    }
+    if (entryKey < latestKey) continue;
+    if (activityLoggedAt(activity) >= activityLoggedAt(latest)) latest = activity;
+  }
+  return latest;
+}
+
+/**
+ * Weight logs for a person as challenge day × lb (one point per activity).
+ * Day is 1-based from CHALLENGE_START; only days inside 1…CHALLENGE_DAYS are kept.
+ */
+function personWeightChartPoints(personId) {
+  if (!personId) return [];
+  return activities
+    .filter((activity) => activity.personId === personId && isWeightActivity(activity))
+    .map((activity) => {
+      const dateKey = activityDateKey(activity);
+      const day = dateKey ? challengeDayIndex(new Date(`${dateKey}T12:00:00`)) : 0;
+      return {
+        dateKey,
+        day,
+        weight: Number(activity.reps) || 0,
+        at: activityLoggedAt(activity),
+      };
+    })
+    .filter(
+      (point) =>
+        point.dateKey &&
+        point.day >= 1 &&
+        point.day <= CHALLENGE_DAYS &&
+        point.weight > 0,
+    )
+    .sort((a, b) => a.day - b.day || a.at - b.at);
+}
+
+function niceWeightAxisTicks(minW, maxW, targetCount = 5) {
+  const span = Math.max(1, maxW - minW);
+  const raw = span / Math.max(1, targetCount - 1);
+  const niceSteps = [1, 2, 5, 10, 15, 20, 25, 50, 100];
+  const step = niceSteps.find((value) => value >= raw) || Math.ceil(raw);
+  const start = Math.floor(minW / step) * step;
+  const ticks = [];
+  for (let value = start; value <= maxW + 0.001; value += step) {
+    if (value >= minW - 0.001 && value <= maxW + 0.001) ticks.push(value);
+  }
+  if (!ticks.length) ticks.push(Math.round(minW), Math.round(maxW));
+  return ticks;
+}
+
+/** Catmull-Rom → cubic Bézier path through chart points. */
+function weightChartSmoothPath(coords) {
+  if (!coords.length) return "";
+  if (coords.length === 1) {
+    return `M${coords[0].x.toFixed(1)} ${coords[0].y.toFixed(1)}`;
+  }
+  if (coords.length === 2) {
+    return `M${coords[0].x.toFixed(1)} ${coords[0].y.toFixed(1)} L${coords[1].x.toFixed(
+      1,
+    )} ${coords[1].y.toFixed(1)}`;
+  }
+  let d = `M${coords[0].x.toFixed(1)} ${coords[0].y.toFixed(1)}`;
+  for (let i = 0; i < coords.length - 1; i += 1) {
+    const p0 = coords[i - 1] || coords[i];
+    const p1 = coords[i];
+    const p2 = coords[i + 1];
+    const p3 = coords[i + 2] || p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(
+      1,
+    )} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+/**
+ * Challenge weight chart: X = days 1–100, Y = lb.
+ * @param {HTMLElement|string|null} chartOrSelector chart root (`.weight-chart`)
+ * @param {string} [personId]
+ */
+function paintWeightChart(chartOrSelector, personId) {
+  const chart =
+    typeof chartOrSelector === "string"
+      ? $(chartOrSelector)
+      : chartOrSelector || $("#weight-chart");
+  if (!chart) return;
+
+  const svg = chart.querySelector(".weight-chart__svg");
+  const empty = chart.querySelector(".weight-chart__empty");
+  if (!svg || !empty) return;
+
+  const allPoints = personWeightChartPoints(personId);
+
+  // One plotted point per challenge day (latest log that day wins).
+  const byDay = new Map();
+  for (const point of allPoints) {
+    byDay.set(point.day, point);
+  }
+  const points = [...byDay.values()].sort((a, b) => a.day - b.day);
+
+  // Match viewBox aspect to the laid-out CSS box so text/grid aren't stretched
+  // when the chart is much wider than the intrinsic 320×142 design size.
+  const height = 142;
+  const boxW = chart.clientWidth || svg.clientWidth;
+  const boxH = chart.clientHeight || svg.clientHeight || height;
+  const width =
+    boxW > 0 && boxH > 0
+      ? Math.max(280, Math.round((boxW / boxH) * height))
+      : 320;
+  // No Y-axis labels — keep room for day labels + floating weight values.
+  const pad = { top: 18, right: 14, bottom: 26, left: 14 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const daySpan = Math.max(1, CHALLENGE_DAYS - 1);
+  const gradId = `weight-fill-${chart.id || "chart"}`;
+
+  let minW = 150;
+  let maxW = 220;
+  if (points.length) {
+    const weights = points.map((p) => p.weight);
+    const lo = Math.min(...weights);
+    const hi = Math.max(...weights);
+    const padLbs = Math.max(3, Math.round((hi - lo) * 0.15) || 3);
+    minW = Math.max(1, Math.floor(lo - padLbs));
+    maxW = Math.ceil(hi + padLbs);
+    if (maxW <= minW) maxW = minW + 10;
+  }
+
+  // Day 1 left → Day 100 right; higher weight up.
+  const xForDay = (day) => pad.left + ((day - 1) / daySpan) * plotW;
+  const yForWeight = (w) =>
+    pad.top + ((maxW - w) / Math.max(1e-6, maxW - minW)) * plotH;
+
+  const placeWeightLabel = (x, y, label) => {
+    const approxW = label.length * 6.4;
+    let lx = x;
+    let anchor = "middle";
+    if (x - approxW / 2 < pad.left) {
+      lx = pad.left;
+      anchor = "start";
+    } else if (x + approxW / 2 > pad.left + plotW) {
+      lx = pad.left + plotW;
+      anchor = "end";
+    }
+    const above = y >= pad.top + 14;
+    const ly = above ? y - 9 : y + 15;
+    const tipW = approxW + 10;
+    const tipH = 15;
+    const tipX =
+      anchor === "start" ? lx : anchor === "end" ? lx - tipW : lx - tipW / 2;
+    const tipY = ly - 11;
+    return { lx, ly, anchor, tipX, tipY, tipW, tipH };
+  };
+
+  const yTicks = niceWeightAxisTicks(minW, maxW, 4);
+  const dayLabelStep = 25;
+  const dayTicks = [];
+  for (let day = 1; day <= CHALLENGE_DAYS; day += 1) {
+    const isEdge = day === 1 || day === CHALLENGE_DAYS;
+    if (isEdge || day % dayLabelStep === 0) dayTicks.push(day);
+  }
+
+  let grid = "";
+  for (const tick of yTicks) {
+    const y = yForWeight(tick);
+    grid += `<line class="weight-chart__grid weight-chart__grid--y" x1="${pad.left}" y1="${y.toFixed(
+      1,
+    )}" x2="${pad.left + plotW}" y2="${y.toFixed(1)}" />`;
+  }
+  for (const day of dayTicks) {
+    if (day === 1 || day === CHALLENGE_DAYS) continue;
+    const x = xForDay(day);
+    grid += `<line class="weight-chart__grid weight-chart__grid--x" x1="${x.toFixed(
+      1,
+    )}" y1="${pad.top}" x2="${x.toFixed(1)}" y2="${pad.top + plotH}" />`;
+  }
+
+  let refs = "";
+  if (points.length >= 1) {
+    const startW = points[0].weight;
+    const latestW = points[points.length - 1].weight;
+    const startY = yForWeight(startW);
+    refs += `<line class="weight-chart__ref weight-chart__ref--start" x1="${pad.left}" y1="${startY.toFixed(
+      1,
+    )}" x2="${pad.left + plotW}" y2="${startY.toFixed(1)}" />`;
+    if (latestW !== startW) {
+      const latestY = yForWeight(latestW);
+      refs += `<line class="weight-chart__ref weight-chart__ref--latest" x1="${pad.left}" y1="${latestY.toFixed(
+        1,
+      )}" x2="${pad.left + plotW}" y2="${latestY.toFixed(1)}" />`;
+    }
+  }
+
+  const dayLabels = dayTicks
+    .map((day) => {
+      const x = xForDay(day);
+      const anchor =
+        day === 1 ? "start" : day === CHALLENGE_DAYS ? "end" : "middle";
+      return `<text class="weight-chart__label weight-chart__day" x="${x.toFixed(1)}" y="${
+        pad.top + plotH + 16
+      }" text-anchor="${anchor}">Day ${day}</text>`;
+    })
+    .join("");
+
+  const defs = `
+    <defs>
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--terra)" stop-opacity="0.28" />
+        <stop offset="55%" stop-color="var(--lime)" stop-opacity="0.1" />
+        <stop offset="100%" stop-color="var(--lime)" stop-opacity="0" />
+      </linearGradient>
+    </defs>
+  `;
+
+  const axis = `
+    ${defs}
+    ${grid}
+    ${refs}
+    <line class="weight-chart__axis" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${
+      pad.top + plotH
+    }" />
+    <line class="weight-chart__axis" x1="${pad.left}" y1="${pad.top + plotH}" x2="${
+      pad.left + plotW
+    }" y2="${pad.top + plotH}" />
+    ${dayLabels}
+  `;
+
+  let series = "";
+  if (points.length) {
+    const coords = points.map((p) => ({
+      x: xForDay(p.day),
+      y: yForWeight(p.weight),
+      weight: p.weight,
+    }));
+    const lineD = weightChartSmoothPath(coords);
+    const baseline = pad.top + plotH;
+    const areaD = `${lineD} L${coords[coords.length - 1].x.toFixed(1)} ${baseline.toFixed(
+      1,
+    )} L${coords[0].x.toFixed(1)} ${baseline.toFixed(1)} Z`;
+    series = `<path class="weight-chart__area" d="${areaD}" fill="url(#${gradId})" />`;
+    series += `<path class="weight-chart__line" d="${lineD}" />`;
+    series += coords
+      .map((c, i) => {
+        const isLatest = i === coords.length - 1;
+        const label = `${Math.round(c.weight)} LB`;
+        const place = placeWeightLabel(c.x, c.y, label);
+        const valueEl = isLatest
+          ? `<text class="weight-chart__value" x="${place.lx.toFixed(1)}" y="${place.ly.toFixed(
+              1,
+            )}" text-anchor="${place.anchor}">${label}</text>`
+          : `<g class="weight-chart__tip" aria-hidden="true">
+              <rect class="weight-chart__tip-bg" x="${place.tipX.toFixed(1)}" y="${place.tipY.toFixed(
+                1,
+              )}" width="${place.tipW.toFixed(1)}" height="${place.tipH}" rx="4" ry="4" />
+              <text class="weight-chart__tip-text" x="${place.lx.toFixed(1)}" y="${(
+                place.tipY + 11
+              ).toFixed(1)}" text-anchor="${place.anchor}">${label}</text>
+            </g>`;
+        return `<g class="weight-chart__marker${isLatest ? " is-latest" : ""}">
+          <circle class="weight-chart__hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="11" />
+          <circle class="weight-chart__halo" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="5.5" />
+          <circle class="weight-chart__point" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.6" />
+          ${valueEl}
+        </g>`;
+      })
+      .join("");
+  }
+
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML = axis + series;
+  empty.textContent = "Add starting weight";
+  empty.hidden = points.length > 0;
+  chart.classList.toggle("is-empty", points.length === 0);
+  chart.setAttribute(
+    "aria-label",
+    points.length
+      ? `Body weight across ${CHALLENGE_DAYS} challenge days`
+      : `Body weight across ${CHALLENGE_DAYS} challenge days, add starting weight`,
+  );
+}
+
+/** Refresh every mounted weight chart for this person (dialog + person page). */
+function renderWeightChart(personId = personInput?.value) {
+  const id = personId || "";
+  paintWeightChart("#weight-chart", id);
+  const pagePerson = currentPersonId();
+  if (pagePerson && (!id || pagePerson === id)) {
+    paintWeightChart("#person-weight-chart", pagePerson);
+  }
+}
+
 function lockLogDialogHeight() {
   const form = $("#log-form");
+  const weightForm = $("#weight-form");
   const success = $("#log-success");
   const otherField = $("#other-field");
   const injuryField = $("#injury-input-field");
   if (!form) return;
 
   const formHidden = form.hidden;
+  const weightHidden = weightForm?.hidden;
   const successHidden = success?.hidden;
   const otherHidden = otherField?.hidden;
   const injuryHidden = injuryField?.hidden;
 
+  if (weightForm && !weightHidden) {
+    form.hidden = true;
+    weightForm.hidden = false;
+    if (success) success.hidden = true;
+    dialog.style.height = "auto";
+    dialog.style.minHeight = "";
+    const height = Math.ceil(dialog.getBoundingClientRect().height);
+    dialog.style.height = `${height}px`;
+    dialog.style.minHeight = `${height}px`;
+    form.hidden = formHidden;
+    weightForm.hidden = weightHidden;
+    if (success) success.hidden = successHidden;
+    return;
+  }
+
   form.hidden = false;
+  if (weightForm) weightForm.hidden = true;
   if (success) success.hidden = true;
   dialog.style.height = "auto";
   dialog.style.minHeight = "";
@@ -3497,7 +3756,169 @@ function lockLogDialogHeight() {
   dialog.style.height = locked;
   dialog.style.minHeight = locked;
   form.hidden = formHidden;
+  if (weightForm) weightForm.hidden = weightHidden;
   if (success) success.hidden = successHidden;
+}
+
+function syncWeightPersonAvatar(person) {
+  const weightImg = $("#weight-person-image");
+  if (!weightImg || !person) return;
+  weightImg.src = person.image;
+  weightImg.alt = "";
+}
+
+function syncWeightNudgeState(amount = Math.round(Number($("#weight-input")?.value) || 0)) {
+  const minus = $("#weight-minus");
+  const plus = $("#weight-plus");
+  const chips = document.querySelectorAll("#weight-quick-chips [data-weight-delta]");
+  const hasValue = amount > 0;
+  if (minus) minus.disabled = !hasValue || amount <= WEIGHT_MIN_LB;
+  if (plus) plus.disabled = hasValue && amount >= WEIGHT_MAX_LB;
+  chips.forEach((button) => {
+    const delta = Number(button.dataset.weightDelta);
+    if (!Number.isFinite(delta)) return;
+    if (!hasValue) {
+      button.disabled = delta < 0;
+      return;
+    }
+    button.disabled =
+      (delta < 0 && amount + delta < WEIGHT_MIN_LB) ||
+      (delta > 0 && amount + delta > WEIGHT_MAX_LB);
+  });
+}
+
+function setWeightInputValue(value) {
+  const input = $("#weight-input");
+  if (!input) return;
+  const raw = Math.round(Number(value) || 0);
+  if (raw <= 0) {
+    input.value = "";
+    syncWeightNudgeState(0);
+    return;
+  }
+  const amount = Math.max(WEIGHT_MIN_LB, Math.min(WEIGHT_MAX_LB, raw));
+  input.value = String(amount);
+  syncWeightNudgeState(amount);
+}
+
+function nudgeWeight(delta) {
+  const current = Math.round(Number($("#weight-input")?.value) || 0);
+  const next = current > 0 ? current + delta : delta > 0 ? WEIGHT_MIN_LB : 0;
+  setWeightInputValue(next);
+  clearWeightFormError();
+}
+
+/**
+ * Toggle starting-weight mode (first entry) vs recent+stepper mode.
+ */
+function syncWeightAmountMode({ starting = false, editing = false } = {}) {
+  const field = $("#weight-amount-field");
+  const label = $("#weight-amount-label");
+  const hint = $("#weight-amount-hint");
+  const input = $("#weight-input");
+  const minus = $("#weight-minus");
+  const plus = $("#weight-plus");
+  const chips = $("#weight-quick-chips");
+  const title = $("#weight-dialog-title");
+  const mode = starting ? "starting" : "recent";
+
+  if (field) field.dataset.mode = mode;
+  if (minus) minus.hidden = starting;
+  if (plus) plus.hidden = starting;
+  if (chips) chips.hidden = starting;
+
+  if (label) {
+    label.textContent = starting ? "Starting weight" : "Weight";
+  }
+  if (hint) {
+    hint.textContent = starting
+      ? `Enter a whole-number weight from ${WEIGHT_MIN_LB} to ${WEIGHT_MAX_LB} lb`
+      : `Whole pounds · ${WEIGHT_MIN_LB}–${WEIGHT_MAX_LB} lb`;
+  }
+  if (input) {
+    input.setAttribute(
+      "aria-label",
+      starting ? "Starting weight in pounds" : "Body weight in pounds",
+    );
+  }
+  if (title) {
+    if (editing) title.textContent = "Edit weight";
+    else title.textContent = starting ? "Starting weight" : "Log weight";
+  }
+  syncWeightNudgeState();
+}
+
+function showLogCard() {
+  const form = $("#log-form");
+  const weightForm = $("#weight-form");
+  const success = $("#log-success");
+  if (weightForm) weightForm.hidden = true;
+  if (success) success.hidden = true;
+  if (form) form.hidden = false;
+  clearWeightFormError();
+  const trackLink = $("#open-weight-card");
+  if (trackLink) trackLink.hidden = Boolean(editingActivityId);
+  unlockLogDialogHeight();
+  if (dialog.open) lockLogDialogHeight();
+}
+
+function showWeightCard({ reps = null, activityDate = null, editing = false, hideBack = false } = {}) {
+  const form = $("#log-form");
+  const weightForm = $("#weight-form");
+  const success = $("#log-success");
+  if (!weightForm) return;
+
+  const priorHeight = dialog.open ? dialog.getBoundingClientRect().height : 0;
+  const personId = personInput?.value;
+  const latest = latestWeightActivity(personId);
+  const hasPrior = Boolean(latest);
+  const starting = !editing && !hasPrior;
+
+  clearLogFormError();
+  clearWeightFormError();
+  if (form) form.hidden = true;
+  if (success) success.hidden = true;
+  weightForm.hidden = false;
+
+  const dateInput = $("#weight-date-input");
+  const mainDate = $("#activity-date-input")?.value || localDateValue();
+  if (dateInput) {
+    dateInput.max = localDateValue();
+    // First weight: default to challenge start (Day 1), not today.
+    dateInput.value = starting
+      ? CHALLENGE_START
+      : activityDate || mainDate;
+  }
+
+  let weightValue = 0;
+  if (editing && reps != null) {
+    weightValue = Number(reps) || 0;
+  } else if (hasPrior) {
+    weightValue = Number(latest.reps) || 0;
+  } else if (reps != null) {
+    weightValue = Number(reps) || 0;
+  }
+  setWeightInputValue(weightValue);
+  syncWeightAmountMode({ starting, editing });
+
+  const submit = $("#weight-submit-button");
+  if (submit) submit.textContent = editing ? "SAVE CHANGES" : "SAVE WEIGHT";
+  const back = $("#weight-back-button");
+  if (back) back.hidden = Boolean(editing || hideBack);
+
+  renderWeightChart(personId);
+
+  unlockLogDialogHeight();
+  if (dialog.open) {
+    lockLogDialogHeight();
+    const locked = parseFloat(dialog.style.height) || 0;
+    if (priorHeight > locked + 1) {
+      const kept = `${Math.ceil(priorHeight)}px`;
+      dialog.style.height = kept;
+      dialog.style.minHeight = kept;
+    }
+  }
+  window.setTimeout(() => $("#weight-input")?.focus(), 40);
 }
 
 function openLogDialog(personId, options = {}) {
@@ -3509,7 +3930,6 @@ function openLogDialog(personId, options = {}) {
 
   clearLogCelebrations();
   unlockLogDialogHeight();
-  $("#log-form").hidden = false;
   $("#log-success").hidden = true;
   $("#log-success").classList.remove("is-board-cleared");
   const successShare = $("#success-share-button");
@@ -3519,17 +3939,33 @@ function openLogDialog(personId, options = {}) {
     successShare.textContent = "Share to WhatsApp";
   }
   $("#log-form").reset();
+  const weightForm = $("#weight-form");
+  if (weightForm) weightForm.reset();
   clearLogFormError();
+  clearWeightFormError();
 
   personInput.value = personId;
   const person = getPerson(personId);
   $("#log-person-image").src = person.image;
   $("#log-person-image").alt = "";
+  syncWeightPersonAvatar(person);
   $("#activity-date-input").max = localDateValue();
   $("#activity-date-input").value = activityDate;
   $("#log-dialog-title").textContent = activity ? "+ Edit reps" : "+ Add reps";
 
-  if (activity) {
+  const isWeight = activity && activityExercise(activity) === "weight";
+
+  if (isWeight) {
+    $("#log-form").hidden = true;
+    showWeightCard({
+      reps: activity.reps,
+      activityDate,
+      editing: true,
+    });
+  } else if (options.openWeight) {
+    showWeightCard({ activityDate, hideBack: true });
+  } else if (activity) {
+    showLogCard();
     exerciseInput.value = activityExercise(activity);
     $("#other-input").value = activity.otherActivity || "";
     const injuryToggle = $("#injury-input-toggle");
@@ -3538,6 +3974,7 @@ function openLogDialog(personId, options = {}) {
     setAmount(activity.reps);
     updateExerciseFields({ keepAmount: true });
   } else {
+    showLogCard();
     exerciseInput.value = "pushups";
     setOtherType("workouts", { syncDraft: false });
     updateExerciseFields();
@@ -3569,6 +4006,8 @@ function closeLogDialog() {
       $("#log-success").hidden = true;
       $("#log-success").classList.remove("is-board-cleared");
       $("#log-form").hidden = false;
+      const weightForm = $("#weight-form");
+      if (weightForm) weightForm.hidden = true;
       unlockLogDialogHeight();
       resolve();
     };
@@ -4496,6 +4935,8 @@ function showLogSuccess(personId, entries, options = {}) {
   }
 
   form.hidden = true;
+  const weightForm = $("#weight-form");
+  if (weightForm) weightForm.hidden = true;
   success.hidden = false;
   if (!dialog.open) {
     dialog.showModal();
@@ -4715,6 +5156,121 @@ $("#person-picker-dialog").addEventListener("click", (event) => {
 });
 $("#close-dialog-button").addEventListener("click", () => {
   closeLogDialog();
+});
+$("#close-weight-dialog-button")?.addEventListener("click", () => {
+  closeLogDialog();
+});
+$("#open-weight-card")?.addEventListener("click", () => {
+  if (editingActivityId) return;
+  const person = getPerson(personInput.value);
+  syncWeightPersonAvatar(person);
+  showWeightCard({
+    activityDate: $("#activity-date-input")?.value || localDateValue(),
+  });
+});
+$("#person-update-weight")?.addEventListener("click", () => {
+  const personId = currentPersonId();
+  if (!personId || !isPersonPageOwner(personId)) return;
+  openLogDialog(personId, { openWeight: true });
+});
+$("#weight-date-input")?.addEventListener("change", () => {
+  const personId = personInput?.value;
+  if (!personId || $("#weight-form")?.hidden) return;
+  paintWeightChart("#weight-chart", personId);
+});
+$("#weight-back-button")?.addEventListener("click", () => {
+  if (editingActivityId) {
+    closeLogDialog();
+    return;
+  }
+  const weightDate = $("#weight-date-input")?.value;
+  if (weightDate && $("#activity-date-input")) {
+    $("#activity-date-input").value = weightDate;
+  }
+  showLogCard();
+});
+$("#weight-input")?.addEventListener("focus", (event) => {
+  event.currentTarget.select();
+});
+$("#weight-input")?.addEventListener("input", (event) => {
+  const input = event.currentTarget;
+  const digits = String(input.value || "").replace(/\D+/g, "");
+  if (input.value !== digits) input.value = digits;
+  syncWeightNudgeState(Math.round(Number(digits) || 0));
+  clearWeightFormError();
+});
+$("#weight-input")?.addEventListener("blur", (event) => {
+  const raw = String(event.currentTarget.value || "").replace(/\D+/g, "");
+  if (!raw) {
+    event.currentTarget.value = "";
+    syncWeightNudgeState(0);
+    return;
+  }
+  setWeightInputValue(raw);
+});
+onPress($("#weight-minus"), () => nudgeWeight(-1));
+onPress($("#weight-plus"), () => nudgeWeight(1));
+document.querySelectorAll("#weight-quick-chips [data-weight-delta]").forEach((button) => {
+  onPress(button, () => nudgeWeight(Number(button.dataset.weightDelta)));
+});
+$("#weight-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const personId = personInput.value;
+  clearWeightFormError();
+  if (personId !== currentPersonId()) {
+    closeLogDialog();
+    showToast("Open a participant profile before adding activity.");
+    return;
+  }
+
+  const reps = Number($("#weight-input")?.value);
+  if (!Number.isInteger(reps) || reps < WEIGHT_MIN_LB || reps > WEIGHT_MAX_LB) {
+    showToast(`Enter a whole-number weight from ${WEIGHT_MIN_LB} to ${WEIGHT_MAX_LB} lb.`);
+    $("#weight-input")?.focus();
+    return;
+  }
+
+  const activityDate = $("#weight-date-input")?.value || localDateValue();
+  const submitButton = $("#weight-submit-button");
+  const activityId = editingActivityId;
+  if (submitButton) submitButton.disabled = true;
+  try {
+    if (activityId) {
+      const result = await protectedRequest("/api/activities", "PUT", personId, {
+        activityId,
+        exercise: "weight",
+        otherActivity: "",
+        otherType: "",
+        injuryInput: false,
+        reps,
+        activityDate,
+      });
+      if (!result) return;
+      const index = activities.findIndex((entry) => entry.id === activityId);
+      if (index >= 0) activities[index] = result.activity;
+      else activities.push(result.activity);
+      participation[personId] = result.status;
+      await finishWeightSave(personId);
+      return;
+    }
+
+    const result = await protectedRequest("/api/activities", "POST", personId, {
+      exercise: "weight",
+      otherActivity: "",
+      otherType: "",
+      injuryInput: false,
+      reps,
+      activityDate,
+    });
+    if (!result) return;
+    activities.push(result.activity);
+    participation[personId] = result.status;
+    await finishWeightSave(personId);
+  } catch (error) {
+    showToast(error.message || "Weight could not be saved.");
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
 });
 dialog.addEventListener("click", (event) => {
   if (event.target === dialog) closeLogDialog();
@@ -5420,7 +5976,6 @@ function initRulesCollapse() {
 updateExerciseFields();
 initThemeToggle();
 initRulesCollapse();
-initPersonDayChartRange();
 render();
 loadSharedState();
 tickOldchellaCountdown();

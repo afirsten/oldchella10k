@@ -22,7 +22,13 @@ function parseActivityFields(body) {
   const rawOtherType = typeof body.otherType === "string" ? body.otherType.trim() : "";
 
   if (!EXERCISES.has(exercise)) throw httpError(400, "Choose a valid activity type.");
-  if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
+  const WEIGHT_MIN_LB = 99;
+  const WEIGHT_MAX_LB = 333;
+  if (exercise === "weight") {
+    if (!Number.isInteger(reps) || reps < WEIGHT_MIN_LB || reps > WEIGHT_MAX_LB) {
+      throw httpError(400, `Weight must be from ${WEIGHT_MIN_LB} to ${WEIGHT_MAX_LB} lb.`);
+    }
+  } else if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
     throw httpError(400, "Activity amount must be from 1 to 1,000.");
   }
   if (
