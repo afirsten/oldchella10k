@@ -710,13 +710,18 @@ function historyDayAgeDays(dateKey, todayKey = localDateValue()) {
   return Math.round((today.getTime() - day.getTime()) / 86400000);
 }
 
-/** Days younger than 3 keep full cards; age ≥ 3 → condensed list. */
-function isCondensedHistoryDay(dateKey, todayKey = localDateValue()) {
+/** Person-page history always uses the condensed timeline list. */
+function isCondensedHistoryDay(_dateKey, _todayKey = localDateValue()) {
+  return true;
+}
+
+/** Older History days (age ≥ 3) paginate behind “Show the next 10”. */
+function isPagedHistoryDay(dateKey, todayKey = localDateValue()) {
   return historyDayAgeDays(dateKey, todayKey) >= 3;
 }
 
 const PERSON_HISTORY_PAGE_SIZE = 10;
-/** How many condensed History days are visible on the person page (session memory). */
+/** How many older History days are visible on the person page (session memory). */
 let personHistoryVisibleDays = PERSON_HISTORY_PAGE_SIZE;
 let personHistoryForPersonId = null;
 
@@ -3091,15 +3096,15 @@ function renderPersonPage({ skipScroll = false } = {}) {
     personHistoryForPersonId = personId;
     personHistoryVisibleDays = PERSON_HISTORY_PAGE_SIZE;
   }
-  const recentHistoryGroups = historyGroups.filter(
-    (group) => !isCondensedHistoryDay(group.dateKey, todayKey),
+  const pinnedHistoryGroups = historyGroups.filter(
+    (group) => !isPagedHistoryDay(group.dateKey, todayKey),
   );
-  const condensedHistoryGroups = historyGroups.filter((group) =>
-    isCondensedHistoryDay(group.dateKey, todayKey),
+  const pagedHistoryGroups = historyGroups.filter((group) =>
+    isPagedHistoryDay(group.dateKey, todayKey),
   );
-  const visibleCondensedHistory = condensedHistoryGroups.slice(0, personHistoryVisibleDays);
-  const hasMoreHistoryDays = condensedHistoryGroups.length > personHistoryVisibleDays;
-  const visibleHistoryGroups = [...recentHistoryGroups, ...visibleCondensedHistory];
+  const visiblePagedHistory = pagedHistoryGroups.slice(0, personHistoryVisibleDays);
+  const hasMoreHistoryDays = pagedHistoryGroups.length > personHistoryVisibleDays;
+  const visibleHistoryGroups = [...pinnedHistoryGroups, ...visiblePagedHistory];
   const historyMoreBtn = $("#person-history-more");
   if (historyMoreBtn) historyMoreBtn.hidden = !hasMoreHistoryDays;
   $("#person-activity-list").innerHTML = visibleHistoryGroups.length
@@ -3116,8 +3121,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
             '<p class="history-day-empty" role="status">No reps recorded</p>';
           const activitiesHtml = !group.activities.length
             ? emptyDayCopy
-            : condensed
-              ? `<div class="history-day-condensed${person.honorary ? " is-honorary" : ""}">
+            : `<div class="history-day-condensed${person.honorary ? " is-honorary" : ""}">
                   <ul class="history-condensed-list">
                     ${group.activities
                       .map((activity) => {
@@ -3162,56 +3166,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       })
                       .join("")}
                   </ul>
-                </div>`
-              : group.activities
-                  .map((activity) => {
-                    const justAdded = isJustAdded(activity);
-                    const note = activityNoteText(activity);
-                    const enteredAt = formatEnteredAt(activity);
-                    const detailBits = [
-                      note
-                        ? `<span class="activity-note">${escapeHtml(note)}</span>`
-                        : "",
-                      enteredAt
-                        ? `<span class="activity-entered">${escapeHtml(enteredAt)}</span>`
-                        : "",
-                    ]
-                      .filter(Boolean)
-                      .join("");
-                    const repsMag = activityCompactMagnitude(activity);
-                    if (isOwner) {
-                      return `
-                      <article class="activity-item is-editable${person.honorary ? " is-honorary" : ""}${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
-                        ${exerciseIcon(activity)}
-                        <div class="activity-main">
-                          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
-                          ${detailBits}
-                          ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
-                        </div>
-                        <button
-                          class="delete-activity-button"
-                          type="button"
-                          data-delete-activity-id="${escapeHtml(activity.id)}"
-                          aria-label="Delete ${escapeHtml(exerciseName(activity))} entry"
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" />
-                          </svg>
-                        </button>
-                      </article>
-                    `;
-                    }
-                    return `
-                      <article class="activity-item is-readonly${person.honorary ? " is-honorary" : ""}" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
-                        ${exerciseIcon(activity)}
-                        <div class="activity-main">
-                          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
-                          ${detailBits}
-                        </div>
-                      </article>
-                    `;
-                  })
-                  .join("");
+                </div>`;
           const dayHtml = `
             <div class="history-day${isToday ? " is-today" : ""}${condensed ? " is-condensed" : ""}">
               <div class="history-date-divider">
@@ -3239,10 +3194,18 @@ function renderPersonPage({ skipScroll = false } = {}) {
             </div>
           `;
           if (dayAge === 1 && !yesterdayHeadingStarted) {
+            if (timelineStarted) {
+              parts.push("</div>");
+              timelineStarted = false;
+            }
             parts.push('<h2 class="person-history-heading">Yesterday</h2>');
             yesterdayHeadingStarted = true;
           }
           if (dayAge >= 2 && !historyHeadingStarted) {
+            if (timelineStarted) {
+              parts.push("</div>");
+              timelineStarted = false;
+            }
             parts.push('<h2 class="person-history-heading">History</h2>');
             historyHeadingStarted = true;
           }

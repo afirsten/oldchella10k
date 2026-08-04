@@ -2709,6 +2709,12 @@ h1 .logo-chella {
   font: 500 13px/1.4 "Manrope", sans-serif;
   letter-spacing: .01em;
 }
+.history-timeline .history-day-empty {
+  position: relative;
+  z-index: 2;
+  /* Clear the rail so empty copy lines up with condensed row text. */
+  padding-left: 28px;
+}
 .history-day-condensed {
   min-width: 0;
   padding: 4px 8px;
