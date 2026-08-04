@@ -1170,18 +1170,21 @@ function dayGoalBreakdown(dayActivities) {
   const { lines } = dayGoalProgressLines(dayActivities);
   const { totals } = dayGoalProgress(dayActivities);
   const chips = [
-    { key: "pushups", value: number.format(totals.pushups) },
-    { key: "squats", value: number.format(totals.squats) },
-    { key: "planks", value: formatPlankMinutes(totals.planks) },
-    { key: "other", value: number.format(totals.other) },
+    { key: "pushups", amount: totals.pushups, value: number.format(totals.pushups) },
+    { key: "squats", amount: totals.squats, value: number.format(totals.squats) },
+    { key: "planks", amount: totals.planks, value: formatPlankMinutes(totals.planks) },
+    { key: "other", amount: totals.other, value: number.format(totals.other) },
   ];
   return `
     <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
       <span class="history-day-breakdown-inline" aria-hidden="true">${chips
-        .map(
-          (chip) =>
-            `<span class="history-day-breakdown-chip"><span class="history-condensed-dot is-${chip.key}"></span>${escapeHtml(chip.value)}</span>`,
-        )
+        .map((chip) => {
+          // Zero amounts keep the base .history-condensed-dot --quiet (unrealized) style.
+          const dotClass = chip.amount
+            ? `history-condensed-dot is-${chip.key}`
+            : "history-condensed-dot";
+          return `<span class="history-day-breakdown-chip"><span class="${dotClass}"></span>${escapeHtml(chip.value)}</span>`;
+        })
         .join("")}</span>
       <span class="history-day-breakdown-card" role="tooltip">
         ${dayGoalSummaryCard(dayActivities, "", "", { compact: true })}
