@@ -3095,18 +3095,18 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const historyGroups = [...historyByDate];
   if (showProgress) {
     const presentKeys = new Set(historyGroups.map((group) => group.dateKey));
-    const ensureEmptyDay = (dateKey) => {
-      if (!dateKey || dateKey < CHALLENGE_START || presentKeys.has(dateKey)) return;
+    // Fill every challenge day through today so empty days still show + Add Reps.
+    for (let day = 1; day <= CHALLENGE_DAYS; day += 1) {
+      const dateKey = challengeDayDateKey(day);
+      if (dateKey > todayKey) break;
+      if (presentKeys.has(dateKey)) continue;
       historyGroups.push({
         dateKey,
         date: new Date(`${dateKey}T12:00:00`),
         activities: [],
       });
       presentKeys.add(dateKey);
-    };
-    ensureEmptyDay(todayKey);
-    // Always show Yesterday so empty days still offer Add Reps.
-    ensureEmptyDay(shiftLocalDateKey(todayKey, -1));
+    }
     historyGroups.sort((a, b) => b.dateKey.localeCompare(a.dateKey));
   }
   if (personHistoryForPersonId !== personId) {
