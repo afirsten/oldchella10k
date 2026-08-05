@@ -4565,8 +4565,6 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   border-radius: 99px;
   background: transparent;
   cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
 }
 .sheet-handle::before {
   content: "";
@@ -4579,10 +4577,6 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   background: var(--quiet);
   transform: translate(-50%, -50%);
   pointer-events: none;
-}
-.sheet-handle:focus,
-.sheet-handle:focus-visible {
-  outline: none;
 }
 .dialog-heading { margin-bottom: 4px; }
 #log-form > .dialog-heading,
