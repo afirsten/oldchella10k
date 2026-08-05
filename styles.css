@@ -4580,9 +4580,9 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
+.sheet-handle:focus,
 .sheet-handle:focus-visible {
-  outline: 2px solid rgba(245, 200, 66, 0.7);
-  outline-offset: 2px;
+  outline: none;
 }
 .dialog-heading { margin-bottom: 4px; }
 #log-form > .dialog-heading,
