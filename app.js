@@ -5334,7 +5334,7 @@ $("#weight-back-button")?.addEventListener("click", () => {
   showLogCard();
 });
 // Select on tap so replace-by-typing still works, but not on the
- // programmatic focus when the weight tracker opens.
+// programmatic focus when the weight tracker opens.
 $("#weight-input")?.addEventListener("click", (event) => {
   event.currentTarget.select();
 });
