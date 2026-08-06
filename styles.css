@@ -4019,6 +4019,9 @@ a.activity-item:focus-visible {
   justify-content: center;
   height: 100%;
 }
+.personal-day-chart__col.is-today {
+  flex: 4 1 0;
+}
 .personal-day-chart__col.is-today::before {
   content: "TODAY";
   position: absolute;
@@ -4078,7 +4081,7 @@ a.activity-item:focus-visible {
 .personal-day-chart__bar > span.is-squats { background: var(--terra); }
 .personal-day-chart__bar > span.is-other { background: var(--green); }
 .personal-day-chart__bar > span.is-planks { background: var(--lime); }
-/* Today: ~2× sibling bar width (58% → 100% of col); covers connector below bar top */
+/* Today: bar fills the wider today column */
 .personal-day-chart__col.is-today .personal-day-chart__bar {
   position: relative;
   z-index: 1;
