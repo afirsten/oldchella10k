@@ -1641,13 +1641,132 @@ body.is-menu-open {
   padding: 36px 0 26px;
 }
 .hero-welcome {
-  margin: 0 0 8px;
+  display: block;
+  margin: 0 0 12px;
   color: var(--lavender);
   font-family: var(--font-ornament);
   font-style: italic;
   font-weight: 300;
-  font-size: 20px;
+  font-size: clamp(22px, 5.5vw, 34px);
   letter-spacing: .05em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+.hero-welcome[hidden],
+html.has-known-person .hero-welcome {
+  display: none !important;
+}
+.hero-add-reps {
+  display: flex;
+  width: 100%;
+  min-height: 72px;
+  align-items: center;
+  justify-content: center;
+  margin: 22px 0 8px;
+  padding: 18px 22px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(90deg, var(--terra), var(--lime));
+  color: #fff8f0;
+  font: 800 clamp(16px, 4.2vw, 20px)/1 var(--font-heading);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 14px 36px rgba(232, 118, 58, .28);
+  transition: transform 160ms ease, filter 160ms ease, box-shadow 160ms ease;
+  animation: hero-add-reps-in 520ms cubic-bezier(.16, .9, .3, 1) both;
+}
+.hero-add-reps[hidden],
+html.has-known-person .hero-add-reps {
+  display: none !important;
+}
+.hero-add-reps:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 18px 42px rgba(232, 118, 58, .36);
+}
+.hero-add-reps:active {
+  transform: scale(.985);
+}
+.hero-add-reps:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-add-reps {
+    animation: none;
+  }
+}
+@keyframes hero-add-reps-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.hero.is-new,
+html:not(.has-known-person) #home-hero {
+  padding-bottom: 26px;
+  align-content: start;
+}
+.hero.is-new .hero-logo,
+html:not(.has-known-person) #home-hero .hero-logo {
+  margin-bottom: 0;
+}
+.hero.is-new .hero-add-reps,
+html:not(.has-known-person) #home-hero .hero-add-reps {
+  margin-bottom: 18px;
+}
+.hero-howto {
+  display: none;
+  width: 100%;
+  margin: 0 0 28px;
+}
+.hero.is-new .hero-howto,
+html:not(.has-known-person) #home-hero .hero-howto {
+  display: block;
+}
+.hero-howto[hidden],
+html.has-known-person .hero-howto {
+  display: none !important;
+}
+.hero-howto-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.hero-howto-steps li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: clamp(14px, 3.6vw, 16px);
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1.35;
+}
+.hero-howto-num {
+  flex: 0 0 auto;
+  min-width: 1.1em;
+  color: var(--terra);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+}
+.hero-howto-done {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+#dashboard-page.is-new-home > .hero-returning,
+html:not(.has-known-person) #dashboard-page > .hero-returning {
+  display: none !important;
 }
 .hero-logo {
   min-width: 0;
@@ -1782,12 +1901,27 @@ h1 .logo-chella {
   margin: 0 0 16px;
   color: var(--muted);
   font-size: 14px;
+  font-weight: 400;
   line-height: 1.5;
 }
-.rules-copy strong {
-  display: inline;
-  color: var(--ink);
+.rules-copy strong,
+.rules-copy b,
+.rules-copy em,
+.rules-copy span {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  font-style: inherit;
+  color: inherit;
+}
+.rules-daily-heading {
+  margin: 0 0 10px;
+  color: var(--label);
+  font-size: 10px;
   font-weight: 700;
+  letter-spacing: .17em;
+  text-align: center;
+  text-transform: uppercase;
 }
 .rules-daily {
   display: grid;

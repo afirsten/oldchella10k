@@ -42,7 +42,7 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=267" />
+    <link rel="stylesheet" href="./styles.css?v=275" />
     <script>
       (function () {
         try {
@@ -57,6 +57,24 @@
         } catch (e) {
           document.documentElement.setAttribute("data-theme", "dark");
         }
+      })();
+    </script>
+    <script>
+      // Hide homepage welcome early for returning visitors (selected person / PIN).
+      (function () {
+        try {
+          if (localStorage.getItem("rippedchella-last-person-v1")) {
+            document.documentElement.classList.add("has-known-person");
+            return;
+          }
+          for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i);
+            if (key && key.indexOf("rippedchella-pin-v1:") === 0) {
+              document.documentElement.classList.add("has-known-person");
+              return;
+            }
+          }
+        } catch (e) {}
       })();
     </script>
     <script>
@@ -80,7 +98,7 @@
       })();
     </script>
     <script src="./vendor/confetti.browser.min.js"></script>
-    <script src="./app.js?v=205" defer></script>
+    <script src="./app.js?v=210" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -233,12 +251,23 @@
 
     <div class="app-shell">
       <main id="dashboard-page">
-        <section class="hero">
-          <p class="hero-welcome">Welcome to</p>
-          <h1 class="hero-logo">
+        <section class="hero" id="home-hero">
+          <h1 class="hero-logo" id="hero-logo">
+            <span class="hero-welcome" id="hero-welcome">WELCOME TO</span>
             <span class="logo-top">Ripped-</span>
             <span class="logo-chella">Chella</span>
           </h1>
+          <button type="button" class="hero-add-reps" id="hero-add-reps">
+            ADD YOUR REPS
+          </button>
+          <div class="hero-howto" id="hero-howto">
+            <ol class="hero-howto-steps" aria-label="How to get started">
+              <li><span class="hero-howto-num" aria-hidden="true">1</span> Tap the big button &amp; pick your name</li>
+              <li><span class="hero-howto-num" aria-hidden="true">2</span> Enter your reps</li>
+              <li><span class="hero-howto-num" aria-hidden="true">3</span> Enter your pin</li>
+            </ol>
+            <p class="hero-howto-done">Done — We won't ask for your pin again. No account. No setup. Just reps.</p>
+          </div>
           <p class="eyebrow">TRAINING CENTER + TRACKER</p>
           <p class="hero-copy">SCAD Bros Trip · Joshua Tree Desert Festival · Oct 22–25</p>
 
@@ -259,8 +288,9 @@
             <div class="rules-panel" id="rules-panel">
               <p class="rules-copy">
                 Each day, clear all 3 goals. Push-ups are what really count towards the 10k.
-                <strong>Nursing an injury? Log under Other (Misc Workout %, Misc Rep, or Misc Timed) and flip Injury Input — 100% misc workout, 100 misc rep, or 30 min each credit 100 push-ups.</strong>
+                Nursing an injury? Log under Other (Misc Workout %, Misc Rep, or Misc Timed) and flip Injury Input — 100% misc workout, 100 misc rep, or 30 min each credit 100 push-ups.
               </p>
+              <p class="rules-daily-heading">DAILY GOALS</p>
               <div class="rules-daily" aria-label="Daily goals">
                 <div class="is-pushups">
                   <strong>100</strong>
@@ -389,7 +419,7 @@
           </div>
         </section>
 
-        <section class="section" id="crew">
+        <section class="section hero-returning" id="crew">
           <div class="section-heading">
             <div>
               <p class="eyebrow">THE CREW</p>
@@ -400,7 +430,7 @@
           <div class="leaderboard" id="leaderboard"></div>
         </section>
 
-        <section class="section activity-section">
+        <section class="section activity-section hero-returning">
           <div class="section-heading">
             <div>
               <p class="eyebrow">LATEST</p>

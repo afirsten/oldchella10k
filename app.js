@@ -2178,6 +2178,28 @@ function rememberLastPerson(personId) {
   } catch {
     // Navigation still works if this browser blocks localStorage.
   }
+  updateHomeWelcome();
+}
+
+/** New = no selected/confirmed person yet (LAST_PERSON or remembered PIN). */
+function isNewVisitor() {
+  return !storedLastPersonId() && !rememberedPersonId();
+}
+
+function updateHomeWelcome() {
+  const hero = $("#home-hero");
+  const dashboard = $("#dashboard-page");
+  if (!hero) return;
+  const isNew = isNewVisitor();
+  hero.classList.toggle("is-new", isNew);
+  dashboard?.classList.toggle("is-new-home", isNew);
+  document.documentElement.classList.toggle("has-known-person", !isNew);
+  const welcome = $("#hero-welcome");
+  if (welcome) welcome.hidden = !isNew;
+  const addReps = $("#hero-add-reps");
+  if (addReps) addReps.hidden = !isNew;
+  const howto = $("#hero-howto");
+  if (howto) howto.hidden = !isNew;
 }
 
 function rememberPin(personId, pin) {
@@ -2200,6 +2222,7 @@ function forgetPin(personId) {
   } catch {
     // Nothing else to clear.
   }
+  updateHomeWelcome();
 }
 
 function storedLastPersonId() {
@@ -5281,6 +5304,7 @@ $("#feed-day-filter")?.addEventListener("click", (event) => {
   renderFeedClearedToday({ smoothDayScroll: true });
 });
 $("#nav-add-reps-button")?.addEventListener("click", () => startAddRepsFlow());
+$("#hero-add-reps")?.addEventListener("click", () => startAddRepsFlow());
 $("#person-picker-grid").addEventListener("click", (event) => {
   const option = event.target.closest("[data-person-id]");
   if (!option) return;
@@ -5909,6 +5933,7 @@ function scrollHomeToTop() {
 }
 
 function updateSiteMenu() {
+  updateHomeWelcome();
   const myHome = $("#menu-my-home");
   const myHomeLabel = $("#menu-my-home-label");
   const myHomeMeta = $("#menu-my-home-meta");
