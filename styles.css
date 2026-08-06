@@ -1725,11 +1725,12 @@ html:not(.has-known-person) #home-hero > .hero-copy {
 }
 .hero.is-new .hero-add-reps,
 html:not(.has-known-person) #home-hero .hero-add-reps {
-  margin-top: 0;
+  margin-top: 28px;
   margin-bottom: 18px;
 }
 .hero.is-new #rules-card,
 html:not(.has-known-person) #home-hero #rules-card {
+  margin-top: 48px;
   margin-bottom: 18px;
   padding: 0;
   border: 0;
