@@ -16,7 +16,7 @@ const DAILY_PUSHUPS_MAX = 501;
 const OTHER_TIME_GOAL_MIN = 30;
 const DAILY_PUSHUP_GOAL = 100;
 const REPS_OVER_LIMIT_MESSAGE =
-  "Erok hit limit for internet machine. More that 501 times pushing the floor away is not possible for art nerds.";
+  "501 is the daily limit for reps. It’s a good time to diversify. Use the other section to go wild.";
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
 
