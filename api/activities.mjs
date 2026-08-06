@@ -11,6 +11,11 @@ import {
 
 const EXERCISES = new Set(["pushups", "squats", "planks", "other", "weight"]);
 const OTHER_TYPES = new Set(["workouts", "reps", "time"]);
+const REPS_MAX = 200;
+const REPS_OVER_LIMIT_MESSAGE =
+  "Erok hit limit for internet machine. More that 200 times pushing the floor away is not possible for art nerds.";
+const WEIGHT_MIN_LB = 99;
+const WEIGHT_MAX_LB = 333;
 
 function parseActivityFields(body) {
   const exercise = typeof body.exercise === "string" ? body.exercise : "";
@@ -22,14 +27,15 @@ function parseActivityFields(body) {
   const rawOtherType = typeof body.otherType === "string" ? body.otherType.trim() : "";
 
   if (!EXERCISES.has(exercise)) throw httpError(400, "Choose a valid activity type.");
-  const WEIGHT_MIN_LB = 99;
-  const WEIGHT_MAX_LB = 333;
   if (exercise === "weight") {
     if (!Number.isInteger(reps) || reps < WEIGHT_MIN_LB || reps > WEIGHT_MAX_LB) {
       throw httpError(400, `Weight must be from ${WEIGHT_MIN_LB} to ${WEIGHT_MAX_LB} lb.`);
     }
-  } else if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
-    throw httpError(400, "Activity amount must be from 1 to 1,000.");
+  } else if (!Number.isInteger(reps) || reps < 1 || reps > REPS_MAX) {
+    if (Number.isInteger(reps) && reps > REPS_MAX) {
+      throw httpError(400, REPS_OVER_LIMIT_MESSAGE);
+    }
+    throw httpError(400, `Activity amount must be from 1 to ${REPS_MAX}.`);
   }
   if (
     !/^\d{4}-\d{2}-\d{2}$/.test(activityDate) ||

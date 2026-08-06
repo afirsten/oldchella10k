@@ -4081,11 +4081,11 @@ a.activity-item:focus-visible {
 .personal-day-chart__bar > span.is-squats { background: var(--terra); }
 .personal-day-chart__bar > span.is-other { background: var(--green); }
 .personal-day-chart__bar > span.is-planks { background: var(--lime); }
-/* Today: bar fills the wider today column */
+/* Today: bar fills most of the wider today column */
 .personal-day-chart__col.is-today .personal-day-chart__bar {
   position: relative;
   z-index: 1;
-  width: 100%;
+  width: 75%;
 }
 /* Today: progress-track fill when empty */
 .personal-day-chart__col.is-today .personal-day-chart__bar.is-empty {

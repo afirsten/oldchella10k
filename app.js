@@ -3,6 +3,9 @@ const CHALLENGE_START = "2026-07-14";
 const CHALLENGE_DAYS = 100;
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
+const REPS_MAX = 200;
+const REPS_OVER_LIMIT_MESSAGE =
+  "Erok hit limit for internet machine. More that 200 times pushing the floor away is not possible for art nerds.";
 const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
 const OLD_CHELLA_URL = "https://goingtoliveforever.com/";
 const RECIPES_SHEET_ID = "1UkuA5apWL5PZ2XQkZP_r9horqKtial1FCrk5Vn3HK88";
@@ -2383,8 +2386,11 @@ function parseLocalActivityFields(body) {
     if (!Number.isInteger(reps) || reps < WEIGHT_MIN_LB || reps > WEIGHT_MAX_LB) {
       throw new ApiError(`Weight must be from ${WEIGHT_MIN_LB} to ${WEIGHT_MAX_LB} lb.`, 400);
     }
-  } else if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
-    throw new ApiError("Activity amount must be from 1 to 1,000.", 400);
+  } else if (!Number.isInteger(reps) || reps < 1 || reps > REPS_MAX) {
+    if (Number.isInteger(reps) && reps > REPS_MAX) {
+      throw new ApiError(REPS_OVER_LIMIT_MESSAGE, 400);
+    }
+    throw new ApiError(`Activity amount must be from 1 to ${REPS_MAX}.`, 400);
   }
   if (
     !/^\d{4}-\d{2}-\d{2}$/.test(activityDate) ||
@@ -3373,12 +3379,28 @@ function setOtherType(type, { syncDraft = true } = {}) {
 
 function amountMaxForExercise(exercise, otherType = currentOtherType()) {
   if (exercise === "other" && otherType === "workouts") return 100;
-  return 1000;
+  return REPS_MAX;
 }
 
-function setAmount(value) {
+/** Null when ok; otherwise the user-facing rejection message (never persist over max). */
+function amountLimitError(reps, exercise, otherType = "") {
+  const max = amountMaxForExercise(exercise, otherType);
+  if (!Number.isInteger(reps) || reps < 1) {
+    return `Enter an amount from 1 to ${max}.`;
+  }
+  if (reps > REPS_MAX) return REPS_OVER_LIMIT_MESSAGE;
+  if (reps > max) return `Enter an amount from 1 to ${max}.`;
+  return null;
+}
+
+function setAmount(value, { announceLimit = false, clamp = true } = {}) {
   const max = amountMaxForExercise(exerciseInput.value);
-  const amount = Math.max(0, Math.min(max, Math.round(Number(value) || 0)));
+  const raw = Math.max(0, Math.round(Number(value) || 0));
+  if (announceLimit && raw > max) {
+    showToast(raw > REPS_MAX ? REPS_OVER_LIMIT_MESSAGE : `Enter an amount from 1 to ${max}.`);
+  }
+  // Clamp only for nudges/chips. Blur/draft restore keep the raw value so submit can reject.
+  const amount = clamp ? Math.min(max, raw) : raw;
   const input = $("#reps-input");
   input.value = amount;
   const showCompact = exerciseInput.value === "other" && currentOtherType() === "workouts";
@@ -3400,11 +3422,12 @@ function nudgeAmount(delta) {
 
 function readCurrentExerciseDraft() {
   const exercise = exerciseInput.value;
-  const reps = Math.max(0, Math.min(1000, Math.round(Number($("#reps-input").value) || 0)));
+  const otherType = exercise === "other" ? currentOtherType() : "";
+  // Keep the raw typed amount — do not silent-clamp. Submit must reject > max.
+  const reps = Math.max(0, Math.round(Number($("#reps-input").value) || 0));
   if (exercise === "other") {
-    const otherType = currentOtherType();
     return {
-      reps: Math.max(0, Math.min(amountMaxForExercise("other", otherType), reps)),
+      reps,
       otherActivity: $("#other-input").value.trim(),
       injuryInput: Boolean($("#injury-input-toggle")?.checked),
       otherType,
@@ -3424,15 +3447,21 @@ function draftEntries() {
   return EXERCISE_ORDER.map((exercise) => {
     const draft = logDrafts[exercise];
     const reps = Number(draft?.reps) || 0;
-    if (!Number.isInteger(reps) || reps < 1 || reps > 1000) return null;
+    if (!Number.isInteger(reps) || reps < 1) return null;
     if (exercise === "other") {
       const otherActivity = (draft.otherActivity || "").trim();
       const injuryInput = Boolean(draft.injuryInput);
       const otherType = OTHER_TYPE_ORDER.includes(draft.otherType) ? draft.otherType : "workouts";
+      if (amountLimitError(reps, exercise, otherType)) {
+        return { exercise, reps, otherActivity, injuryInput, otherType, invalid: "overLimit" };
+      }
       if (!otherActivity) {
         return { exercise, reps, otherActivity: "", injuryInput, otherType, invalid: "name" };
       }
       return { exercise, reps, otherActivity, injuryInput, otherType };
+    }
+    if (amountLimitError(reps, exercise, "")) {
+      return { exercise, reps, otherActivity: "", injuryInput: false, otherType: "", invalid: "overLimit" };
     }
     return { exercise, reps, otherActivity: "", injuryInput: false, otherType: "" };
   }).filter(Boolean);
@@ -3473,7 +3502,7 @@ function applyDraftToFields(exercise) {
     if (injuryToggle) injuryToggle.checked = Boolean(draft.injuryInput);
     setOtherType(draft.otherType || "workouts", { syncDraft: false });
   }
-  setAmount(draft.reps || 0);
+  setAmount(draft.reps || 0, { clamp: false });
 }
 
 function updateExerciseFields({ keepAmount = false } = {}) {
@@ -3537,7 +3566,7 @@ function updateExerciseFields({ keepAmount = false } = {}) {
     suffix.setAttribute("aria-hidden", settings.percent ? "false" : "true");
   }
   $("#reps-input").setAttribute("aria-label", settings.label);
-  $("#reps-input").setAttribute("maxlength", settings.percent ? "3" : "4");
+  $("#reps-input").setAttribute("maxlength", "3");
   const isOther = exercise === "other";
   $("#other-field").hidden = !isOther;
   const injuryField = $("#injury-input-field");
@@ -3552,7 +3581,8 @@ function updateExerciseFields({ keepAmount = false } = {}) {
   if (!keepAmount) {
     setAmount(0);
   } else {
-    setAmount($("#reps-input").value);
+    // Re-apply without clamping so an over-limit draft stays visible for reject-on-submit.
+    setAmount($("#reps-input").value, { clamp: false });
   }
   syncDraftTabIndicators();
   updateAddSubmitLabel();
@@ -4236,7 +4266,7 @@ function openLogDialog(personId, options = {}) {
     const injuryToggle = $("#injury-input-toggle");
     if (injuryToggle) injuryToggle.checked = Boolean(activity.injuryInput);
     setOtherType(otherTypeOf(activity) || "workouts", { syncDraft: false });
-    setAmount(activity.reps);
+    setAmount(activity.reps, { clamp: false });
     updateExerciseFields({ keepAmount: true });
   } else {
     showLogCard();
@@ -5232,6 +5262,15 @@ async function quickAddActivity(button) {
   const reps = Number(button.dataset.quickReps);
   const otherActivity = button.dataset.quickOther || "";
   if (!exercise || !Number.isInteger(reps) || reps < 1) return;
+  const quickLimitError = amountLimitError(
+    reps,
+    exercise,
+    exercise === "other" ? "workouts" : "",
+  );
+  if (quickLimitError) {
+    showToast(quickLimitError);
+    return;
+  }
 
   const activityDate = localDateValue();
   const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
@@ -5618,7 +5657,9 @@ $("#reps-input").addEventListener("input", (event) => {
   saveCurrentDraft();
 });
 $("#reps-input").addEventListener("blur", (event) => {
-  setAmount(event.currentTarget.value);
+  // Announce over-limit but do not clamp — clamping here let submit persist the
+  // capped value after the user typed e.g. 450 and clicked Add.
+  setAmount(event.currentTarget.value, { announceLimit: true, clamp: false });
   saveCurrentDraft();
 });
 $("#activity-date-input").addEventListener("change", () => {
@@ -5743,8 +5784,9 @@ $("#log-form").addEventListener("submit", async (event) => {
       const reps = Number($("#reps-input").value);
       const exercise = exerciseInput.value;
       const otherType = currentOtherType();
-      if (!Number.isInteger(reps) || reps < 1 || reps > 1000) {
-        showToast("Enter an amount from 1 to 1,000.");
+      const limitError = amountLimitError(reps, exercise, otherType);
+      if (limitError) {
+        showToast(limitError);
         return;
       }
       if (exercise === "other" && !$("#other-input").value.trim()) {
@@ -5789,6 +5831,17 @@ $("#log-form").addEventListener("submit", async (event) => {
 
     saveCurrentDraft();
     const entries = draftEntries();
+    const overLimit = entries.find((entry) => entry.invalid === "overLimit");
+    if (overLimit) {
+      exerciseInput.value = overLimit.exercise;
+      applyDraftToFields(overLimit.exercise);
+      updateExerciseFields({ keepAmount: true });
+      showToast(
+        amountLimitError(overLimit.reps, overLimit.exercise, overLimit.otherType || ""),
+      );
+      $("#reps-input").focus();
+      return;
+    }
     const missingName = entries.find((entry) => entry.invalid === "name");
     if (missingName) {
       exerciseInput.value = "other";
@@ -5810,6 +5863,16 @@ $("#log-form").addEventListener("submit", async (event) => {
     const added = [];
     try {
       for (const entry of toAdd) {
+        const entryLimitError = amountLimitError(
+          entry.reps,
+          entry.exercise,
+          entry.otherType || "",
+        );
+        if (entryLimitError) {
+          showToast(entryLimitError);
+          if (added.length) render();
+          return;
+        }
         const result = await protectedRequest("/api/activities", "POST", personId, {
           exercise: entry.exercise,
           otherActivity: entry.otherActivity,
