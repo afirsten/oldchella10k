@@ -3,9 +3,9 @@ const CHALLENGE_START = "2026-07-14";
 const CHALLENGE_DAYS = 100;
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
-const REPS_MAX = 251;
+const REPS_MAX = 501;
 const REPS_OVER_LIMIT_MESSAGE =
-  "Erok hit limit for internet machine. More that 251 times pushing the floor away is not possible for art nerds.";
+  "Erok hit limit for internet machine. More that 501 times pushing the floor away is not possible for art nerds.";
 const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
 const OLD_CHELLA_URL = "https://goingtoliveforever.com/";
 const RECIPES_SHEET_ID = "1UkuA5apWL5PZ2XQkZP_r9horqKtial1FCrk5Vn3HK88";
@@ -320,7 +320,7 @@ function personDayPushupTotal(personId, dateKey, { excludeActivityId = null } = 
   return dayGoalProgress(dayActivities).totals.pushups;
 }
 
-/** Null when ok; otherwise Erok message when day push-ups would exceed REPS_MAX (251). */
+/** Null when ok; otherwise Erok message when day push-ups would exceed REPS_MAX (501). */
 function dailyPushupLimitError(personId, dateKey, contribution, { excludeActivityId = null } = {}) {
   const add = Math.max(0, Math.round(Number(contribution) || 0));
   if (!personId || !dateKey || add <= 0) return null;
