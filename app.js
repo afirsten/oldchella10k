@@ -1649,7 +1649,7 @@ function render({ skipScroll = false } = {}) {
             ? " is-undecided"
             : "";
       const subtitle = person.honorary
-        ? `Honorary · ${person.sessions} ${person.sessions === 1 ? "session" : "sessions"} · not in group total`
+        ? `Honorary · ${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}`
         : person.status === "out"
           ? "Out"
           : person.status === "unknown"
@@ -2200,6 +2200,7 @@ function updateHomeWelcome() {
   if (addReps) addReps.hidden = !isNew;
   const howto = $("#hero-howto");
   if (howto) howto.hidden = !isNew;
+  if (isNew) setRulesCollapsed(false);
 }
 
 function rememberPin(personId, pin) {
@@ -6131,9 +6132,15 @@ function setRulesCollapsed(collapsed) {
   const card = $("#rules-card");
   const toggle = $("#rules-toggle");
   if (!card || !toggle) return;
+  // New-user home keeps rules expanded with no collapse control.
+  if (isNewVisitor()) collapsed = false;
   card.classList.toggle("is-collapsed", collapsed);
   toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
   toggle.setAttribute("aria-label", collapsed ? "Expand our goal" : "Collapse our goal");
+  if (isNewVisitor()) {
+    toggle.removeAttribute("aria-label");
+    return;
+  }
   try {
     localStorage.setItem(RULES_COLLAPSE_KEY, collapsed ? "1" : "0");
   } catch {
@@ -6144,8 +6151,9 @@ function setRulesCollapsed(collapsed) {
 function initRulesCollapse() {
   const toggle = $("#rules-toggle");
   if (!toggle) return;
-  setRulesCollapsed(rulesShouldStartCollapsed());
+  setRulesCollapsed(isNewVisitor() ? false : rulesShouldStartCollapsed());
   toggle.addEventListener("click", () => {
+    if (isNewVisitor()) return;
     setRulesCollapsed(!$("#rules-card")?.classList.contains("is-collapsed"));
   });
 }

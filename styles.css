@@ -1715,9 +1715,57 @@ html:not(.has-known-person) #home-hero {
 html:not(.has-known-person) #home-hero .hero-logo {
   margin-bottom: 0;
 }
+.hero.is-new > .eyebrow,
+html:not(.has-known-person) #home-hero > .eyebrow {
+  margin: 14px 0 10px;
+}
+.hero.is-new > .hero-copy,
+html:not(.has-known-person) #home-hero > .hero-copy {
+  margin-bottom: 18px;
+}
 .hero.is-new .hero-add-reps,
 html:not(.has-known-person) #home-hero .hero-add-reps {
+  margin-top: 0;
   margin-bottom: 18px;
+}
+.hero.is-new #rules-card,
+html:not(.has-known-person) #home-hero #rules-card {
+  margin-bottom: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.hero.is-new #rules-card:not(.is-collapsed),
+html:not(.has-known-person) #home-hero #rules-card:not(.is-collapsed) {
+  border: 0;
+  background: none;
+}
+.hero.is-new #rules-card .rules-toggle,
+html:not(.has-known-person) #home-hero #rules-card .rules-toggle {
+  padding: 0 0 8px;
+  pointer-events: none;
+  cursor: default;
+}
+.hero.is-new #rules-card .rules-toggle:hover,
+.hero.is-new #rules-card .rules-toggle:focus-visible,
+html:not(.has-known-person) #home-hero #rules-card .rules-toggle:hover,
+html:not(.has-known-person) #home-hero #rules-card .rules-toggle:focus-visible {
+  background: transparent;
+}
+.hero.is-new #rules-card .rules-chevron,
+html:not(.has-known-person) #home-hero #rules-card .rules-chevron {
+  display: none;
+}
+.hero.is-new #rules-card .rules-panel,
+html:not(.has-known-person) #home-hero #rules-card .rules-panel {
+  display: grid;
+  padding: 0;
+}
+.hero.is-new #rules-card.is-collapsed .rules-panel,
+html:not(.has-known-person) #home-hero #rules-card.is-collapsed .rules-panel {
+  display: grid;
 }
 .hero-howto {
   display: none;
