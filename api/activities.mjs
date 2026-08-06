@@ -11,11 +11,61 @@ import {
 
 const EXERCISES = new Set(["pushups", "squats", "planks", "other", "weight"]);
 const OTHER_TYPES = new Set(["workouts", "reps", "time"]);
-const REPS_MAX = 200;
+const REPS_MAX = 251;
+const DAILY_PUSHUPS_MAX = 251;
+const OTHER_TIME_GOAL_MIN = 30;
+const DAILY_PUSHUP_GOAL = 100;
 const REPS_OVER_LIMIT_MESSAGE =
-  "Erok hit limit for internet machine. More that 200 times pushing the floor away is not possible for art nerds.";
+  "Erok hit limit for internet machine. More that 251 times pushing the floor away is not possible for art nerds.";
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
+
+/** Match client activityDateKey for noon-UTC createdAt stamps (UTC date === workout date). */
+function activityDateKey(activity) {
+  return String(activity?.createdAt || "").slice(0, 10);
+}
+
+function injuryPushupCredit(activity) {
+  if (activity?.exercise !== "other" || !activity.injuryInput) return 0;
+  const amount = Number(activity.reps) || 0;
+  const type = OTHER_TYPES.has(activity.otherType) ? activity.otherType : "workouts";
+  if (type === "reps") return Math.round(amount);
+  if (type === "time") return Math.round(amount * (DAILY_PUSHUP_GOAL / OTHER_TIME_GOAL_MIN));
+  return Math.round((amount / 100) * DAILY_PUSHUP_GOAL);
+}
+
+/** Same day total the UI uses for push-ups: direct PU + injury-credited Other. */
+function personDayPushupTotal(activities, personId, dateKey, { excludeActivityId = null } = {}) {
+  return activities.reduce((sum, activity) => {
+    if (activity.personId !== personId) return sum;
+    if (excludeActivityId && activity.id === excludeActivityId) return sum;
+    if (activityDateKey(activity) !== dateKey) return sum;
+    const direct = activity.exercise === "pushups" ? Number(activity.reps) || 0 : 0;
+    return sum + direct + injuryPushupCredit(activity);
+  }, 0);
+}
+
+function proposedPushupContribution(fields) {
+  if (fields.exercise === "pushups") return Math.max(0, Math.round(Number(fields.reps) || 0));
+  if (fields.exercise === "other" && fields.injuryInput) {
+    return injuryPushupCredit({
+      exercise: "other",
+      reps: fields.reps,
+      otherType: fields.otherType,
+      injuryInput: true,
+    });
+  }
+  return 0;
+}
+
+function assertDailyPushupLimit(state, personId, dateKey, fields, { excludeActivityId = null } = {}) {
+  const adding = proposedPushupContribution(fields);
+  if (adding <= 0) return;
+  const existing = personDayPushupTotal(state.activities, personId, dateKey, { excludeActivityId });
+  if (existing + adding > DAILY_PUSHUPS_MAX) {
+    throw httpError(400, REPS_OVER_LIMIT_MESSAGE);
+  }
+}
 
 function parseActivityFields(body) {
   const exercise = typeof body.exercise === "string" ? body.exercise : "";
@@ -98,6 +148,8 @@ export default async function handler(request, response) {
     }
 
     const fields = parseActivityFields(body);
+    const activityDate =
+      typeof body.activityDate === "string" ? body.activityDate : fields.createdAt.slice(0, 10);
 
     if (request.method === "PUT") {
       const activityId = typeof body.activityId === "string" ? body.activityId : "";
@@ -108,6 +160,10 @@ export default async function handler(request, response) {
         (activity) => activity.id === activityId && activity.personId === personId,
       );
       if (activityIndex < 0) throw httpError(404, "That activity could not be found.");
+
+      assertDailyPushupLimit(state, personId, activityDate, fields, {
+        excludeActivityId: activityId,
+      });
 
       const activity = {
         ...state.activities[activityIndex],
@@ -123,6 +179,9 @@ export default async function handler(request, response) {
       return send(response, 200, { activity, status: "in" });
     }
 
+    const state = await getState();
+    assertDailyPushupLimit(state, personId, activityDate, fields);
+
     const activity = {
       id: crypto.randomUUID(),
       personId,
@@ -130,7 +189,6 @@ export default async function handler(request, response) {
       ...fields,
       loggedAt: new Date().toISOString(),
     };
-    const state = await getState();
     state.activities.push(activity);
     state.participation[personId] = "in";
     await saveState(state);

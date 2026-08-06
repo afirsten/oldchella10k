@@ -3,9 +3,9 @@ const CHALLENGE_START = "2026-07-14";
 const CHALLENGE_DAYS = 100;
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
-const REPS_MAX = 200;
+const REPS_MAX = 251;
 const REPS_OVER_LIMIT_MESSAGE =
-  "Erok hit limit for internet machine. More that 200 times pushing the floor away is not possible for art nerds.";
+  "Erok hit limit for internet machine. More that 251 times pushing the floor away is not possible for art nerds.";
 const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
 const OLD_CHELLA_URL = "https://goingtoliveforever.com/";
 const RECIPES_SHEET_ID = "1UkuA5apWL5PZ2XQkZP_r9horqKtial1FCrk5Vn3HK88";
@@ -293,6 +293,40 @@ function injuryPushupCredit(activity) {
 
 function dayHasInjuryPushupCredit(dayActivities) {
   return dayActivities.some((activity) => injuryPushupCredit(activity) > 0);
+}
+
+/**
+ * Push-up contribution for a proposed log (same rules as accumulateChallengeMetrics /
+ * dayGoalProgress totals.pushups: direct push-ups + injury-credited Other).
+ */
+function proposedPushupContribution(exercise, reps, { otherType = "", injuryInput = false } = {}) {
+  if (exercise === "pushups") return Math.max(0, Math.round(Number(reps) || 0));
+  if (exercise === "other" && injuryInput) {
+    return injuryPushupCredit({
+      exercise: "other",
+      reps,
+      otherType: otherType || "workouts",
+      injuryInput: true,
+    });
+  }
+  return 0;
+}
+
+/** Day push-up total matching the UI daily pulse (includes injury credits). */
+function personDayPushupTotal(personId, dateKey, { excludeActivityId = null } = {}) {
+  const dayActivities = personDayActivities(personId, dateKey).filter(
+    (activity) => activity.id !== excludeActivityId,
+  );
+  return dayGoalProgress(dayActivities).totals.pushups;
+}
+
+/** Null when ok; otherwise Erok message when day push-ups would exceed REPS_MAX (251). */
+function dailyPushupLimitError(personId, dateKey, contribution, { excludeActivityId = null } = {}) {
+  const add = Math.max(0, Math.round(Number(contribution) || 0));
+  if (!personId || !dateKey || add <= 0) return null;
+  const existing = personDayPushupTotal(personId, dateKey, { excludeActivityId });
+  if (existing + add > REPS_MAX) return REPS_OVER_LIMIT_MESSAGE;
+  return null;
 }
 
 function exerciseName(activity) {
@@ -2014,6 +2048,7 @@ function clearLogFormError() {
   if (!el) return;
   el.hidden = true;
   el.textContent = "";
+  el.removeAttribute("tabindex");
 }
 
 function clearWeightFormError() {
@@ -2025,10 +2060,15 @@ function clearWeightFormError() {
 
 function showLogFormError(message) {
   const el = $("#log-form-error");
-  if (!el || !dialog.open || $("#log-form").hidden) return false;
+  if (!el || !dialog?.open || $("#log-form")?.hidden) return false;
   el.hidden = false;
   el.textContent = message;
-  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  el.setAttribute("tabindex", "-1");
+  // Keep in-flow (not absolute) so overflow:hidden on the dialog cannot clip it away,
+  // and so it stays until clearLogFormError / next valid action — not a fleeting toast.
+  requestAnimationFrame(() => {
+    el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  });
   return true;
 }
 
@@ -2044,7 +2084,7 @@ function showWeightFormError(message) {
 function hideToastSoon(toast, ms = 2400) {
   window.clearTimeout(window.__toastHideTimer);
   window.__toastHideTimer = window.setTimeout(() => {
-    toast.classList.remove("is-visible", "is-success");
+    toast.classList.remove("is-visible", "is-success", "is-error");
   }, ms);
 }
 
@@ -2054,15 +2094,21 @@ function showToast(message) {
   const toast = $("#toast");
   if (!toast) return;
   toast.classList.remove("is-success");
+  const isLimit = message === REPS_OVER_LIMIT_MESSAGE;
+  toast.classList.toggle("is-error", isLimit);
   toast.textContent = message;
   toast.classList.add("is-visible");
-  hideToastSoon(toast);
+  // Long Erok / limit copy needs more than the default flash; while the log sheet
+  // is open, prefer #log-form-error (dialog top-layer hides page toasts).
+  const duration = isLimit || message.length > 60 ? 7000 : 3200;
+  hideToastSoon(toast, duration);
 }
 
 /** Fixed toast with check — does not change layout or scroll. */
 function showWeightUpdatedToast() {
   const toast = $("#toast");
   if (!toast) return;
+  toast.classList.remove("is-error");
   toast.classList.add("is-success");
   toast.innerHTML =
     '<span class="toast__check" aria-hidden="true">✓</span><span class="toast__text">Weight updated</span>';
@@ -2447,6 +2493,25 @@ function demoRequest(path, method, personId, body) {
   }
 
   const fields = parseLocalActivityFields(body);
+
+  const activityDate =
+    typeof body.activityDate === "string" ? body.activityDate : fields.createdAt.slice(0, 10);
+  const excludeId =
+    method === "PUT" && typeof body.activityId === "string" ? body.activityId : null;
+  const dayPushups = activities.reduce((sum, activity) => {
+    if (activity.personId !== personId) return sum;
+    if (excludeId && activity.id === excludeId) return sum;
+    if (activityDateKey(activity) !== activityDate) return sum;
+    return sum + (activityExercise(activity) === "pushups" ? Number(activity.reps) || 0 : 0)
+      + injuryPushupCredit(activity);
+  }, 0);
+  const adding = proposedPushupContribution(fields.exercise, fields.reps, {
+    otherType: fields.otherType,
+    injuryInput: fields.injuryInput,
+  });
+  if (adding > 0 && dayPushups + adding > REPS_MAX) {
+    throw new ApiError(REPS_OVER_LIMIT_MESSAGE, 400);
+  }
 
   if (method === "PUT") {
     const activityId = typeof body.activityId === "string" ? body.activityId : "";
@@ -3393,11 +3458,36 @@ function amountLimitError(reps, exercise, otherType = "") {
   return null;
 }
 
+/** Per-entry cap plus daily push-up total (incl. injury credit) for person + date. */
+function activityAmountError(
+  personId,
+  dateKey,
+  reps,
+  exercise,
+  { otherType = "", injuryInput = false, excludeActivityId = null } = {},
+) {
+  const perEntry = amountLimitError(reps, exercise, otherType);
+  if (perEntry) return perEntry;
+  const contribution = proposedPushupContribution(exercise, reps, { otherType, injuryInput });
+  return dailyPushupLimitError(personId, dateKey, contribution, { excludeActivityId });
+}
+
 function setAmount(value, { announceLimit = false, clamp = true } = {}) {
   const max = amountMaxForExercise(exerciseInput.value);
   const raw = Math.max(0, Math.round(Number(value) || 0));
   if (announceLimit && raw > max) {
     showToast(raw > REPS_MAX ? REPS_OVER_LIMIT_MESSAGE : `Enter an amount from 1 to ${max}.`);
+  } else if (announceLimit) {
+    const personId = personInput?.value || currentPersonId();
+    const dateKey = $("#activity-date-input")?.value || localDateValue();
+    const contribution = proposedPushupContribution(exerciseInput.value, raw, {
+      otherType: currentOtherType(),
+      injuryInput: Boolean($("#injury-input-toggle")?.checked),
+    });
+    const dailyError = dailyPushupLimitError(personId, dateKey, contribution, {
+      excludeActivityId: editingActivityId,
+    });
+    if (dailyError) showToast(dailyError);
   }
   // Clamp only for nudges/chips. Blur/draft restore keep the raw value so submit can reject.
   const amount = clamp ? Math.min(max, raw) : raw;
@@ -3591,6 +3681,7 @@ function updateExerciseFields({ keepAmount = false } = {}) {
 exerciseButtons.forEach((button) => {
   button.addEventListener("click", () => {
     if (button.dataset.exercise === exerciseInput.value) return;
+    clearLogFormError();
     saveCurrentDraft();
     exerciseInput.value = button.dataset.exercise;
     applyDraftToFields(exerciseInput.value);
@@ -5262,17 +5353,15 @@ async function quickAddActivity(button) {
   const reps = Number(button.dataset.quickReps);
   const otherActivity = button.dataset.quickOther || "";
   if (!exercise || !Number.isInteger(reps) || reps < 1) return;
-  const quickLimitError = amountLimitError(
-    reps,
-    exercise,
-    exercise === "other" ? "workouts" : "",
-  );
+  const activityDate = localDateValue();
+  const quickLimitError = activityAmountError(personId, activityDate, reps, exercise, {
+    otherType: exercise === "other" ? "workouts" : "",
+    injuryInput: false,
+  });
   if (quickLimitError) {
     showToast(quickLimitError);
     return;
   }
-
-  const activityDate = localDateValue();
   const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
   const wasComplete = personDayComplete(personId, activityDate);
   const grid = button.closest(".person-quick-add-grid");
@@ -5651,6 +5740,7 @@ $("#reps-input").addEventListener("focus", (event) => {
   event.currentTarget.select();
 });
 $("#reps-input").addEventListener("input", (event) => {
+  clearLogFormError();
   const input = event.currentTarget;
   const digits = String(input.value || "").replace(/\D+/g, "");
   if (input.value !== digits) input.value = digits;
@@ -5663,6 +5753,7 @@ $("#reps-input").addEventListener("blur", (event) => {
   saveCurrentDraft();
 });
 $("#activity-date-input").addEventListener("change", () => {
+  clearLogFormError();
   const input = $("#activity-date-input");
   const today = localDateValue();
   const yesterday = yesterdayDateValue();
@@ -5755,12 +5846,14 @@ $("#other-input").addEventListener("input", () => {
   saveCurrentDraft();
 });
 $("#injury-input-toggle")?.addEventListener("change", () => {
+  clearLogFormError();
   saveCurrentDraft();
 });
 
 document.querySelectorAll("[data-other-type]").forEach((button) => {
   button.addEventListener("click", () => {
     if (button.dataset.otherType === currentOtherType()) return;
+    clearLogFormError();
     setOtherType(button.dataset.otherType);
   });
 });
@@ -5784,7 +5877,13 @@ $("#log-form").addEventListener("submit", async (event) => {
       const reps = Number($("#reps-input").value);
       const exercise = exerciseInput.value;
       const otherType = currentOtherType();
-      const limitError = amountLimitError(reps, exercise, otherType);
+      const injuryInput = exercise === "other" && Boolean($("#injury-input-toggle")?.checked);
+      const activityDate = $("#activity-date-input").value;
+      const limitError = activityAmountError(personId, activityDate, reps, exercise, {
+        otherType,
+        injuryInput,
+        excludeActivityId: activityId,
+      });
       if (limitError) {
         showToast(limitError);
         return;
@@ -5793,7 +5892,6 @@ $("#log-form").addEventListener("submit", async (event) => {
         showToast("Name your other activity.");
         return;
       }
-      const activityDate = $("#activity-date-input").value;
       const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
       const wasComplete = personDayComplete(personId, activityDate);
       const result = await protectedRequest("/api/activities", "PUT", personId, {
@@ -5801,7 +5899,7 @@ $("#log-form").addEventListener("submit", async (event) => {
         exercise,
         otherActivity: exercise === "other" ? $("#other-input").value.trim() : "",
         otherType: exercise === "other" ? otherType : "",
-        injuryInput: exercise === "other" && Boolean($("#injury-input-toggle")?.checked),
+        injuryInput,
         reps,
         activityDate,
       });
@@ -5858,15 +5956,54 @@ $("#log-form").addEventListener("submit", async (event) => {
     }
 
     const activityDate = $("#activity-date-input").value;
+    let batchPushups = 0;
+    for (const entry of toAdd) {
+      const contribution = proposedPushupContribution(entry.exercise, entry.reps, {
+        otherType: entry.otherType || "",
+        injuryInput: Boolean(entry.injuryInput),
+      });
+      const entryLimitError = activityAmountError(
+        personId,
+        activityDate,
+        entry.reps,
+        entry.exercise,
+        {
+          otherType: entry.otherType || "",
+          injuryInput: Boolean(entry.injuryInput),
+        },
+      );
+      // activityAmountError only sees persisted day totals; include earlier entries in this batch.
+      const batchDailyError =
+        contribution > 0 &&
+        personDayPushupTotal(personId, activityDate) + batchPushups + contribution > REPS_MAX
+          ? REPS_OVER_LIMIT_MESSAGE
+          : null;
+      const limitError = entryLimitError || batchDailyError;
+      if (limitError) {
+        exerciseInput.value = entry.exercise;
+        applyDraftToFields(entry.exercise);
+        updateExerciseFields({ keepAmount: true });
+        showToast(limitError);
+        $("#reps-input").focus();
+        return;
+      }
+      batchPushups += contribution;
+    }
+
     const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
     const wasComplete = personDayComplete(personId, activityDate);
     const added = [];
     try {
       for (const entry of toAdd) {
-        const entryLimitError = amountLimitError(
+        const entryLimitError = activityAmountError(
+          personId,
+          activityDate,
           entry.reps,
           entry.exercise,
-          entry.otherType || "",
+          {
+            otherType: entry.otherType || "",
+            injuryInput: Boolean(entry.injuryInput),
+          },
         );
         if (entryLimitError) {
           showToast(entryLimitError);
