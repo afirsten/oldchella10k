@@ -3584,6 +3584,77 @@ function localDateValue(date = new Date()) {
   ].join("-");
 }
 
+function yesterdayDateValue(from = new Date()) {
+  const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() - 1);
+  return localDateValue(day);
+}
+
+function workoutDateOtherLabel(dateKey) {
+  if (!dateKey) return "";
+  const date = new Date(`${dateKey}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  const dow = date.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  const today = localDateValue();
+  const age = historyDayAgeDays(dateKey, today);
+  // Within the last week: weekday is enough; older dates get a short month+day.
+  if (age >= 0 && age < 7) return dow;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function syncWorkoutDateToggle() {
+  const input = $("#activity-date-input");
+  const toggle = $("#workout-date-toggle");
+  const otherLabel = $("#workout-date-other-label");
+  const otherWrap = toggle?.querySelector(".workout-date-other-wrap");
+  if (!input || !toggle) return;
+
+  const today = localDateValue();
+  const yesterday = yesterdayDateValue();
+  input.min = CHALLENGE_START;
+  input.max = today;
+  const value = input.value || today;
+  if (!input.value) input.value = value;
+
+  let preset = "other";
+  if (value === today) preset = "today";
+  else if (value === yesterday) preset = "yesterday";
+
+  toggle.dataset.active = preset;
+  toggle.querySelectorAll("button[data-date-preset]").forEach((button) => {
+    const selected = button.dataset.datePreset === preset;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+  otherWrap?.classList.toggle("is-selected", preset === "other");
+
+  if (otherLabel) {
+    otherLabel.textContent = preset === "other" ? workoutDateOtherLabel(value) : "";
+  }
+  input.setAttribute(
+    "aria-label",
+    preset === "other"
+      ? `Workout date ${workoutDateOtherLabel(value) || value}. Change date`
+      : "Pick another workout date",
+  );
+}
+
+function setActivityDateValue(dateKey, { emitChange = false } = {}) {
+  const input = $("#activity-date-input");
+  if (!input) return;
+  const today = localDateValue();
+  let next = dateKey || today;
+  if (next > today) next = today;
+  if (next < CHALLENGE_START) next = CHALLENGE_START;
+  const changed = input.value !== next;
+  input.min = CHALLENGE_START;
+  input.max = today;
+  input.value = next;
+  syncWorkoutDateToggle();
+  if (emitChange && changed) {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
 function unlockLogDialogHeight() {
   dialog.style.height = "";
   dialog.style.minHeight = "";
@@ -4141,8 +4212,10 @@ function openLogDialog(personId, options = {}) {
   $("#log-person-image").src = person.image;
   $("#log-person-image").alt = "";
   syncWeightPersonAvatar(person);
+  $("#activity-date-input").min = CHALLENGE_START;
   $("#activity-date-input").max = localDateValue();
   $("#activity-date-input").value = activityDate;
+  syncWorkoutDateToggle();
   $("#log-dialog-title").textContent = activity ? "+ Edit reps" : "+ Add reps";
 
   const isWeight = activity && activityExercise(activity) === "weight";
@@ -5355,7 +5428,7 @@ $("#weight-back-button")?.addEventListener("click", () => {
   }
   const weightDate = $("#weight-date-input")?.value;
   if (weightDate && $("#activity-date-input")) {
-    $("#activity-date-input").value = weightDate;
+    setActivityDateValue(weightDate);
   }
   showLogCard();
 });
@@ -5549,7 +5622,93 @@ $("#reps-input").addEventListener("blur", (event) => {
   saveCurrentDraft();
 });
 $("#activity-date-input").addEventListener("change", () => {
+  const input = $("#activity-date-input");
+  const today = localDateValue();
+  const yesterday = yesterdayDateValue();
+  let value = input?.value || today;
+  if (value > today) value = today;
+  if (value < CHALLENGE_START) value = CHALLENGE_START;
+  if (input && input.value !== value) input.value = value;
+  // Snap calendar picks of today/yesterday onto those segments.
+  if (value === today || value === yesterday) {
+    setActivityDateValue(value);
+  } else {
+    syncWorkoutDateToggle();
+  }
   saveCurrentDraft();
+});
+
+let workoutDatePickerGuard = false;
+
+function fallbackOpenWorkoutDatePicker(input) {
+  // Used when showPicker throws/rejects (common on iOS). Focus alone is often
+  // not enough; a guarded synthetic click can recover the native wheel/sheet.
+  workoutDatePickerGuard = true;
+  try {
+    try {
+      input.focus({ preventScroll: true });
+    } catch {
+      try {
+        input.focus();
+      } catch {
+        /* ignore */
+      }
+    }
+    try {
+      input.click();
+    } catch {
+      /* ignore */
+    }
+  } finally {
+    queueMicrotask(() => {
+      workoutDatePickerGuard = false;
+    });
+  }
+}
+
+function openWorkoutDatePicker() {
+  const input = $("#activity-date-input");
+  if (!input || workoutDatePickerGuard) return;
+
+  input.min = CHALLENGE_START;
+  input.max = localDateValue();
+
+  if (typeof input.showPicker !== "function") {
+    // Rely on the activating tap on the input itself (iOS / older browsers).
+    // Do not synthesize another click — that can dismiss the native picker.
+    return;
+  }
+
+  try {
+    const result = input.showPicker();
+    if (result && typeof result.then === "function") {
+      result.catch(() => fallbackOpenWorkoutDatePicker(input));
+    }
+  } catch {
+    // showPicker throws when not user-activated, unsupported for this control,
+    // or blocked inside a dialog on some mobile browsers.
+    fallbackOpenWorkoutDatePicker(input);
+  }
+}
+
+$("#activity-date-input")?.addEventListener("click", () => {
+  // Ensure tapping anywhere on the calendar segment opens the picker, not just
+  // the tiny native indicator. showPicker requires a user gesture.
+  // Click-only (no pointerup): avoids open-then-close races with the native UI.
+  openWorkoutDatePicker();
+});
+
+document.querySelectorAll("#workout-date-toggle button[data-date-preset]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const preset = button.dataset.datePreset;
+    if (preset === "today") {
+      setActivityDateValue(localDateValue(), { emitChange: true });
+      return;
+    }
+    if (preset === "yesterday") {
+      setActivityDateValue(yesterdayDateValue(), { emitChange: true });
+    }
+  });
 });
 $("#other-input").addEventListener("input", () => {
   saveCurrentDraft();

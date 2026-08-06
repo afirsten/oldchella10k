@@ -4797,14 +4797,135 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 }
 .close-button { width: 38px; height: 38px; }
 .activity-date-field {
+  display: grid;
+  gap: 8px;
   min-width: 0;
   max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
 }
-#log-dialog .activity-date-field input[type="date"] {
+.activity-date-field__label {
+  color: var(--muted);
+}
+.workout-date-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 3px;
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--inset-panel-strong) 60%, transparent);
+}
+.workout-date-toggle > button,
+.workout-date-other-wrap {
+  display: inline-flex;
+  min-height: 44px;
+  height: 44px;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--quiet);
+  font: 700 11px/1 "Manrope", sans-serif;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.workout-date-toggle > button:hover,
+.workout-date-other-wrap:hover {
+  color: var(--muted);
+}
+.workout-date-toggle > button.is-selected,
+.workout-date-other-wrap.is-selected {
+  background: rgba(245,200,66,.14);
+  box-shadow: inset 0 0 0 1px rgba(245,200,66,.45);
+  color: var(--lime);
+}
+.workout-date-other-wrap {
+  position: relative;
+  /* Keep radius clip, but don't trap the native picker UI. */
+  overflow: hidden;
+  isolation: isolate;
+}
+.workout-date-other__face {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.workout-date-other__label:empty {
+  display: none;
+}
+.workout-date-other__icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.workout-date-other__input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  /* Fully transparent controls can miss hit-testing on some iOS builds. */
+  opacity: 0.01;
+  cursor: pointer;
+  background: transparent;
+  color: transparent;
+  color-scheme: light dark;
+  /* 16px avoids iOS focus zoom inside the sheet. */
+  font-size: 16px;
+  line-height: 44px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Stretch the native picker hit-target across the whole segment; otherwise
+   only a tiny indicator on the right opens the calendar (desktop Chrome). */
+.workout-date-other__input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.01;
+}
+.workout-date-other__input:focus {
+  outline: none;
+  box-shadow: none;
+}
+#log-dialog .workout-date-other__input {
+  /* Override global date-input width rules inside the segmented control. */
   width: 100%;
   min-width: 0;
-  max-width: 100%;
-  color-scheme: light dark;
+  max-width: none;
+  height: 100%;
+  min-height: 44px;
 }
 .daily-goals-card {
   padding: 16px 16px 14px;
