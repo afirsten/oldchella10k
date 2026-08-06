@@ -1732,8 +1732,9 @@ html:not(.has-known-person) #home-hero .hero-add-reps {
 html:not(.has-known-person) #home-hero #rules-card {
   margin-top: 48px;
   margin-bottom: 18px;
-  padding: 0;
+  padding: 28px 0 0;
   border: 0;
+  border-top: 1px solid var(--line);
   border-radius: 0;
   background: none;
   box-shadow: none;
@@ -1741,6 +1742,7 @@ html:not(.has-known-person) #home-hero #rules-card {
 .hero.is-new #rules-card:not(.is-collapsed),
 html:not(.has-known-person) #home-hero #rules-card:not(.is-collapsed) {
   border: 0;
+  border-top: 1px solid var(--line);
   background: none;
 }
 .hero.is-new #rules-card .rules-toggle,
