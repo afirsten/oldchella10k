@@ -4386,9 +4386,19 @@ dialog[open] { animation: slide-up 250ms ease-out; }
 }
 #log-dialog.is-closing {
   animation: log-sheet-down 280ms ease-in forwards;
+  pointer-events: none;
 }
 #log-dialog.is-closing::backdrop {
   animation: log-backdrop-out 280ms ease-in forwards;
+  pointer-events: none;
+}
+/* Full-screen absorber for the ghost tap after a mobile sheet dismisses. */
+.click-through-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: transparent;
+  touch-action: none;
 }
 #log-form,
 #weight-form {

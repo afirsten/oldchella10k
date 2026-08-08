@@ -2129,6 +2129,9 @@ async function finishWeightSave(personId) {
 
   renderWeightChart(personId);
   editingActivityId = null;
+  // Drop any in-progress reps drafts so a ghost tap / Back mishap can't
+  // also POST a workout (commonly the Quick Add 1 min plank under the sheet).
+  logDrafts = emptyLogDrafts();
   await closeLogDialog();
   render({ skipScroll: true });
   restoreScroll();
@@ -4373,12 +4376,49 @@ function openLogDialog(personId, options = {}) {
   lockLogDialogHeight();
 }
 
+/**
+ * Absorb the synthetic click / touch that mobile browsers often deliver to
+ * whatever sits under a just-dismissed bottom sheet (e.g. Quick Add +1 MIN PLANK
+ * after SAVE WEIGHT).
+ */
+let clickThroughShieldEl = null;
+let clickThroughShieldTimer = null;
+
+function armClickThroughShield(durationMs = 450) {
+  if (typeof document === "undefined") return;
+  if (!clickThroughShieldEl) {
+    clickThroughShieldEl = document.createElement("div");
+    clickThroughShieldEl.className = "click-through-shield";
+    clickThroughShieldEl.setAttribute("aria-hidden", "true");
+    const block = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    // Capture so Quick Add's touchstart handler never sees the ghost tap.
+    for (const type of ["click", "pointerdown", "pointerup", "touchstart", "touchend", "mousedown", "mouseup"]) {
+      clickThroughShieldEl.addEventListener(type, block, true);
+    }
+  }
+  if (!clickThroughShieldEl.isConnected) {
+    document.body.appendChild(clickThroughShieldEl);
+  }
+  document.body.classList.add("has-click-through-shield");
+  window.clearTimeout(clickThroughShieldTimer);
+  clickThroughShieldTimer = window.setTimeout(() => {
+    clickThroughShieldEl?.remove();
+    document.body.classList.remove("has-click-through-shield");
+    clickThroughShieldTimer = null;
+  }, durationMs);
+}
+
 function closeLogDialog() {
   if (!dialog.open || logDialogClosing) return Promise.resolve();
   logDialogClosing = true;
   editingActivityId = null;
   clearLogCelebrations();
   dialog.classList.add("is-closing");
+  // Ignore taps on the sheet itself while it animates away.
+  armClickThroughShield(500);
 
   return new Promise((resolve) => {
     let settled = false;
@@ -4395,6 +4435,8 @@ function closeLogDialog() {
       const weightForm = $("#weight-form");
       if (weightForm) weightForm.hidden = true;
       unlockLogDialogHeight();
+      // Re-arm after close — the ghost click often lands after dialog.close().
+      armClickThroughShield(450);
       resolve();
     };
     const onEnd = (event) => {
@@ -5345,6 +5387,8 @@ $("#person-log-button").addEventListener("click", () => {
 });
 
 async function quickAddActivity(button) {
+  // Bottom-sheet dismiss can synthesize a tap on Quick Add; ignore while shielded.
+  if (document.body.classList.contains("has-click-through-shield")) return;
   const personId = currentPersonId();
   if (!personId || !isPersonPageOwner(personId) || !button || button.classList.contains("is-success")) {
     return;
