@@ -3,9 +3,7 @@ const CHALLENGE_START = "2026-07-14";
 const CHALLENGE_DAYS = 100;
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
-const REPS_MAX = 501;
-const REPS_OVER_LIMIT_MESSAGE =
-  "501 is the daily limit for reps. It’s a good time to diversify. Use the other section to go wild.";
+const OTHER_WORKOUTS_MAX = 100;
 const OLDCHELLA_START = new Date("2026-10-22T15:00:00");
 const OLD_CHELLA_URL = "https://goingtoliveforever.com/";
 const RECIPES_SHEET_ID = "1UkuA5apWL5PZ2XQkZP_r9horqKtial1FCrk5Vn3HK88";
@@ -293,40 +291,6 @@ function injuryPushupCredit(activity) {
 
 function dayHasInjuryPushupCredit(dayActivities) {
   return dayActivities.some((activity) => injuryPushupCredit(activity) > 0);
-}
-
-/**
- * Push-up contribution for a proposed log (same rules as accumulateChallengeMetrics /
- * dayGoalProgress totals.pushups: direct push-ups + injury-credited Other).
- */
-function proposedPushupContribution(exercise, reps, { otherType = "", injuryInput = false } = {}) {
-  if (exercise === "pushups") return Math.max(0, Math.round(Number(reps) || 0));
-  if (exercise === "other" && injuryInput) {
-    return injuryPushupCredit({
-      exercise: "other",
-      reps,
-      otherType: otherType || "workouts",
-      injuryInput: true,
-    });
-  }
-  return 0;
-}
-
-/** Day push-up total matching the UI daily pulse (includes injury credits). */
-function personDayPushupTotal(personId, dateKey, { excludeActivityId = null } = {}) {
-  const dayActivities = personDayActivities(personId, dateKey).filter(
-    (activity) => activity.id !== excludeActivityId,
-  );
-  return dayGoalProgress(dayActivities).totals.pushups;
-}
-
-/** Null when ok; otherwise Erok message when day push-ups would exceed REPS_MAX (501). */
-function dailyPushupLimitError(personId, dateKey, contribution, { excludeActivityId = null } = {}) {
-  const add = Math.max(0, Math.round(Number(contribution) || 0));
-  if (!personId || !dateKey || add <= 0) return null;
-  const existing = personDayPushupTotal(personId, dateKey, { excludeActivityId });
-  if (existing + add > REPS_MAX) return REPS_OVER_LIMIT_MESSAGE;
-  return null;
 }
 
 function exerciseName(activity) {
@@ -2093,14 +2057,12 @@ function showToast(message) {
   if (showWeightFormError(message)) return;
   const toast = $("#toast");
   if (!toast) return;
-  toast.classList.remove("is-success");
-  const isLimit = message === REPS_OVER_LIMIT_MESSAGE;
-  toast.classList.toggle("is-error", isLimit);
+  toast.classList.remove("is-success", "is-error");
   toast.textContent = message;
   toast.classList.add("is-visible");
-  // Long Erok / limit copy needs more than the default flash; while the log sheet
-  // is open, prefer #log-form-error (dialog top-layer hides page toasts).
-  const duration = isLimit || message.length > 60 ? 7000 : 3200;
+  // Long copy needs more than the default flash; while the log sheet is open,
+  // prefer #log-form-error (dialog top-layer hides page toasts).
+  const duration = message.length > 60 ? 7000 : 3200;
   hideToastSoon(toast, duration);
 }
 
@@ -2435,11 +2397,14 @@ function parseLocalActivityFields(body) {
     if (!Number.isInteger(reps) || reps < WEIGHT_MIN_LB || reps > WEIGHT_MAX_LB) {
       throw new ApiError(`Weight must be from ${WEIGHT_MIN_LB} to ${WEIGHT_MAX_LB} lb.`, 400);
     }
-  } else if (!Number.isInteger(reps) || reps < 1 || reps > REPS_MAX) {
-    if (Number.isInteger(reps) && reps > REPS_MAX) {
-      throw new ApiError(REPS_OVER_LIMIT_MESSAGE, 400);
-    }
-    throw new ApiError(`Activity amount must be from 1 to ${REPS_MAX}.`, 400);
+  } else if (!Number.isInteger(reps) || reps < 1) {
+    throw new ApiError("Activity amount must be at least 1.", 400);
+  } else if (
+    exercise === "other" &&
+    (!rawOtherType || rawOtherType === "workouts") &&
+    reps > OTHER_WORKOUTS_MAX
+  ) {
+    throw new ApiError(`Activity amount must be from 1 to ${OTHER_WORKOUTS_MAX}.`, 400);
   }
   if (
     !/^\d{4}-\d{2}-\d{2}$/.test(activityDate) ||
@@ -2496,25 +2461,6 @@ function demoRequest(path, method, personId, body) {
   }
 
   const fields = parseLocalActivityFields(body);
-
-  const activityDate =
-    typeof body.activityDate === "string" ? body.activityDate : fields.createdAt.slice(0, 10);
-  const excludeId =
-    method === "PUT" && typeof body.activityId === "string" ? body.activityId : null;
-  const dayPushups = activities.reduce((sum, activity) => {
-    if (activity.personId !== personId) return sum;
-    if (excludeId && activity.id === excludeId) return sum;
-    if (activityDateKey(activity) !== activityDate) return sum;
-    return sum + (activityExercise(activity) === "pushups" ? Number(activity.reps) || 0 : 0)
-      + injuryPushupCredit(activity);
-  }, 0);
-  const adding = proposedPushupContribution(fields.exercise, fields.reps, {
-    otherType: fields.otherType,
-    injuryInput: fields.injuryInput,
-  });
-  if (adding > 0 && dayPushups + adding > REPS_MAX) {
-    throw new ApiError(REPS_OVER_LIMIT_MESSAGE, 400);
-  }
 
   if (method === "PUT") {
     const activityId = typeof body.activityId === "string" ? body.activityId : "";
@@ -3445,55 +3391,31 @@ function setOtherType(type, { syncDraft = true } = {}) {
   if (syncDraft) saveCurrentDraft();
 }
 
+/** Max for the current amount field, or null when uncapped (reps / minutes). */
 function amountMaxForExercise(exercise, otherType = currentOtherType()) {
-  if (exercise === "other" && otherType === "workouts") return 100;
-  return REPS_MAX;
+  if (exercise === "other" && otherType === "workouts") return OTHER_WORKOUTS_MAX;
+  return null;
 }
 
 /** Null when ok; otherwise the user-facing rejection message (never persist over max). */
 function amountLimitError(reps, exercise, otherType = "") {
   const max = amountMaxForExercise(exercise, otherType);
   if (!Number.isInteger(reps) || reps < 1) {
-    return `Enter an amount from 1 to ${max}.`;
+    return max == null ? "Enter an amount of at least 1." : `Enter an amount from 1 to ${max}.`;
   }
-  if (reps > REPS_MAX) return REPS_OVER_LIMIT_MESSAGE;
-  if (reps > max) return `Enter an amount from 1 to ${max}.`;
+  if (max != null && reps > max) return `Enter an amount from 1 to ${max}.`;
   return null;
-}
-
-/** Per-entry cap plus daily push-up total (incl. injury credit) for person + date. */
-function activityAmountError(
-  personId,
-  dateKey,
-  reps,
-  exercise,
-  { otherType = "", injuryInput = false, excludeActivityId = null } = {},
-) {
-  const perEntry = amountLimitError(reps, exercise, otherType);
-  if (perEntry) return perEntry;
-  const contribution = proposedPushupContribution(exercise, reps, { otherType, injuryInput });
-  return dailyPushupLimitError(personId, dateKey, contribution, { excludeActivityId });
 }
 
 function setAmount(value, { announceLimit = false, clamp = true } = {}) {
   const max = amountMaxForExercise(exerciseInput.value);
   const raw = Math.max(0, Math.round(Number(value) || 0));
-  if (announceLimit && raw > max) {
-    showToast(raw > REPS_MAX ? REPS_OVER_LIMIT_MESSAGE : `Enter an amount from 1 to ${max}.`);
-  } else if (announceLimit) {
-    const personId = personInput?.value || currentPersonId();
-    const dateKey = $("#activity-date-input")?.value || localDateValue();
-    const contribution = proposedPushupContribution(exerciseInput.value, raw, {
-      otherType: currentOtherType(),
-      injuryInput: Boolean($("#injury-input-toggle")?.checked),
-    });
-    const dailyError = dailyPushupLimitError(personId, dateKey, contribution, {
-      excludeActivityId: editingActivityId,
-    });
-    if (dailyError) showToast(dailyError);
+  if (announceLimit && max != null && raw > max) {
+    showToast(`Enter an amount from 1 to ${max}.`);
   }
-  // Clamp only for nudges/chips. Blur/draft restore keep the raw value so submit can reject.
-  const amount = clamp ? Math.min(max, raw) : raw;
+  // Clamp only for nudges/chips when a max applies. Blur/draft restore keep the
+  // raw value so submit can reject over-max misc workout %.
+  const amount = clamp && max != null ? Math.min(max, raw) : raw;
   const input = $("#reps-input");
   input.value = amount;
   const showCompact = exerciseInput.value === "other" && currentOtherType() === "workouts";
@@ -3505,7 +3427,7 @@ function setAmount(value, { announceLimit = false, clamp = true } = {}) {
   const minus = $("#amount-minus");
   const plus = $("#amount-plus");
   if (minus) minus.disabled = amount <= 0;
-  if (plus) plus.disabled = amount >= max;
+  if (plus) plus.disabled = max != null && amount >= max;
 }
 
 function nudgeAmount(delta) {
@@ -3659,7 +3581,11 @@ function updateExerciseFields({ keepAmount = false } = {}) {
     suffix.setAttribute("aria-hidden", settings.percent ? "false" : "true");
   }
   $("#reps-input").setAttribute("aria-label", settings.label);
-  $("#reps-input").setAttribute("maxlength", "3");
+  // Misc Workout % tops out at 100; other amounts are uncapped (allow 6 digits).
+  $("#reps-input").setAttribute(
+    "maxlength",
+    amountMaxForExercise(exercise) == null ? "6" : "3",
+  );
   const isOther = exercise === "other";
   $("#other-field").hidden = !isOther;
   const injuryField = $("#injury-input-field");
@@ -5398,10 +5324,11 @@ async function quickAddActivity(button) {
   const otherActivity = button.dataset.quickOther || "";
   if (!exercise || !Number.isInteger(reps) || reps < 1) return;
   const activityDate = localDateValue();
-  const quickLimitError = activityAmountError(personId, activityDate, reps, exercise, {
-    otherType: exercise === "other" ? "workouts" : "",
-    injuryInput: false,
-  });
+  const quickLimitError = amountLimitError(
+    reps,
+    exercise,
+    exercise === "other" ? "workouts" : "",
+  );
   if (quickLimitError) {
     showToast(quickLimitError);
     return;
@@ -5923,11 +5850,7 @@ $("#log-form").addEventListener("submit", async (event) => {
       const otherType = currentOtherType();
       const injuryInput = exercise === "other" && Boolean($("#injury-input-toggle")?.checked);
       const activityDate = $("#activity-date-input").value;
-      const limitError = activityAmountError(personId, activityDate, reps, exercise, {
-        otherType,
-        injuryInput,
-        excludeActivityId: activityId,
-      });
+      const limitError = amountLimitError(reps, exercise, otherType);
       if (limitError) {
         showToast(limitError);
         return;
@@ -6000,29 +5923,12 @@ $("#log-form").addEventListener("submit", async (event) => {
     }
 
     const activityDate = $("#activity-date-input").value;
-    let batchPushups = 0;
     for (const entry of toAdd) {
-      const contribution = proposedPushupContribution(entry.exercise, entry.reps, {
-        otherType: entry.otherType || "",
-        injuryInput: Boolean(entry.injuryInput),
-      });
-      const entryLimitError = activityAmountError(
-        personId,
-        activityDate,
+      const limitError = amountLimitError(
         entry.reps,
         entry.exercise,
-        {
-          otherType: entry.otherType || "",
-          injuryInput: Boolean(entry.injuryInput),
-        },
+        entry.otherType || "",
       );
-      // activityAmountError only sees persisted day totals; include earlier entries in this batch.
-      const batchDailyError =
-        contribution > 0 &&
-        personDayPushupTotal(personId, activityDate) + batchPushups + contribution > REPS_MAX
-          ? REPS_OVER_LIMIT_MESSAGE
-          : null;
-      const limitError = entryLimitError || batchDailyError;
       if (limitError) {
         exerciseInput.value = entry.exercise;
         applyDraftToFields(entry.exercise);
@@ -6031,7 +5937,6 @@ $("#log-form").addEventListener("submit", async (event) => {
         $("#reps-input").focus();
         return;
       }
-      batchPushups += contribution;
     }
 
     const previousPercents = dayGoalProgress(personDayActivities(personId, activityDate)).percents;
@@ -6039,15 +5944,10 @@ $("#log-form").addEventListener("submit", async (event) => {
     const added = [];
     try {
       for (const entry of toAdd) {
-        const entryLimitError = activityAmountError(
-          personId,
-          activityDate,
+        const entryLimitError = amountLimitError(
           entry.reps,
           entry.exercise,
-          {
-            otherType: entry.otherType || "",
-            injuryInput: Boolean(entry.injuryInput),
-          },
+          entry.otherType || "",
         );
         if (entryLimitError) {
           showToast(entryLimitError);
