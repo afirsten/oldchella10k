@@ -686,7 +686,7 @@ function personBoardProgress(personId, dateKey = localDateValue()) {
 
 function peopleWhoClearedDailyGoal(dateKey = localDateValue()) {
   return crew
-    .filter((person) => !person.honorary && personStatus(person.id) !== "out")
+    .filter((person) => personStatus(person.id) !== "out")
     .filter((person) => personBoardProgress(person.id, dateKey).complete)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -732,7 +732,7 @@ function groupCloseoutStats(participantIds) {
 /** Bros who locked ≥1 of push / squat / plank for the day (includes full clears). */
 function peopleWithBoardClosingProgress(dateKey = localDateValue()) {
   return crew
-    .filter((person) => !person.honorary && personStatus(person.id) !== "out")
+    .filter((person) => personStatus(person.id) !== "out")
     .map((person) => ({ person, progress: personBoardProgress(person.id, dateKey) }))
     .filter(({ progress }) => progress.closedCount > 0)
     .sort((a, b) => {
@@ -952,7 +952,7 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   renderFeedDayFilter({ smoothScroll: smoothDayScroll });
 
   const eligible = crew.filter(
-    (person) => !person.honorary && personStatus(person.id) !== "out",
+    (person) => personStatus(person.id) !== "out",
   );
   const closing = peopleWithBoardClosingProgress(dateKey);
   const cleared = closing.filter(({ progress }) => progress.complete);
