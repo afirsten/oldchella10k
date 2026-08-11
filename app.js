@@ -5718,8 +5718,8 @@ $("#reps-input").addEventListener("input", (event) => {
   saveCurrentDraft();
 });
 $("#reps-input").addEventListener("blur", (event) => {
-  // Announce over-limit but do not clamp — clamping here let submit persist the
-  // capped value after the user typed e.g. 450 and clicked Add.
+  // Announce over-max misc workout % but do not clamp — clamping here let submit
+  // persist the capped value after the user typed e.g. 150 and clicked Add.
   setAmount(event.currentTarget.value, { announceLimit: true, clamp: false });
   saveCurrentDraft();
 });
