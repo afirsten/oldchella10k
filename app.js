@@ -2078,10 +2078,37 @@ function showWeightUpdatedToast() {
   hideToastSoon(toast, 2600);
 }
 
+function showWeightSaveSuccess(pounds) {
+  clearLogCelebrations();
+  const form = $("#log-form");
+  const weightForm = $("#weight-form");
+  const success = $("#log-success");
+  if (!success) return;
+  success.classList.remove("is-board-cleared", "is-fireworks");
+  success.querySelectorAll(".share-whatsapp-button, .daily-pulse-share, .log-success-share").forEach((el) => {
+    el.remove();
+  });
+  $("#success-eyebrow").textContent = "WEIGHT UPDATED";
+  $("#success-amount").textContent = String(pounds);
+  $("#success-unit").textContent = "LB";
+  $("#success-copy").textContent = "Saved to your tracker.";
+  const remaining = $("#success-remaining");
+  if (remaining) {
+    remaining.hidden = true;
+    remaining.textContent = "";
+  }
+  if (form) form.hidden = true;
+  if (weightForm) weightForm.hidden = true;
+  success.hidden = false;
+  if (dialog.open) lockLogDialogHeight();
+}
+
 /**
- * Close weight dialog, refresh UI, keep scroll position, then show success toast.
+ * Keep the weight sheet up through a short success beat, then close it.
+ * Closing immediately under SAVE WEIGHT lets iOS retarget that same tap onto
+ * Quick Add’s +1 MIN PLANK on the person page underneath.
  */
-async function finishWeightSave(personId) {
+async function finishWeightSave(personId, pounds) {
   const scrollY = window.scrollY;
   const restoreScroll = () => {
     if (Math.abs(window.scrollY - scrollY) > 1) {
@@ -2091,16 +2118,20 @@ async function finishWeightSave(personId) {
 
   renderWeightChart(personId);
   editingActivityId = null;
-  // Drop any in-progress reps drafts so a ghost tap / Back mishap can't
-  // also POST a workout (commonly the Quick Add 1 min plank under the sheet).
   logDrafts = emptyLogDrafts();
-  await closeLogDialog();
+  disarmQuickAdd();
+  suppressGhostTaps(1600);
+  showWeightSaveSuccess(pounds);
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  await new Promise((resolve) => {
+    window.setTimeout(resolve, reduceMotion ? 450 : 1200);
+  });
+
+  if (dialog.open) await closeLogDialog();
   render({ skipScroll: true });
   restoreScroll();
-  requestAnimationFrame(() => {
-    restoreScroll();
-    showWeightUpdatedToast();
-  });
+  requestAnimationFrame(restoreScroll);
 }
 
 class ApiError extends Error {
@@ -4321,11 +4352,12 @@ function openLogDialog(personId, options = {}) {
  * straight at the element now under the finger, skipping the shield. Keep a
  * timestamp so Quick Add / increment chips ignore that gesture even then.
  */
-const GHOST_TAP_SUPPRESS_MS = 900;
+const GHOST_TAP_SUPPRESS_MS = 1200;
 let clickThroughShieldEl = null;
 let clickThroughShieldTimer = null;
 let pointerSuppressUntil = 0;
 let lastOverlayPointerAt = 0;
+let quickAddGestureOk = false;
 
 function ghostTapsSuppressed() {
   return Date.now() < pointerSuppressUntil;
@@ -4335,7 +4367,12 @@ function overlayPointerIsHot() {
   return Date.now() - lastOverlayPointerAt < GHOST_TAP_SUPPRESS_MS;
 }
 
+function disarmQuickAdd() {
+  quickAddGestureOk = false;
+}
+
 function suppressGhostTaps(durationMs = GHOST_TAP_SUPPRESS_MS) {
+  disarmQuickAdd();
   pointerSuppressUntil = Math.max(pointerSuppressUntil, Date.now() + durationMs);
   armClickThroughShield(durationMs);
 }
@@ -4375,9 +4412,13 @@ function anyOverlayOpen() {
 document.addEventListener(
   "pointerdown",
   (event) => {
-    if (anyOverlayOpen() || event.target?.closest?.("input[type=date]")) {
+    const onDate = event.target?.closest?.("input[type=date]");
+    if (anyOverlayOpen() || onDate || ghostTapsSuppressed()) {
       lastOverlayPointerAt = Date.now();
+      disarmQuickAdd();
+      return;
     }
+    quickAddGestureOk = Boolean(event.target?.closest?.("#person-quick-add"));
   },
   true,
 );
@@ -5358,8 +5399,10 @@ $("#person-log-button").addEventListener("click", () => {
 });
 
 async function quickAddActivity(button) {
-  // Overlay dismiss can retarget a tap onto Quick Add; ignore that leftover gesture.
-  if (ghostTapsSuppressed() || overlayPointerIsHot()) return;
+  // Overlay dismiss can retarget a tap onto Quick Add. Require a fresh
+  // pointerdown on the grid after the sheet is gone — leftover clicks from
+  // SAVE WEIGHT must not post a 1 min plank.
+  if (!quickAddGestureOk || ghostTapsSuppressed() || overlayPointerIsHot()) return;
   const personId = currentPersonId();
   if (!personId || !isPersonPageOwner(personId) || !button || button.classList.contains("is-success")) {
     return;
@@ -5632,6 +5675,8 @@ $("#weight-form")?.addEventListener("submit", async (event) => {
   const submitButton = $("#weight-submit-button");
   const activityId = editingActivityId;
   if (submitButton) submitButton.disabled = true;
+  disarmQuickAdd();
+  suppressGhostTaps(1600);
   try {
     if (activityId) {
       const result = await protectedRequest("/api/activities", "PUT", personId, {
@@ -5648,7 +5693,7 @@ $("#weight-form")?.addEventListener("submit", async (event) => {
       if (index >= 0) activities[index] = result.activity;
       else activities.push(result.activity);
       participation[personId] = result.status;
-      await finishWeightSave(personId);
+      await finishWeightSave(personId, reps);
       return;
     }
 
@@ -5663,7 +5708,7 @@ $("#weight-form")?.addEventListener("submit", async (event) => {
     if (!result) return;
     activities.push(result.activity);
     participation[personId] = result.status;
-    await finishWeightSave(personId);
+    await finishWeightSave(personId, reps);
   } catch (error) {
     showToast(error.message || "Weight could not be saved.");
   } finally {
