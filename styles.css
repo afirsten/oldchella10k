@@ -4399,6 +4399,11 @@ dialog[open] { animation: slide-up 250ms ease-out; }
   z-index: 10000;
   background: transparent;
   touch-action: none;
+  pointer-events: auto;
+}
+body.has-click-through-shield .person-quick-add-grid,
+body.has-click-through-shield .quick-reps {
+  pointer-events: none;
 }
 #log-form,
 #weight-form {
