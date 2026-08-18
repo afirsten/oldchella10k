@@ -2313,7 +2313,10 @@ function openPersonPicker() {
 
 function closePersonPicker() {
   const picker = $("#person-picker-dialog");
-  if (picker.open) picker.close();
+  if (!picker.open) return;
+  // Same mobile ghost-tap as the log sheet: the dismiss tap can land on Quick Add.
+  suppressGhostTaps();
+  picker.close();
 }
 
 let resolvePinPrompt = null;
@@ -2372,7 +2375,9 @@ function closePinPrompt(value = null) {
   pinAutoSubmitTimer = null;
   const resolve = resolvePinPrompt;
   resolvePinPrompt = null;
-  $("#pin-dialog").close();
+  const pinEl = $("#pin-dialog");
+  if (pinEl?.open) suppressGhostTaps();
+  pinEl?.close();
   if (resolve) resolve(value);
 }
 
@@ -3367,6 +3372,8 @@ function emptyLogDrafts() {
 }
 
 let logDrafts = emptyLogDrafts();
+let lastExerciseSwitchAt = 0;
+let lastChipTouchStartAt = 0;
 
 function currentOtherType() {
   const input = $("#other-type-input");
@@ -3615,6 +3622,9 @@ exerciseButtons.forEach((button) => {
     exerciseInput.value = button.dataset.exercise;
     applyDraftToFields(exerciseInput.value);
     updateExerciseFields({ keepAmount: true });
+    // Chip labels swap in place (+25 → +1.5 min). Ignore the rest of this
+    // gesture so a delayed click can't bank a plank (or other) draft.
+    lastExerciseSwitchAt = Date.now();
   });
 });
 
@@ -4304,13 +4314,33 @@ function openLogDialog(personId, options = {}) {
 
 /**
  * Absorb the synthetic click / touch that mobile browsers often deliver to
- * whatever sits under a just-dismissed bottom sheet (e.g. Quick Add +1 MIN PLANK
- * after SAVE WEIGHT).
+ * whatever sits under a just-dismissed overlay (e.g. Quick Add +1 MIN PLANK
+ * after SAVE WEIGHT, or a log-sheet increment chip after the date picker).
+ *
+ * The overlay div alone is not enough: iOS often retargets the leftover click
+ * straight at the element now under the finger, skipping the shield. Keep a
+ * timestamp so Quick Add / increment chips ignore that gesture even then.
  */
+const GHOST_TAP_SUPPRESS_MS = 900;
 let clickThroughShieldEl = null;
 let clickThroughShieldTimer = null;
+let pointerSuppressUntil = 0;
+let lastOverlayPointerAt = 0;
 
-function armClickThroughShield(durationMs = 450) {
+function ghostTapsSuppressed() {
+  return Date.now() < pointerSuppressUntil;
+}
+
+function overlayPointerIsHot() {
+  return Date.now() - lastOverlayPointerAt < GHOST_TAP_SUPPRESS_MS;
+}
+
+function suppressGhostTaps(durationMs = GHOST_TAP_SUPPRESS_MS) {
+  pointerSuppressUntil = Math.max(pointerSuppressUntil, Date.now() + durationMs);
+  armClickThroughShield(durationMs);
+}
+
+function armClickThroughShield(durationMs = GHOST_TAP_SUPPRESS_MS) {
   if (typeof document === "undefined") return;
   if (!clickThroughShieldEl) {
     clickThroughShieldEl = document.createElement("div");
@@ -4320,7 +4350,6 @@ function armClickThroughShield(durationMs = 450) {
       event.preventDefault();
       event.stopPropagation();
     };
-    // Capture so Quick Add's touchstart handler never sees the ghost tap.
     for (const type of ["click", "pointerdown", "pointerup", "touchstart", "touchend", "mousedown", "mouseup"]) {
       clickThroughShieldEl.addEventListener(type, block, true);
     }
@@ -4337,6 +4366,22 @@ function armClickThroughShield(durationMs = 450) {
   }, durationMs);
 }
 
+function anyOverlayOpen() {
+  return Boolean(
+    dialog?.open || pinDialog?.open || $("#person-picker-dialog")?.open,
+  );
+}
+
+document.addEventListener(
+  "pointerdown",
+  (event) => {
+    if (anyOverlayOpen() || event.target?.closest?.("input[type=date]")) {
+      lastOverlayPointerAt = Date.now();
+    }
+  },
+  true,
+);
+
 function closeLogDialog() {
   if (!dialog.open || logDialogClosing) return Promise.resolve();
   logDialogClosing = true;
@@ -4344,7 +4389,7 @@ function closeLogDialog() {
   clearLogCelebrations();
   dialog.classList.add("is-closing");
   // Ignore taps on the sheet itself while it animates away.
-  armClickThroughShield(500);
+  suppressGhostTaps(500);
 
   return new Promise((resolve) => {
     let settled = false;
@@ -4362,7 +4407,7 @@ function closeLogDialog() {
       if (weightForm) weightForm.hidden = true;
       unlockLogDialogHeight();
       // Re-arm after close — the ghost click often lands after dialog.close().
-      armClickThroughShield(450);
+      suppressGhostTaps();
       resolve();
     };
     const onEnd = (event) => {
@@ -5313,8 +5358,8 @@ $("#person-log-button").addEventListener("click", () => {
 });
 
 async function quickAddActivity(button) {
-  // Bottom-sheet dismiss can synthesize a tap on Quick Add; ignore while shielded.
-  if (document.body.classList.contains("has-click-through-shield")) return;
+  // Overlay dismiss can retarget a tap onto Quick Add; ignore that leftover gesture.
+  if (ghostTapsSuppressed() || overlayPointerIsHot()) return;
   const personId = currentPersonId();
   if (!personId || !isPersonPageOwner(personId) || !button || button.classList.contains("is-success")) {
     return;
@@ -5440,17 +5485,26 @@ $("#person-quick-add")?.addEventListener(
     const button = event.target.closest("[data-quick-exercise]");
     if (!button || button.disabled) return;
     if (event.touches.length !== 1) return;
-    event.preventDefault();
-    button.dataset.touchedAt = String(Date.now());
-    quickAddActivity(button);
+    // Record the start only — do not log yet. Logging on touchstart made a
+    // scroll or overlay-dismiss brush post a plank (or other preset).
+    const touch = event.touches[0];
+    button.dataset.touchStartX = String(touch.clientX);
+    button.dataset.touchStartY = String(touch.clientY);
   },
-  { passive: false }
+  { passive: true },
 );
 $("#person-quick-add")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-quick-exercise]");
-  if (!button) return;
-  const touchedAt = Number(button.dataset.touchedAt || 0);
-  if (touchedAt && Date.now() - touchedAt < 450) return;
+  if (!button || button.disabled) return;
+  const startX = Number(button.dataset.touchStartX);
+  const startY = Number(button.dataset.touchStartY);
+  delete button.dataset.touchStartX;
+  delete button.dataset.touchStartY;
+  if (Number.isFinite(startX) && Number.isFinite(startY)) {
+    const dx = event.clientX - startX;
+    const dy = event.clientY - startY;
+    if (Math.hypot(dx, dy) > 14) return;
+  }
   quickAddActivity(button);
 });
 
@@ -5673,32 +5727,61 @@ pinDialog.addEventListener("close", () => {
   resetPinCodeUI();
 });
 
+function staleChipGesture() {
+  // Workout-type tabs and increment chips occupy the same column. A tap that
+  // starts on PLANK (or a delayed click after the labels swap) must not also
+  // add +30/+60/+90/+120 to the new draft.
+  if (!lastExerciseSwitchAt) return false;
+  if (Date.now() - lastExerciseSwitchAt > 400) return false;
+  if (lastChipTouchStartAt >= lastExerciseSwitchAt) return false;
+  return true;
+}
+
 function onPress(element, handler) {
   if (!element) return;
-  let touchedRecently = false;
-  // touchstart + preventDefault is the reliable iOS path: each rapid tap fires
-  // the action and Safari never gets a chance to treat it as double-tap zoom.
+  let start = null;
+  let handled = false;
   element.addEventListener(
     "touchstart",
     (event) => {
-      if (event.touches.length !== 1) return;
-      event.preventDefault();
-      touchedRecently = true;
-      handler(event);
-      window.setTimeout(() => {
-        touchedRecently = false;
-      }, 450);
+      if (event.touches.length !== 1) {
+        start = null;
+        return;
+      }
+      const touch = event.touches[0];
+      start = { x: touch.clientX, y: touch.clientY };
     },
-    { passive: false }
+    { passive: true },
   );
+  element.addEventListener("touchend", (event) => {
+    if (!start) return;
+    const touch = event.changedTouches[0];
+    const moved = Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 14;
+    start = null;
+    if (moved || ghostTapsSuppressed()) return;
+    handled = true;
+    window.setTimeout(() => {
+      handled = false;
+    }, 450);
+    event.preventDefault();
+    handler(event);
+  });
   element.addEventListener("click", (event) => {
-    if (touchedRecently) return;
+    if (handled || ghostTapsSuppressed()) return;
     handler(event);
   });
 }
 
 quickButtons.forEach((button) => {
+  button.addEventListener(
+    "touchstart",
+    () => {
+      lastChipTouchStartAt = Date.now();
+    },
+    { passive: true },
+  );
   onPress(button, () => {
+    if (staleChipGesture()) return;
     setAmount(Number($("#reps-input").value) + Number(button.dataset.increment));
     saveCurrentDraft();
   });
@@ -5739,6 +5822,8 @@ $("#activity-date-input").addEventListener("change", () => {
     syncWorkoutDateToggle();
   }
   saveCurrentDraft();
+  // Native date-picker "Done" can fall through onto +1 min / +2 min chips.
+  suppressGhostTaps(500);
 });
 
 let workoutDatePickerGuard = false;
@@ -5826,6 +5911,7 @@ document.querySelectorAll("[data-other-type]").forEach((button) => {
     if (button.dataset.otherType === currentOtherType()) return;
     clearLogFormError();
     setOtherType(button.dataset.otherType);
+    lastExerciseSwitchAt = Date.now();
   });
 });
 
