@@ -401,17 +401,31 @@ function formatActivityAmount(activity) {
   return number.format(reps);
 }
 
-function formatActivityLead(activity) {
+function formatActivityLeadValue(activity) {
   const amount = formatActivityAmount(activity);
   const exercise = activityExercise(activity);
-  if (exercise === "planks") return `+${amount} MIN`;
-  if (exercise === "weight") return `${amount} LB`;
-  if (exercise === "other") {
-    const type = otherTypeOf(activity);
-    if (type === "time") return `+${amount} MIN`;
-    if (type === "workouts") return `+${amount}%`;
-  }
+  if (exercise === "weight") return amount;
+  if (exercise === "other" && otherTypeOf(activity) === "workouts") return `+${amount}%`;
   return `+${amount}`;
+}
+
+function formatActivityLeadUnit(activity) {
+  const exercise = activityExercise(activity);
+  if (exercise === "planks") return "MIN";
+  if (exercise === "weight") return "LB";
+  if (exercise === "other" && otherTypeOf(activity) === "time") return "MIN";
+  return "";
+}
+
+function formatActivityLead(activity) {
+  const unit = formatActivityLeadUnit(activity);
+  return unit ? `${formatActivityLeadValue(activity)} ${unit}` : formatActivityLeadValue(activity);
+}
+
+function activityAmountHtml(activity, repsMag) {
+  const unit = formatActivityLeadUnit(activity);
+  const unitHtml = unit ? ` ${escapeHtml(unit)}` : "";
+  return `<span class="activity-reps ${exerciseColorClass(activity)}${repsMag}">${escapeHtml(formatActivityLeadValue(activity))}</span>${unitHtml} ${escapeHtml(exerciseName(activity))}`;
 }
 
 /** Add activity amounts into challenge metrics (skips personal-only weight). */
@@ -1149,7 +1163,7 @@ function activityFeedItemHtml(activity) {
           <span>${formatDate(activity.createdAt)}</span>
         </div>
         <div class="activity-meta">
-          <p class="${exerciseColorClass(activity)}"><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+          <p>${activityAmountHtml(activity, repsMag)}</p>
         </div>
       </a>
     `;
@@ -3506,7 +3520,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       <article class="activity-item is-editable${person.honorary ? " is-honorary" : ""}${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p class="${exerciseColorClass(activity)}"><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p>${activityAmountHtml(activity, repsMag)}</p>
                           ${detailBits}
                           ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
                         </div>
@@ -3527,7 +3541,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       <article class="activity-item is-readonly${person.honorary ? " is-honorary" : ""}" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p class="${exerciseColorClass(activity)}"><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p>${activityAmountHtml(activity, repsMag)}</p>
                           ${detailBits}
                         </div>
                       </article>

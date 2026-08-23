@@ -3420,26 +3420,11 @@ a.activity-item:focus-visible {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.activity-main p.is-pushups,
-.activity-meta p.is-pushups,
-.activity-main p.is-pushups .activity-reps,
-.activity-meta p.is-pushups .activity-reps { color: var(--pink); }
-.activity-main p.is-squats,
-.activity-meta p.is-squats,
-.activity-main p.is-squats .activity-reps,
-.activity-meta p.is-squats .activity-reps { color: var(--terra); }
-.activity-main p.is-planks,
-.activity-meta p.is-planks,
-.activity-main p.is-planks .activity-reps,
-.activity-meta p.is-planks .activity-reps { color: var(--lime); }
-.activity-main p.is-other,
-.activity-meta p.is-other,
-.activity-main p.is-other .activity-reps,
-.activity-meta p.is-other .activity-reps { color: var(--green); }
-.activity-main p.is-weight,
-.activity-meta p.is-weight,
-.activity-main p.is-weight .activity-reps,
-.activity-meta p.is-weight .activity-reps { color: var(--lavender); }
+.activity-reps.is-pushups { color: var(--pink); }
+.activity-reps.is-squats { color: var(--terra); }
+.activity-reps.is-planks { color: var(--lime); }
+.activity-reps.is-other { color: var(--green); }
+.activity-reps.is-weight { color: var(--lavender); }
 .activity-reps {
   margin: 0 4px 0 0;
   color: var(--lime);
@@ -3452,9 +3437,6 @@ a.activity-item:focus-visible {
 }
 .activity-reps.is-10k {
   font-size: 11px;
-}
-.activity-item.is-honorary .activity-reps {
-  color: inherit;
 }
 @media (min-width: 480px) {
   .activity-meta p {
