@@ -42,7 +42,7 @@
       href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=288" />
+    <link rel="stylesheet" href="./styles.css?v=314" />
     <script>
       (function () {
         try {
@@ -98,7 +98,7 @@
       })();
     </script>
     <script src="./vendor/confetti.browser.min.js"></script>
-    <script src="./app.js?v=222" defer></script>
+    <script src="./app.js?v=239" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -118,13 +118,16 @@
         class="nav-home"
         href="#/"
         id="ripped-home-link"
-        aria-current="page"
         aria-label="Ripped-Chella home"
       >
         <span class="compact-wordmark ripped-wordmark">
           <span class="wordmark-base">RIPPED-</span><span class="wordmark-accent">CHELLA</span>
         </span>
       </a>
+      <p class="nav-days-left" id="nav-days-left">
+        <span id="nav-days-left-count">0</span>
+        <span id="nav-days-left-label">days to go</span>
+      </p>
       <button
         type="button"
         class="nav-add-reps"
@@ -137,7 +140,7 @@
 
     <div class="site-menu" id="site-menu" hidden>
       <button type="button" class="site-menu-backdrop" id="site-menu-backdrop" tabindex="-1" aria-label="Close menu"></button>
-      <div class="site-menu-panel" role="dialog" aria-modal="true" aria-label="Site menu">
+      <div class="site-menu-panel" role="dialog" aria-modal="true" aria-label="Site menu" tabindex="-1">
         <div class="site-menu-header">
           <p class="site-menu-eyebrow">Navigate</p>
           <button type="button" class="theme-toggle site-menu-theme" id="theme-toggle" aria-label="Switch to light mode">
@@ -459,7 +462,13 @@
               </div>
             </div>
             <div class="person-identity-copy">
-              <h1 id="person-name"></h1>
+              <div class="person-identity-head">
+                <h1 id="person-name"></h1>
+                <div class="personal-goal">
+                  <strong id="person-goal-percent">0%</strong>
+                  <span>OF 10K GOAL</span>
+                </div>
+              </div>
               <p class="hero-copy" id="person-summary"></p>
             </div>
           </div>
@@ -481,31 +490,29 @@
               <div>
                 <p class="label" id="person-total-label">PUSH-UP COUNT</p>
                 <p class="person-total-line">
-                  <strong id="person-total">0</strong> of 10k
+                  <strong id="person-total">0</strong>
                 </p>
               </div>
-              <div class="personal-goal">
-                <strong id="person-goal-percent">0%</strong>
-                <span>OF 10K GOAL</span>
+              <div class="personal-progress-block">
+                <p class="personal-goal-copy">
+                  <span id="person-goal-current">0</span> of 10k
+                  <span id="person-pace-copy"></span>
+                </p>
+                <div
+                  class="personal-progress-track"
+                  role="progressbar"
+                  id="person-progress-track"
+                  aria-label="Personal 10K progress"
+                  aria-valuemin="0"
+                  aria-valuemax="10000"
+                  aria-valuenow="0"
+                >
+                  <div class="personal-progress-target" id="person-progress-target" aria-hidden="true"></div>
+                  <div id="person-progress-fill"></div>
+                  <span class="personal-progress-pace" id="person-progress-pace" aria-hidden="true"></span>
+                </div>
               </div>
             </div>
-            <div
-              class="personal-progress-track"
-              role="progressbar"
-              id="person-progress-track"
-              aria-label="Personal 10K progress"
-              aria-valuemin="0"
-              aria-valuemax="10000"
-              aria-valuenow="0"
-            >
-              <div class="personal-progress-target" id="person-progress-target" aria-hidden="true"></div>
-              <div id="person-progress-fill"></div>
-              <span class="personal-progress-pace" id="person-progress-pace" aria-hidden="true"></span>
-            </div>
-            <p class="personal-goal-copy">
-              <span id="person-goal-current">0</span> of 10,000 complete
-              <span id="person-pace-copy"></span>
-            </p>
 
             <div
               class="personal-day-chart"
@@ -528,34 +535,32 @@
               <div>
                 <span>PUSH-UPS</span>
                 <strong id="person-pushups-total">0</strong>
-                <span class="daily-avg">
-                  <span class="daily-avg-label">DAILY AVG</span>
-                  <strong id="person-avg-pushups">0</strong>
-                </span>
+                <span class="daily-avg"><strong id="person-avg-pushups">0</strong> DAILY AVG</span>
               </div>
               <div>
                 <span>SQUATS</span>
                 <strong id="person-squats-total">0</strong>
-                <span class="daily-avg">
-                  <span class="daily-avg-label">DAILY AVG</span>
-                  <strong id="person-avg-squats">0</strong>
-                </span>
+                <span class="daily-avg"><strong id="person-avg-squats">0</strong> DAILY AVG</span>
               </div>
               <div>
                 <span>PLANKS</span>
                 <strong id="person-plank-minutes">0<span class="stat-unit">MIN</span></strong>
-                <span class="daily-avg">
-                  <span class="daily-avg-label">DAILY AVG</span>
-                  <strong id="person-avg-planks">0</strong>
-                </span>
+                <span class="daily-avg"><strong id="person-avg-planks">0</strong> DAILY AVG</span>
               </div>
               <div>
                 <span>WORKOUTS</span>
                 <strong id="person-other-days">0</strong>
-                <span class="daily-avg">
-                  <span class="daily-avg-label">DAILY AVG</span>
-                  <strong id="person-avg-other">0</strong>
-                </span>
+                <span class="daily-avg"><strong id="person-avg-other">0</strong> DAILY AVG</span>
+              </div>
+              <div>
+                <span>TRIFECTAS</span>
+                <strong id="person-trifectas-total">0</strong>
+                <span class="daily-avg"><strong id="person-avg-trifectas">0</strong> DAILY AVG</span>
+              </div>
+              <div>
+                <span>TOTAL</span>
+                <strong id="person-combined-total">0</strong>
+                <span class="daily-avg"><strong id="person-avg-combined">0</strong> DAILY AVG</span>
               </div>
             </div>
           </div>
@@ -736,6 +741,27 @@
             <span class="is-pace"><i></i> Pace mark</span>
           </div>
           <div class="activity-viz" aria-label="Crew pace and momentum">
+            <div class="activity-podium" aria-label="Leaders">
+              <div class="activity-viz__today" aria-hidden="true">
+                <span class="activity-viz__today-rule"></span>
+                <span class="activity-viz__today-label">LEADERS</span>
+                <span class="activity-viz__today-rule"></span>
+              </div>
+              <div class="activity-podium__grid">
+                <div class="activity-podium__col">
+                  <span class="activity-podium__label">PUSH-UPS</span>
+                  <ol class="activity-podium__list" id="activity-podium-pushups"></ol>
+                </div>
+                <div class="activity-podium__col">
+                  <span class="activity-podium__label">TRIFECTAS</span>
+                  <ol class="activity-podium__list" id="activity-podium-trifectas"></ol>
+                </div>
+                <div class="activity-podium__col">
+                  <span class="activity-podium__label">TOTAL</span>
+                  <ol class="activity-podium__list" id="activity-podium-total"></ol>
+                </div>
+              </div>
+            </div>
             <div class="activity-viz__today" aria-hidden="true">
               <span class="activity-viz__today-rule"></span>
               <span class="activity-viz__today-label">TODAY</span>
@@ -1055,7 +1081,7 @@
           <div class="feed-cleared-card__head">
             <div>
               <p class="eyebrow" id="feed-cleared-eyebrow">TODAY’S BOARD</p>
-              <h2 id="feed-cleared-heading">Daily closers</h2>
+              <h2 id="feed-cleared-heading">Trifecta closers</h2>
             </div>
             <span class="feed-cleared-card__count" id="feed-cleared-count" aria-live="polite">0</span>
           </div>

@@ -183,6 +183,15 @@ let activities = loadActivities();
 let participation = {};
 let apiAvailable = false;
 let pendingPulseReveal = null;
+let leaderboardSortKey = "total";
+let leaderboardSortDir = "desc";
+const LEADERBOARD_SORT_COLUMNS = [
+  { key: "pushups", label: "PUSH UPS" },
+  { key: "squats", label: "SQUATS" },
+  { key: "planks", label: "PLANKS" },
+  { key: "other", label: "OTHER" },
+  { key: "combined", label: "TOTAL" },
+];
 try {
   participation = JSON.parse(localStorage.getItem(STATUS_KEY) || "{}");
 } catch {
@@ -693,6 +702,89 @@ function groupCloseoutStats(participantIds) {
   return { pushupClosers, repClosers, trifectas };
 }
 
+function trifectasByPersonId(participantIds) {
+  const byPersonDay = new Map();
+  for (const activity of activities) {
+    if (!participantIds.has(activity.personId)) continue;
+    if (isWeightActivity(activity)) continue;
+    const dateKey = activityDateKey(activity);
+    const key = `${activity.personId}|${dateKey}`;
+    let dayActivities = byPersonDay.get(key);
+    if (!dayActivities) {
+      dayActivities = [];
+      byPersonDay.set(key, dayActivities);
+    }
+    dayActivities.push(activity);
+  }
+
+  const counts = new Map();
+  for (const [key, dayActivities] of byPersonDay) {
+    const personId = key.split("|")[0];
+    if (!dayGoalProgress(dayActivities).complete) continue;
+    counts.set(personId, (counts.get(personId) || 0) + 1);
+  }
+  return counts;
+}
+
+function podiumTopThree(people, scoreFor) {
+  return [...people]
+    .map((person) => ({ person, score: Number(scoreFor(person)) || 0 }))
+    .sort((a, b) => b.score - a.score || a.person.name.localeCompare(b.person.name))
+    .slice(0, 3);
+}
+
+function renderActivityPodium(participants) {
+  const lists = {
+    pushups: $("#activity-podium-pushups"),
+    trifectas: $("#activity-podium-trifectas"),
+    total: $("#activity-podium-total"),
+  };
+  if (!lists.pushups || !lists.trifectas || !lists.total) return;
+
+  const participantIds = new Set(participants.map((person) => person.id));
+  const trifectas = trifectasByPersonId(participantIds);
+  const columns = [
+    {
+      el: lists.pushups,
+      valueClass: "is-pushups",
+      format: (score) => number.format(score),
+      rows: podiumTopThree(participants, (person) => person.metrics.pushups),
+    },
+    {
+      el: lists.trifectas,
+      valueClass: "is-planks",
+      format: (score) => number.format(score),
+      rows: podiumTopThree(participants, (person) => trifectas.get(person.id) || 0),
+    },
+    {
+      el: lists.total,
+      valueClass: "is-total",
+      format: (score) => number.format(Math.round(score)),
+      rows: podiumTopThree(participants, (person) => leaderboardCombinedTotal(person)),
+    },
+  ];
+
+  for (const column of columns) {
+    if (!column.rows.length) {
+      column.el.innerHTML = `<li class="activity-podium__row is-empty"><span class="activity-podium__name">No logs yet</span></li>`;
+      continue;
+    }
+    column.el.innerHTML = column.rows
+      .map(({ person, score }) => {
+        return `
+          <li>
+            <a class="activity-podium__row" href="#/person/${person.id}">
+              <img class="activity-podium__avatar" src="${person.image}" alt="" />
+              <span class="activity-podium__name">${escapeHtml(person.name)}</span>
+              <strong class="activity-podium__value ${column.valueClass}">${column.format(score)}</strong>
+            </a>
+          </li>
+        `;
+      })
+      .join("");
+  }
+}
+
 /** Bros who locked ≥1 of push / squat / plank for the day (includes full clears). */
 function peopleWithBoardClosingProgress(dateKey = localDateValue()) {
   return crew
@@ -927,7 +1019,7 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   const longLabel = formatFeedDayLabel(dateKey, { long: true });
 
   if (headingEl) {
-    headingEl.textContent = "Daily closers";
+    headingEl.textContent = "Trifecta closers";
   }
   if (subEl) {
     if (cleared.length) {
@@ -1522,14 +1614,49 @@ function formatPersonHeadline(name) {
   return `${escapeHtml(parts.join(" "))}<span class="name-initial">${escapeHtml(initial)}</span>`;
 }
 
-function render({ skipScroll = false } = {}) {
-  const ranking = totalsByPerson().sort(
-    (a, b) =>
-      Number(a.status === "out") - Number(b.status === "out") ||
-      Number(a.status === "unknown") - Number(b.status === "unknown") ||
-      b.total - a.total ||
-      a.name.localeCompare(b.name),
+function leaderboardCombinedTotal(person) {
+  const metrics = person.metrics || {};
+  const plankMinutes = (Number(metrics.planks) || 0) / 60;
+  return (
+    (Number(metrics.pushups) || 0) +
+    (Number(metrics.squats) || 0) +
+    plankMinutes +
+    (Number(metrics.other) || 0)
   );
+}
+
+function leaderboardSortValue(person, key) {
+  if (key === "total") return Number(person.total) || 0;
+  if (key === "combined") return leaderboardCombinedTotal(person);
+  return Number(person.metrics?.[key]) || 0;
+}
+
+function compareLeaderboardRows(a, b) {
+  const status =
+    Number(a.status === "out") - Number(b.status === "out") ||
+    Number(a.status === "unknown") - Number(b.status === "unknown");
+  if (status) return status;
+  const dir = leaderboardSortDir === "asc" ? 1 : -1;
+  const delta = (leaderboardSortValue(a, leaderboardSortKey) - leaderboardSortValue(b, leaderboardSortKey)) * dir;
+  return delta || a.name.localeCompare(b.name);
+}
+
+function leaderboardHeadHtml() {
+  const cols = LEADERBOARD_SORT_COLUMNS.map(({ key, label }) => {
+    const active = leaderboardSortKey === key;
+    const sortState = active ? leaderboardSortDir : "none";
+    return `<button type="button" class="leader-sort${active ? " is-active" : ""}" data-leader-sort="${key}" aria-pressed="${active ? "true" : "false"}" aria-sort="${sortState}" title="Sort by ${label}">${label}</button>`;
+  }).join("");
+  return `<div class="leader-head">
+    <span class="leader-head-spacer" aria-hidden="true"></span>
+    <span class="leader-head-spacer" aria-hidden="true"></span>
+    <span class="leader-head-spacer" aria-hidden="true"></span>
+    <div class="leader-reps">${cols}</div>
+  </div>`;
+}
+
+function render({ skipScroll = false } = {}) {
+  const ranking = totalsByPerson().sort(compareLeaderboardRows);
   const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
   const honoraryMembers = ranking.filter((person) => person.honorary);
   const optedOut = ranking.filter((person) => person.status === "out" && !person.honorary);
@@ -1642,34 +1769,32 @@ function render({ skipScroll = false } = {}) {
   let competitiveIndex = 0;
   const leaderboardHtml = ranking
     .map((person) => {
-      const rowState = person.honorary
-        ? " is-honorary"
-        : person.status === "out"
+      const rowState =
+        person.status === "out"
           ? " is-out"
           : person.status === "unknown"
             ? " is-undecided"
             : "";
-      const subtitle = person.honorary
-        ? `Honorary · ${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}`
-        : person.status === "out"
+      const subtitle =
+        person.status === "out"
           ? "Out"
           : person.status === "unknown"
             ? "Undecided"
             : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
-      const rankHtml = person.honorary
-        ? `<span class="rank rank-honorary" title="Honorary · not counted in group total">★</span>`
-        : (() => {
-            const index = competitiveIndex;
-            competitiveIndex += 1;
-            const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
-            return `<span class="rank rank-${tone}">${index + 1}</span>`;
-          })();
+      const rankHtml = (() => {
+        const index = competitiveIndex;
+        competitiveIndex += 1;
+        const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
+        return `<span class="rank rank-${tone}">${index + 1}</span>`;
+      })();
       const plankMinutes = (Number(person.metrics.planks) || 0) / 60;
+      const combinedTotal = leaderboardCombinedTotal(person);
       const repsMag = compactMagnitudeAttr([
         person.metrics.pushups,
         person.metrics.squats,
         plankMinutes,
         person.metrics.other,
+        combinedTotal,
       ]);
       return `
         <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
@@ -1677,37 +1802,37 @@ function render({ skipScroll = false } = {}) {
           <span class="avatar-wrap">
             <img class="avatar" src="${person.image}" alt="" />
             ${person.status === "out" ? '<span class="out-stamp">OUT</span>' : ""}
-            ${person.honorary ? '<span class="honorary-stamp">H</span>' : ""}
+            ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
           </span>
           <div>
             <p class="leader-name">${escapeHtml(person.name)}</p>
             <p class="leader-sub">${subtitle}</p>
           </div>
           <div class="leader-reps${repsMag}">
-            <span class="${person.primaryType === "pushups" ? "is-primary" : ""}">
+            <span class="is-pushups${(Number(person.metrics.pushups) || 0) === 0 ? " is-zero" : ""}">
               <strong>${number.format(person.metrics.pushups)}</strong>
-              <small>PUSH</small>
             </span>
-            <span>
+            <span class="is-squats${(Number(person.metrics.squats) || 0) === 0 ? " is-zero" : ""}">
               <strong>${number.format(person.metrics.squats)}</strong>
-              <small>SQUAT</small>
             </span>
-            <span>
+            <span class="is-planks${(Number(person.metrics.planks) || 0) === 0 ? " is-zero" : ""}">
               <strong>${formatPlankMinutes(person.metrics.planks)}</strong>
-              <small>PLANK</small>
             </span>
-            <span class="${person.primaryType === "other" ? "is-primary" : ""}">
+            <span class="is-other${(Number(person.metrics.other) || 0) === 0 ? " is-zero" : ""}">
               <strong>${number.format(person.metrics.other)}</strong>
-              <small>OTHER</small>
+            </span>
+            <span class="is-total${Math.round(combinedTotal) === 0 ? " is-zero" : ""}">
+              <strong>${number.format(Math.round(combinedTotal))}</strong>
             </span>
           </div>
         </a>
       `;
     })
     .join("");
-  $("#leaderboard").innerHTML = leaderboardHtml;
+  const leaderboardMarkup = `${leaderboardHeadHtml()}${leaderboardHtml}`;
+  $("#leaderboard").innerHTML = leaderboardMarkup;
   const leaderboardPageList = $("#leaderboard-page-list");
-  if (leaderboardPageList) leaderboardPageList.innerHTML = leaderboardHtml;
+  if (leaderboardPageList) leaderboardPageList.innerHTML = leaderboardMarkup;
 
   const recent = [...activities]
     .filter((activity) => !isWeightActivity(activity))
@@ -1810,6 +1935,7 @@ function render({ skipScroll = false } = {}) {
   setText("#activity-fun-cabs", number.format(desertMath.callACabs));
   setText("#activity-fun-biscuits", number.format(desertMath.biscuits));
   setText("#activity-fun-wings", number.format(desertMath.wings));
+  renderActivityPodium(participants);
   const closeouts = groupCloseoutStats(participantIds);
   setText("#activity-closeout-pushups", number.format(closeouts.pushupClosers));
   setText("#activity-closeout-reps", number.format(closeouts.repClosers));
@@ -3092,13 +3218,12 @@ function renderPersonPage({ skipScroll = false } = {}) {
   rankTile.classList.toggle("is-out", personStats.status === "out");
   rankTile.classList.toggle("is-honorary", Boolean(person.honorary));
   $("#person-name").innerHTML = formatPersonHeadline(person.name);
+  const streakDays = personStreakDays(person.id);
   $("#person-summary").textContent = person.honorary
     ? `${person.name.split(" ")[0]} is an honorary bro — logs show up, but don’t count toward the crew total.`
     : personStats.status === "out"
       ? `${person.name.split(" ")[0]} is sitting this challenge out.`
-      : history.length
-        ? `${person.name.split(" ")[0]} has put in ${personStats.sessions} ${personStats.sessions === 1 ? "session" : "sessions"} on the road to Joshua Tree.`
-        : `${person.name.split(" ")[0]} is ready to choose whether to join the challenge.`;
+      : `${streakDays} ${streakDays === 1 ? "Day" : "Days"} in a row`;
   const participationCard = $("#participation-card");
   participationCard.hidden = !isOwner || person.honorary || history.length > 0;
   participationCard.querySelectorAll("[data-participation]").forEach((button) => {
@@ -3108,6 +3233,11 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const todayKey = localDateValue();
   $(".personal-total").hidden = !showProgress;
   $(".personal-total")?.classList.toggle("is-honorary", Boolean(person.honorary));
+  const personalGoal = $(".personal-goal");
+  if (personalGoal) {
+    personalGoal.hidden = !showProgress;
+    personalGoal.classList.toggle("is-honorary", Boolean(person.honorary));
+  }
   $("#person-log-button").hidden = !isOwner || personStats.status !== "in";
   const quickAdd = $("#person-quick-add");
   if (quickAdd) quickAdd.hidden = !isOwner || personStats.status !== "in";
@@ -3133,7 +3263,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
     targetReps <= 0
       ? ""
       : paceDelta === 0
-        ? ` · on pace (${number.format(targetReps)})`
+        ? " · on track"
         : paceDelta > 0
           ? ` · ${number.format(paceDelta)} ahead of pace`
           : ` · ${number.format(Math.abs(paceDelta))} behind pace`;
@@ -3142,12 +3272,18 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-plank-minutes").innerHTML =
     `${durationNumber.format(plankMinutes)}<span class="stat-unit">MIN</span>`;
   $("#person-other-days").textContent = workoutNumber.format(workoutUnits);
+  const trifectaCount = trifectasByPersonId(new Set([person.id])).get(person.id) || 0;
+  const combinedTotal = Math.round(leaderboardCombinedTotal(personStats));
+  $("#person-trifectas-total").textContent = number.format(trifectaCount);
+  $("#person-combined-total").textContent = number.format(combinedTotal);
   setCompactMagnitude(
     $(".personal-breakdown"),
     personStats.metrics.pushups,
     personStats.metrics.squats,
     plankMinutes,
     workoutUnits,
+    trifectaCount,
+    combinedTotal,
   );
   $("#person-avg-pushups").textContent = number.format(
     Math.round(averageFor("pushups", personStats.metrics.pushups)),
@@ -3160,6 +3296,20 @@ function renderPersonPage({ skipScroll = false } = {}) {
   );
   $("#person-avg-other").textContent = workoutNumber.format(
     averageFor("other", workoutUnits),
+  );
+  const uniqueSessionDays = new Set([
+    ...sessionDays.pushups,
+    ...sessionDays.squats,
+    ...sessionDays.planks,
+    ...sessionDays.other,
+  ]).size;
+  const averageAcrossDays = (value) =>
+    uniqueSessionDays ? value / uniqueSessionDays : 0;
+  $("#person-avg-trifectas").textContent = durationNumber.format(
+    averageAcrossDays(trifectaCount),
+  );
+  $("#person-avg-combined").textContent = number.format(
+    Math.round(averageAcrossDays(combinedTotal)),
   );
   renderPersonDayChart(personId);
   const weightSection = $("#person-weight-section");
@@ -3678,6 +3828,31 @@ function localDateValue(date = new Date()) {
 function yesterdayDateValue(from = new Date()) {
   const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() - 1);
   return localDateValue(day);
+}
+
+function shiftLocalDateKey(dateKey, days) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return localDateValue(date);
+}
+
+function personStreakDays(personId) {
+  const days = new Set(
+    activities
+      .filter((activity) => activity.personId === personId && !isWeightActivity(activity))
+      .map((activity) => activityDateKey(activity)),
+  );
+  if (!days.size) return 0;
+  const today = localDateValue();
+  const yesterday = yesterdayDateValue();
+  let cursor = days.has(today) ? today : days.has(yesterday) ? yesterday : null;
+  if (!cursor) return 0;
+  let streak = 0;
+  while (days.has(cursor)) {
+    streak += 1;
+    cursor = shiftLocalDateKey(cursor, -1);
+  }
+  return streak;
 }
 
 function workoutDateOtherLabel(dateKey) {
@@ -6282,6 +6457,19 @@ $("#person-activity-list").addEventListener("keydown", (event) => {
 });
 
 function onLeaderboardClick(event) {
+  const sortBtn = event.target.closest("[data-leader-sort]");
+  if (sortBtn) {
+    event.preventDefault();
+    const key = sortBtn.dataset.leaderSort;
+    if (leaderboardSortKey === key) {
+      leaderboardSortDir = leaderboardSortDir === "desc" ? "asc" : "desc";
+    } else {
+      leaderboardSortKey = key;
+      leaderboardSortDir = "desc";
+    }
+    render({ skipScroll: true });
+    return;
+  }
   const row = event.target.closest("[data-person-id]");
   if (row) window.location.hash = `/person/${row.dataset.personId}`;
 }
@@ -6327,6 +6515,18 @@ function tickOldchellaCountdown() {
   const secCount = Math.floor((diff % 60000) / 1000);
   const challengeDay = currentChallengeDay();
   const challengeDayLabel = `Day ${challengeDay} of ${CHALLENGE_DAYS}`;
+  const daysToGo = challengeDaysLeftInclusive();
+  const navDaysCount = $("#nav-days-left-count");
+  const navDaysLabel = $("#nav-days-left-label");
+  const navDays = $("#nav-days-left");
+  if (navDaysCount) navDaysCount.textContent = String(daysToGo);
+  if (navDaysLabel) navDaysLabel.textContent = daysToGo === 1 ? "day to go" : "days to go";
+  if (navDays) {
+    navDays.setAttribute(
+      "aria-label",
+      `${daysToGo} ${daysToGo === 1 ? "day" : "days"} to go`,
+    );
+  }
   const goalDays = $("#goal-days-value");
   if (goalDays) {
     goalDays.textContent = String(challengeDay);
@@ -6348,7 +6548,7 @@ function tickOldchellaCountdown() {
   const mins = $("#activity-cd-mins");
   const secs = $("#activity-cd-secs");
   if (days && hours && mins && secs) {
-    days.textContent = String(dayCount).padStart(3, "0");
+    days.textContent = String(dayCount);
     hours.textContent = String(hourCount).padStart(2, "0");
     mins.textContent = String(minCount).padStart(2, "0");
     secs.textContent = String(secCount).padStart(2, "0");
@@ -6396,19 +6596,26 @@ function updateSiteMenu() {
   }
 
   const route = parseAppRoute();
+  const viewingOwnPerson = route.type === "person" && knownId && route.personId === knownId;
+  let activeKey = "";
+  if (viewingOwnPerson) activeKey = "home";
+  else if (route.type === "challenge") activeKey = "challenge";
+  else if (route.type === "leaderboard") activeKey = "leaderboard";
+  else if (route.type === "activity") activeKey = "activity";
+  else if (route.type === "feed") activeKey = "feed";
+  else if (route.type === "recipes") activeKey = "recipes";
+  else if (route.type === "inspiration") activeKey = "inspiration";
+
   document.querySelectorAll(".site-menu-link[data-menu-route]").forEach((link) => {
-    const key = link.dataset.menuRoute;
-    let current = false;
-    if (key === "home") current = route.type === "person" && route.personId === knownId;
-    else if (key === "challenge") current = route.type === "challenge";
-    else if (key === "leaderboard") current = route.type === "leaderboard";
-    else if (key === "activity") current = route.type === "activity";
-    else if (key === "feed") current = route.type === "feed";
-    else if (key === "recipes") current = route.type === "recipes";
-    else if (key === "inspiration") current = route.type === "inspiration";
-    if (current) link.setAttribute("aria-current", "page");
+    if (link.dataset.menuRoute === activeKey) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
+
+  const homeLink = $("#ripped-home-link");
+  if (homeLink) {
+    if (route.type === "challenge") homeLink.setAttribute("aria-current", "page");
+    else homeLink.removeAttribute("aria-current");
+  }
 }
 
 let siteMenuClosing = false;
@@ -6505,8 +6712,8 @@ function openSiteMenu() {
     reveal();
   }
 
-  const first = menu.querySelector(".site-menu-link:not([hidden])");
-  if (first) window.setTimeout(() => first.focus(), 0);
+  const panel = menu.querySelector(".site-menu-panel");
+  if (panel) window.setTimeout(() => panel.focus(), 0);
 }
 
 function toggleSiteMenu() {
