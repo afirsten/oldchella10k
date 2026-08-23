@@ -41,13 +41,13 @@ function getPreferredTheme() {
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme);
   const toggle = document.getElementById("theme-toggle");
-  const icon =
-    document.getElementById("theme-toggle-icon") ||
-    toggle?.querySelector(".theme-toggle__icon");
   const meta = document.getElementById("theme-color-meta");
   const isDark = theme === "dark";
-  if (icon) icon.textContent = isDark ? "light_mode" : "dark_mode";
   if (toggle) {
+    if (toggle.type === "checkbox") {
+      toggle.checked = isDark;
+      toggle.setAttribute("aria-checked", isDark ? "true" : "false");
+    }
     toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
   }
   if (meta) meta.setAttribute("content", isDark ? "#120a06" : "#f3ebe0");
@@ -57,9 +57,8 @@ function initThemeToggle() {
   const toggle = document.getElementById("theme-toggle");
   if (!toggle) return;
   applyTheme(getPreferredTheme());
-  toggle.addEventListener("click", () => {
-    const next =
-      document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  toggle.addEventListener("change", () => {
+    const next = toggle.checked ? "dark" : "light";
     try {
       localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
@@ -853,8 +852,11 @@ function renderActivityPodium(participants) {
       .map(({ person, score }) => {
         return `
           <li>
-            <a class="activity-podium__row" href="#/person/${person.id}">
-              <img class="activity-podium__avatar" src="${person.image}" alt="" />
+            <a class="activity-podium__row${person.honorary ? " is-honorary" : ""}" href="#/person/${person.id}">
+              <span class="activity-podium__avatar-wrap">
+                <img class="activity-podium__avatar" src="${person.image}" alt="" />
+                ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
+              </span>
               <span class="activity-podium__name">${escapeHtml(person.name)}</span>
               <strong class="activity-podium__value ${column.valueClass}">${column.format(score)}</strong>
             </a>
@@ -2015,7 +2017,7 @@ function render({ skipScroll = false } = {}) {
   setText("#activity-fun-cabs", number.format(desertMath.callACabs));
   setText("#activity-fun-biscuits", number.format(desertMath.biscuits));
   setText("#activity-fun-wings", number.format(desertMath.wings));
-  renderActivityPodium(participants);
+  renderActivityPodium([...participants, ...honoraryMembers]);
   const closeouts = groupCloseoutStats(participantIds);
   setText("#activity-closeout-pushups", number.format(closeouts.pushupClosers));
   setText("#activity-closeout-reps", number.format(closeouts.repClosers));
