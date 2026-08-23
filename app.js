@@ -22,7 +22,7 @@ const DAILY_GOALS = {
 };
 /** 30 min misc timed ≈ 100% Other / 100 push-up injury credit. */
 const OTHER_TIME_GOAL_MIN = 30;
-const STORAGE_KEY = "oldchella-10k-activities-v3";
+const STORAGE_KEY = "oldchella-10k-activities-v4";
 const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
@@ -90,9 +90,9 @@ function isHonorary(personOrId) {
   return Boolean(crew.find((person) => person.id === personOrId)?.honorary);
 }
 
-function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setNote, run = false }) {
+function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setNote, run = false, time = "18:00:00" }) {
   const entries = [];
-  const createdAt = `${date}T18:00:00`;
+  const createdAt = `${date}T${time}`;
   if (pushups) {
     entries.push({
       id: `${personId}-${date}-pushups`,
@@ -110,7 +110,7 @@ function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setN
       exercise: "squats",
       reps: squats,
       note: setNote,
-      createdAt,
+      createdAt: `${date}T${time}`.replace(/:00:00$/, ":02:00"),
     });
   }
   if (planks) {
@@ -120,7 +120,7 @@ function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setN
       exercise: "planks",
       reps: planks * 60,
       note: `${planks} × 1 min`,
-      createdAt,
+      createdAt: `${date}T${time}`.replace(/:00:00$/, ":04:00"),
     });
   }
   if (run) {
@@ -133,10 +133,24 @@ function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setN
       reps: 100,
       percent: 100,
       note: "",
-      createdAt,
+      createdAt: `${date}T${time}`.replace(/:00:00$/, ":08:00"),
     });
   }
   return entries;
+}
+
+function seedOther(personId, date, { name, type, amount, time = "19:00:00", injury = false }) {
+  return {
+    id: `${personId}-${date}-${String(name).toLowerCase().replace(/[^a-z0-9]+/g, "")}`,
+    personId,
+    exercise: "other",
+    otherActivity: name,
+    otherType: type,
+    reps: amount,
+    percent: type === "workouts" ? amount : null,
+    injuryInput: injury,
+    createdAt: `${date}T${time}`,
+  };
 }
 
 const seedActivities = [
@@ -158,6 +172,49 @@ const seedActivities = [
   ...seedWorkout("andrew", "2026-07-18", { pushups: 75, squats: 75, planks: 3, setNote: "3 sets of 25" }),
   ...seedWorkout("andrew", "2026-07-19", { pushups: 75, squats: 75, planks: 3, setNote: "3 sets of 25" }),
   ...seedWorkout("andrew", "2026-07-20", { pushups: 75, squats: 75, planks: 3, setNote: "3 sets of 25", run: true }),
+
+  ...["18", "19", "20", "21", "22"].flatMap((day) =>
+    seedWorkout("joe", `2026-08-${day}`, {
+      pushups: 100,
+      squats: 100,
+      planks: 4,
+      setNote: "4 sets of 25",
+      time: "07:40:00",
+    }),
+  ),
+  ...seedWorkout("joe", "2026-08-23", {
+    pushups: 100,
+    squats: 100,
+    planks: 4,
+    setNote: "4 sets of 25",
+    time: "08:12:00",
+  }),
+
+  ...seedWorkout("matt", "2026-08-21", { pushups: 100, time: "06:50:00" }),
+  ...seedWorkout("matt", "2026-08-22", { pushups: 100, squats: 50, time: "07:05:00" }),
+  ...seedWorkout("matt", "2026-08-23", { pushups: 100, time: "09:18:00" }),
+
+  ...seedWorkout("andrew", "2026-08-20", { pushups: 75, squats: 75, planks: 3, run: true, time: "18:10:00" }),
+  ...seedWorkout("andrew", "2026-08-21", { pushups: 75, squats: 75, planks: 3, time: "18:22:00" }),
+  ...seedWorkout("andrew", "2026-08-22", { pushups: 75, squats: 75, planks: 3, run: true, time: "18:40:00" }),
+  ...seedWorkout("andrew", "2026-08-23", { pushups: 75, squats: 75, planks: 3, run: true, time: "10:05:00" }),
+
+  ...seedWorkout("chris", "2026-08-22", { pushups: 50, squats: 50, time: "12:10:00" }),
+  seedOther("chris", "2026-08-22", { name: "Bike", type: "time", amount: 30, time: "12:40:00" }),
+  ...seedWorkout("chris", "2026-08-23", { pushups: 50, time: "11:20:00" }),
+  seedOther("chris", "2026-08-23", {
+    name: "Row",
+    type: "workouts",
+    amount: 100,
+    time: "11:28:00",
+    injury: true,
+  }),
+
+  ...seedWorkout("jamie", "2026-08-22", { squats: 100, time: "17:00:00" }),
+  seedOther("jamie", "2026-08-23", { name: "Jump rope", type: "reps", amount: 200, time: "08:55:00" }),
+
+  ...seedWorkout("kelly", "2026-08-23", { pushups: 40, time: "09:40:00" }),
+  seedOther("evan", "2026-08-23", { name: "Yoga", type: "time", amount: 20, time: "07:30:00" }),
 ];
 
 const $ = (selector) => document.querySelector(selector);
@@ -300,6 +357,15 @@ function injuryPushupCredit(activity) {
 
 function dayHasInjuryPushupCredit(dayActivities) {
   return dayActivities.some((activity) => injuryPushupCredit(activity) > 0);
+}
+
+function exerciseColorClass(activity) {
+  const exercise = activityExercise(activity);
+  if (exercise === "squats") return "is-squats";
+  if (exercise === "planks") return "is-planks";
+  if (exercise === "other") return "is-other";
+  if (exercise === "weight") return "is-weight";
+  return "is-pushups";
 }
 
 function exerciseName(activity) {
@@ -1083,7 +1149,7 @@ function activityFeedItemHtml(activity) {
           <span>${formatDate(activity.createdAt)}</span>
         </div>
         <div class="activity-meta">
-          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+          <p class="${exerciseColorClass(activity)}"><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
         </div>
       </a>
     `;
@@ -3440,7 +3506,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       <article class="activity-item is-editable${person.honorary ? " is-honorary" : ""}${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p class="${exerciseColorClass(activity)}"><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
                           ${detailBits}
                           ${justAdded ? '<span class="just-added-tag">Just added</span>' : ""}
                         </div>
@@ -3461,7 +3527,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                       <article class="activity-item is-readonly${person.honorary ? " is-honorary" : ""}" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
-                          <p><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
+                          <p class="${exerciseColorClass(activity)}"><span class="activity-reps${repsMag}">${formatActivityLead(activity)}</span> ${escapeHtml(exerciseName(activity))}</p>
                           ${detailBits}
                         </div>
                       </article>
@@ -6581,7 +6647,7 @@ function updateSiteMenu() {
       myHome.hidden = false;
       myHome.href = `#/person/${knownId}`;
       if (myHomeLabel) myHomeLabel.textContent = first;
-      if (myHomeMeta) myHomeMeta.textContent = "Your progress";
+      if (myHomeMeta) myHomeMeta.textContent = "Your Progress";
       if (myHomeAvatar) {
         myHomeAvatar.src = person?.image || "";
         myHomeAvatar.alt = "";
