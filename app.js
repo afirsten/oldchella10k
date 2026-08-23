@@ -5059,7 +5059,7 @@ function playDailyPulseLfg(pulse) {
       <div class="daily-pulse-lfg__confetti" aria-hidden="true"></div>
       <p class="daily-pulse-lfg__eyebrow">BOARD CLEARED</p>
       <strong class="daily-pulse-lfg__amount">LET'S F@#%!ING GO!</strong>
-      <span class="daily-pulse-lfg__unit">PUSH · SQUAT · PLANK</span>
+      <span class="daily-pulse-lfg__unit">PUSH-UPS · SQUATS · PLANK</span>
     `;
     pulse.appendChild(lfg);
   }
@@ -5614,7 +5614,7 @@ function showLogSuccess(personId, entries, options = {}) {
   if (boardCleared) {
     $("#success-eyebrow").textContent = "BOARD CLEARED";
     $("#success-amount").textContent = "LET'S F@#%!ING GO!";
-    $("#success-unit").textContent = "PUSH · SQUAT · PLANK";
+    $("#success-unit").textContent = "PUSH-UPS · SQUATS · PLANK";
     $("#success-copy").textContent =
       list.length === 1
         ? "Daily goals locked in. Absolute menace."
