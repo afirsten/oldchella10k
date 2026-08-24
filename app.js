@@ -1101,19 +1101,19 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   const longLabel = formatFeedDayLabel(dateKey, { long: true });
 
   if (headingEl) {
-    headingEl.textContent = "Trifecta closers";
+    headingEl.textContent = "Daily Closers";
   }
   if (subEl) {
     if (cleared.length) {
       subEl.textContent =
-        "Push-ups, squats, and plank — the full daily pulse. Bonus workouts are gravy.";
+        "Closers hit the daily goal of 100 push-ups, 100 squats and 4min plank. Close out all 3 for a Trifecta.";
     } else if (partials.length) {
       subEl.textContent = isToday
         ? "Categories lighting up — lock all three to clear the board."
         : "Categories locked that day — all three make a full clear.";
     } else {
       subEl.textContent =
-        "Push-ups, squats, and plank — the full daily pulse. Bonus workouts are gravy.";
+        "Closers hit the daily goal of 100 push-ups, 100 squats and 4min plank. Close out all 3 for a Trifecta.";
     }
   }
 
