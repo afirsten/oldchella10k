@@ -1851,24 +1851,28 @@ function render({ skipScroll = false } = {}) {
   let competitiveIndex = 0;
   const leaderboardHtml = ranking
     .map((person) => {
-      const rowState =
-        person.status === "out"
+      const rowState = person.honorary
+        ? " is-honorary"
+        : person.status === "out"
           ? " is-out"
           : person.status === "unknown"
             ? " is-undecided"
             : "";
-      const subtitle =
-        person.status === "out"
+      const subtitle = person.honorary
+        ? `Honorary · ${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}`
+        : person.status === "out"
           ? "Out"
           : person.status === "unknown"
             ? "Undecided"
             : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
-      const rankHtml = (() => {
-        const index = competitiveIndex;
-        competitiveIndex += 1;
-        const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
-        return `<span class="rank rank-${tone}">${index + 1}</span>`;
-      })();
+      const rankHtml = person.honorary
+        ? `<span class="rank rank-honorary" title="Honorary · not counted in group total">★</span>`
+        : (() => {
+            const index = competitiveIndex;
+            competitiveIndex += 1;
+            const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
+            return `<span class="rank rank-${tone}">${index + 1}</span>`;
+          })();
       const plankMinutes = (Number(person.metrics.planks) || 0) / 60;
       const combinedTotal = leaderboardCombinedTotal(person);
       const repsMag = compactMagnitudeAttr([
