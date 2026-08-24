@@ -1858,13 +1858,12 @@ function render({ skipScroll = false } = {}) {
           : person.status === "unknown"
             ? " is-undecided"
             : "";
-      const subtitle = person.honorary
-        ? `Honorary · ${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}`
-        : person.status === "out"
+      const subtitle =
+        person.status === "out" && !person.honorary
           ? "Out"
-          : person.status === "unknown"
+          : person.status === "unknown" && !person.honorary
             ? "Undecided"
-            : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
+            : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${!person.honorary && person.primaryType === "other" ? " · alternative" : ""}`;
       const rankHtml = person.honorary
         ? `<span class="rank rank-honorary" title="Honorary · not counted in group total">★</span>`
         : (() => {
