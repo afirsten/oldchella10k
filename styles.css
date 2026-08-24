@@ -2806,6 +2806,13 @@ h1 .logo-chella {
     0 1px 0 rgba(255,255,255,.16) inset,
     0 3px 8px rgba(0,0,0,.35);
 }
+.rank-honorary {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.28), transparent 42%),
+    linear-gradient(135deg, #e4d7ff 0%, var(--honorary) 48%, #5f4a9a 100%);
+  color: #1a1028;
+  font-size: 11px;
+}
 .avatar, .activity-avatar {
   border-radius: 50%;
   object-fit: cover;
@@ -2892,6 +2899,9 @@ h1 .logo-chella {
 }
 .leader-name { margin: 0 0 3px; font-weight: 600; }
 .leader-sub { margin: 0; color: var(--quiet); font-size: 11px; }
+.leader-row.is-honorary .leader-sub {
+  color: color-mix(in srgb, var(--honorary) 72%, var(--quiet));
+}
 .leader-reps {
   display: grid;
   grid-template-columns: repeat(5,minmax(24px,1fr));
