@@ -1161,7 +1161,7 @@ function activityFeedItemHtml(activity) {
           ${exerciseIcon(activity)}
         </div>
         <div class="activity-main">
-          <p class="activity-person">${escapeHtml(person.name)}${person.honorary ? ' <span class="honorary-tag">Honorary</span>' : ""}</p>
+          <p class="activity-person">${escapeHtml(person.name)}${person.honorary ? ' <span class="honorary-tag" aria-label="Honorary Member" title="Honorary Member">H</span>' : ""}</p>
           <span>${formatDate(activity.createdAt)}</span>
         </div>
         <div class="activity-meta">
