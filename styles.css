@@ -2897,7 +2897,6 @@ h1 .logo-chella {
   font: 800 8px/1 "Manrope", sans-serif;
   letter-spacing: 0;
   text-transform: none;
-  transform: translateY(1px);
 }
 .leader-name { margin: 0 0 3px; font-weight: 600; }
 .leader-sub { margin: 0; color: var(--quiet); font-size: 11px; }
