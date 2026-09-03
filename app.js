@@ -248,9 +248,9 @@ const LEADERBOARD_PERIOD_OPTIONS = [
   { value: "week", label: "Week" },
 ];
 const LEADERBOARD_SORT_COLUMNS = [
-  { key: "pushups", label: "PUSH UPS" },
-  { key: "squats", label: "SQUATS" },
-  { key: "planks", label: "PLANKS" },
+  { key: "pushups", label: "P-UPS" },
+  { key: "squats", label: "SQTS" },
+  { key: "planks", label: "PLNK" },
   { key: "other", label: "OTHER" },
   { key: "combined", label: "TOTAL" },
 ];
