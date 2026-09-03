@@ -3334,10 +3334,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const streakDays = personStreakDays(person.id);
   const trifectaCount = trifectasByPersonId(new Set([person.id])).get(person.id) || 0;
   const personSummary = $("#person-summary");
-  if (person.honorary) {
-    personSummary.textContent =
-      `${person.name.split(" ")[0]} is an honorary bro — logs show up, but don’t count toward the crew total.`;
-  } else if (personStats.status === "out") {
+  if (personStats.status === "out" && !person.honorary) {
     personSummary.textContent =
       `${person.name.split(" ")[0]} is sitting this challenge out.`;
   } else {
