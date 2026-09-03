@@ -241,6 +241,12 @@ let apiAvailable = false;
 let pendingPulseReveal = null;
 let leaderboardSortKey = "total";
 let leaderboardSortDir = "desc";
+let leaderboardPeriod = "all";
+const LEADERBOARD_PERIOD_OPTIONS = [
+  { value: "all", label: "All time" },
+  { value: "month", label: "Month" },
+  { value: "week", label: "Week" },
+];
 const LEADERBOARD_SORT_COLUMNS = [
   { key: "pushups", label: "PUSH UPS" },
   { key: "squats", label: "SQUATS" },
@@ -1397,9 +1403,23 @@ function compareActivitiesRecentFirst(a, b) {
   return activities.indexOf(b) - activities.indexOf(a);
 }
 
-function totalsByPerson() {
+function activityInLeaderboardPeriod(activity, period = "all") {
+  if (period === "all") return true;
+  const dateKey = activityDateKey(activity);
+  if (period === "week") return weekDateKeys().includes(dateKey);
+  if (period === "month") {
+    const date = new Date(`${dateKey}T12:00:00`);
+    const anchor = new Date();
+    return date.getFullYear() === anchor.getFullYear() && date.getMonth() === anchor.getMonth();
+  }
+  return true;
+}
+
+function totalsByPerson(period = "all") {
   return crew.map((person) => {
-    const personActivities = activities.filter((activity) => activity.personId === person.id);
+    const personActivities = activities.filter(
+      (activity) => activity.personId === person.id && activityInLeaderboardPeriod(activity, period),
+    );
     const pushupActivities = personActivities.filter(
       (activity) => activityExercise(activity) === "pushups",
     );
@@ -1417,7 +1437,7 @@ function totalsByPerson() {
       sessions: new Set(
         personActivities
           .filter((activity) => !isWeightActivity(activity))
-          .map((activity) => activity.createdAt.slice(0, 10)),
+          .map((activity) => activityDateKey(activity)),
       ).size,
       pushupSessions: pushupActivities.length,
     };
@@ -1723,6 +1743,14 @@ function compareLeaderboardRows(a, b) {
   return delta || a.name.localeCompare(b.name);
 }
 
+function leaderboardPeriodHtml() {
+  const buttons = LEADERBOARD_PERIOD_OPTIONS.map(({ value, label }) => {
+    const active = leaderboardPeriod === value;
+    return `<button type="button" class="leader-period${active ? " is-selected" : ""}" data-leader-period="${value}" aria-pressed="${active ? "true" : "false"}">${label}</button>`;
+  }).join("");
+  return `<div class="leader-period-toggle" role="group" aria-label="Leaderboard time range">${buttons}</div>`;
+}
+
 function leaderboardHeadHtml() {
   const cols = LEADERBOARD_SORT_COLUMNS.map(({ key, label }) => {
     const active = leaderboardSortKey === key;
@@ -1738,7 +1766,7 @@ function leaderboardHeadHtml() {
 }
 
 function render({ skipScroll = false } = {}) {
-  const ranking = totalsByPerson().sort(compareLeaderboardRows);
+  const ranking = totalsByPerson(leaderboardPeriod).sort(compareLeaderboardRows);
   const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
   const honoraryMembers = ranking.filter((person) => person.honorary);
   const optedOut = ranking.filter((person) => person.status === "out" && !person.honorary);
@@ -1914,7 +1942,7 @@ function render({ skipScroll = false } = {}) {
       `;
     })
     .join("");
-  const leaderboardMarkup = `${leaderboardHeadHtml()}${leaderboardHtml}`;
+  const leaderboardMarkup = `${leaderboardPeriodHtml()}${leaderboardHeadHtml()}${leaderboardHtml}`;
   $("#leaderboard").innerHTML = leaderboardMarkup;
   const leaderboardPageList = $("#leaderboard-page-list");
   if (leaderboardPageList) leaderboardPageList.innerHTML = leaderboardMarkup;
@@ -3304,11 +3332,22 @@ function renderPersonPage({ skipScroll = false } = {}) {
   rankTile.classList.toggle("is-honorary", Boolean(person.honorary));
   $("#person-name").innerHTML = formatPersonHeadline(person.name);
   const streakDays = personStreakDays(person.id);
-  $("#person-summary").textContent = person.honorary
-    ? `${person.name.split(" ")[0]} is an honorary bro — logs show up, but don’t count toward the crew total.`
-    : personStats.status === "out"
-      ? `${person.name.split(" ")[0]} is sitting this challenge out.`
-      : `${streakDays} ${streakDays === 1 ? "Day" : "Days"} in a row`;
+  const trifectaCount = trifectasByPersonId(new Set([person.id])).get(person.id) || 0;
+  const personSummary = $("#person-summary");
+  if (person.honorary) {
+    personSummary.textContent =
+      `${person.name.split(" ")[0]} is an honorary bro — logs show up, but don’t count toward the crew total.`;
+  } else if (personStats.status === "out") {
+    personSummary.textContent =
+      `${person.name.split(" ")[0]} is sitting this challenge out.`;
+  } else {
+    const dayLabel = streakDays === 1 ? "day" : "days";
+    const trifectaLabel = trifectaCount === 1 ? "Trifecta" : "Trifectas";
+    personSummary.innerHTML =
+      `<span class="person-summary-label">STREAKS</span> ${streakDays} ${dayLabel}` +
+      `<span class="person-summary-sep" aria-hidden="true">|</span>` +
+      `${number.format(trifectaCount)} ${trifectaLabel}`;
+  }
   const participationCard = $("#participation-card");
   participationCard.hidden = !isOwner || person.honorary || history.length > 0;
   participationCard.querySelectorAll("[data-participation]").forEach((button) => {
@@ -3318,11 +3357,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const todayKey = localDateValue();
   $(".personal-total").hidden = !showProgress;
   $(".personal-total")?.classList.toggle("is-honorary", Boolean(person.honorary));
-  const personalGoal = $(".personal-goal");
-  if (personalGoal) {
-    personalGoal.hidden = !showProgress;
-    personalGoal.classList.toggle("is-honorary", Boolean(person.honorary));
-  }
   $("#person-log-button").hidden = !isOwner || personStats.status !== "in";
   const quickAdd = $("#person-quick-add");
   if (quickAdd) quickAdd.hidden = !isOwner || personStats.status !== "in";
@@ -3334,8 +3368,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
     : personStats.primaryType === "other"
       ? "TOTAL ALTERNATIVE WORK"
       : "PUSH-UP COUNT";
-  $("#person-goal-percent").textContent = `${personalPercent}%`;
-  $("#person-goal-current").textContent = number.format(personStats.total);
   $("#person-progress-fill").style.width = `${Math.min(100, personalPercent)}%`;
   $("#person-progress-target").style.width = `${Math.min(100, targetPercent)}%`;
   $("#person-progress-pace").style.left = `${Math.min(100, targetPercent)}%`;
@@ -3348,16 +3380,15 @@ function renderPersonPage({ skipScroll = false } = {}) {
     targetReps <= 0
       ? ""
       : paceDelta === 0
-        ? " · on track"
+        ? "on track"
         : paceDelta > 0
-          ? ` · ${number.format(paceDelta)} ahead of pace`
-          : ` · ${number.format(Math.abs(paceDelta))} behind pace`;
+          ? `${number.format(paceDelta)} ahead of pace`
+          : `${number.format(Math.abs(paceDelta))} behind pace`;
   $("#person-pushups-total").textContent = number.format(personStats.metrics.pushups);
   $("#person-squats-total").textContent = number.format(personStats.metrics.squats);
   $("#person-plank-minutes").innerHTML =
     `${durationNumber.format(plankMinutes)}<span class="stat-unit">MIN</span>`;
   $("#person-other-days").textContent = workoutNumber.format(workoutUnits);
-  const trifectaCount = trifectasByPersonId(new Set([person.id])).get(person.id) || 0;
   const combinedTotal = Math.round(leaderboardCombinedTotal(personStats));
   $("#person-trifectas-total").textContent = number.format(trifectaCount);
   $("#person-combined-total").textContent = number.format(combinedTotal);
@@ -3378,23 +3409,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
   );
   $("#person-avg-planks").textContent = durationNumber.format(
     averageFor("planks", plankMinutes),
-  );
-  $("#person-avg-other").textContent = workoutNumber.format(
-    averageFor("other", workoutUnits),
-  );
-  const uniqueSessionDays = new Set([
-    ...sessionDays.pushups,
-    ...sessionDays.squats,
-    ...sessionDays.planks,
-    ...sessionDays.other,
-  ]).size;
-  const averageAcrossDays = (value) =>
-    uniqueSessionDays ? value / uniqueSessionDays : 0;
-  $("#person-avg-trifectas").textContent = durationNumber.format(
-    averageAcrossDays(trifectaCount),
-  );
-  $("#person-avg-combined").textContent = number.format(
-    Math.round(averageAcrossDays(combinedTotal)),
   );
   renderPersonDayChart(personId);
   const weightSection = $("#person-weight-section");
@@ -6542,6 +6556,16 @@ $("#person-activity-list").addEventListener("keydown", (event) => {
 });
 
 function onLeaderboardClick(event) {
+  const periodBtn = event.target.closest("[data-leader-period]");
+  if (periodBtn) {
+    event.preventDefault();
+    const next = periodBtn.dataset.leaderPeriod;
+    if (next && next !== leaderboardPeriod) {
+      leaderboardPeriod = next;
+      render({ skipScroll: true });
+    }
+    return;
+  }
   const sortBtn = event.target.closest("[data-leader-sort]");
   if (sortBtn) {
     event.preventDefault();

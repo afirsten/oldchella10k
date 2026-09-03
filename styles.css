@@ -2698,6 +2698,39 @@ h1 .logo-chella {
   box-shadow: 0 0 10px var(--terra);
 }
 .leaderboard { border-top: 0; }
+.leader-period-toggle {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  width: calc(100% + 2 * var(--shell-gutter));
+  margin-inline: calc(-1 * var(--shell-gutter));
+  margin-bottom: 10px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--inset-panel-strong) 60%, transparent);
+}
+.leader-period-toggle > button {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--quiet);
+  font: 700 11px/1 "Manrope", sans-serif;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.leader-period-toggle > button:hover {
+  color: var(--muted);
+}
+.leader-period-toggle > button.is-selected {
+  background: color-mix(in srgb, var(--ink) 10%, var(--surface-raised));
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
 .leader-head {
   display: grid;
   width: calc(100% + 2 * var(--shell-gutter));
@@ -4086,10 +4119,6 @@ a.activity-item:focus-visible {
   min-width: 0;
   flex: 1;
 }
-.person-identity-head .personal-goal {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
 .person-hero h1 {
   margin: 0 0 8px;
   font-size: clamp(32px, 9vw, 58px);
@@ -4102,6 +4131,18 @@ a.activity-item:focus-visible {
 }
 .person-identity-copy .hero-copy {
   margin: 0;
+}
+.person-identity-copy .hero-copy .person-summary-label {
+  margin-right: 2px;
+  color: var(--label);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+}
+.person-identity-copy .hero-copy .person-summary-sep {
+  margin: 0 14px;
+  color: var(--quiet);
+  font-weight: 600;
 }
 .person-rank-badge {
   position: absolute;
@@ -4229,8 +4270,7 @@ a.activity-item:focus-visible {
   letter-spacing: -.055em;
 }
 .personal-total.is-honorary .personal-total-row > div:first-child > strong,
-.personal-total.is-honorary .person-total-line strong,
-.personal-goal.is-honorary strong {
+.personal-total.is-honorary .person-total-line strong {
   color: var(--honorary);
 }
 .personal-total.is-honorary .personal-total-row > div:first-child > span {
@@ -4255,22 +4295,6 @@ a.activity-item:focus-visible {
   letter-spacing: -.055em;
   vertical-align: -4px;
 }
-.personal-goal {
-  display: grid;
-  gap: 4px;
-  text-align: right;
-}
-.personal-goal strong {
-  color: var(--lime);
-  font: 800 36px/1 "Manrope", sans-serif;
-  letter-spacing: -.05em;
-}
-.personal-goal span {
-  color: var(--quiet);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: .1em;
-}
 .personal-progress-block {
   display: flex;
   flex: 1 1 auto;
@@ -4284,7 +4308,8 @@ a.activity-item:focus-visible {
   height: 14px;
   overflow: hidden;
   border-radius: 99px;
-  background: var(--progress-track);
+  background: #000;
+  box-shadow: inset 0 0 0 1px rgba(255, 160, 80, .22);
 }
 .personal-progress-target {
   position: absolute;
@@ -4293,7 +4318,7 @@ a.activity-item:focus-visible {
   z-index: 0;
   height: 100%;
   border-radius: inherit;
-  background: rgba(245,200,66,.2);
+  background: transparent;
   transition: width 500ms ease;
 }
 #person-progress-fill {
@@ -4479,9 +4504,7 @@ a.activity-item:focus-visible {
   justify-items: center;
   text-align: center;
   padding: 4px 8px 2px;
-  border-right: 1px solid var(--line);
 }
-.personal-breakdown > div:nth-child(3n) { border-right: 0; }
 .personal-breakdown > div:nth-child(n + 4) {
   margin-top: 10px;
   padding-top: 12px;
