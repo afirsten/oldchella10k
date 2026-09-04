@@ -24,6 +24,7 @@ Everything under `secrets/` is ignored by Git. Keep that file private.
 4. Add these production environment variables in **Settings → Environment Variables**:
 
    - `PARTICIPANT_PINS` — paste the entire contents of `secrets/participant-pins.local.json`
+   - `PARTICIPANT_PINS_EXTRA` — optional JSON object of additional `{ "personId": "1234" }` entries (merged over the base map; useful when the base secret can’t be edited)
    - `MASTER_PIN` — paste the value from `secrets/master-pin.local.txt`
 
 5. Deploy or redeploy the project.
