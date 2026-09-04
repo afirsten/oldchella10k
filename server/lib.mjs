@@ -56,13 +56,25 @@ export function parseBody(request) {
   }
 }
 
-export async function authorize(request, personId, suppliedPin) {
-  let pins;
+function parsePinMap(raw, label) {
+  if (!raw) return {};
   try {
-    pins = JSON.parse(process.env.PARTICIPANT_PINS || "{}");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("not an object");
+    }
+    return parsed;
   } catch {
-    throw httpError(500, "PIN protection is not configured.");
+    throw httpError(500, `${label} is not configured.`);
   }
+}
+
+export async function authorize(request, personId, suppliedPin) {
+  // PARTICIPANT_PINS_EXTRA lets us add people without reading the sensitive base map.
+  const pins = {
+    ...parsePinMap(process.env.PARTICIPANT_PINS, "PIN protection"),
+    ...parsePinMap(process.env.PARTICIPANT_PINS_EXTRA, "PIN protection"),
+  };
   if (!PEOPLE.has(personId)) {
     throw httpError(400, "Unknown participant.");
   }
@@ -87,7 +99,7 @@ export async function authorize(request, personId, suppliedPin) {
   if (!/^\d{4}$/.test(personPin)) {
     throw httpError(
       400,
-      "PIN not configured for this participant. Add them to PARTICIPANT_PINS in Vercel, then redeploy. (Master PIN still works.)",
+      "PIN not configured for this participant. Add them to PARTICIPANT_PINS or PARTICIPANT_PINS_EXTRA in Vercel, then redeploy. (Master PIN still works.)",
     );
   }
 
