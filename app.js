@@ -72,6 +72,8 @@ const crew = [
   { id: "andrew", name: "Andrew F", image: "./assets/people/andrew.png" },
   { id: "brian", name: "Brian M", image: "./assets/people/brian.png" },
   { id: "chris", name: "Chris E", image: "./assets/people/chris.png" },
+  { id: "eliot", name: "Eliot B", image: "./assets/people/eliot.png" },
+  { id: "eric", name: "Eric M", image: "./assets/people/eric.png" },
   { id: "erok", name: "Erok L", image: "./assets/people/erok.png", honorary: true },
   { id: "evan", name: "Evan F", image: "./assets/people/evan.png", honorary: true },
   { id: "james", name: "James Z", image: "./assets/people/james.png" },
