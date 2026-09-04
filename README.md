@@ -1,6 +1,6 @@
 # Ripped-Chella
 
-A mobile-first shared fitness tracker for the nine-person Oldchella 2026 crew. Vercel serves the static app and three small Functions; an Upstash Redis integration stores the shared state.
+A mobile-first shared fitness tracker for the Oldchella 2026 crew. Vercel serves the static app and three small Functions; an Upstash Redis integration stores the shared state.
 
 Public reads need no credentials. Writes require the participant's PIN or the master PIN. This is deliberate casual deterrence, not a full account system.
 
