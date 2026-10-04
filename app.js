@@ -22,7 +22,7 @@ const DAILY_GOALS = {
 };
 /** 30 min misc timed ≈ 100% Other / 100 push-up injury credit. */
 const OTHER_TIME_GOAL_MIN = 30;
-const STORAGE_KEY = "oldchella-10k-activities-v4";
+const STORAGE_KEY = "oldchella-10k-activities-v6";
 const STATUS_KEY = "oldchella-10k-participation-v1";
 const PIN_STORAGE_PREFIX = "rippedchella-pin-v1:";
 const LAST_PERSON_KEY = "rippedchella-last-person-v1";
@@ -154,6 +154,51 @@ function seedOther(personId, date, { name, type, amount, time = "19:00:00", inju
   };
 }
 
+function seedDateOffset(daysBack = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysBack);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function seedCalendarPreview(personId) {
+  const entries = [];
+  for (let daysBack = 0; daysBack <= 45; daysBack += 1) {
+    if ([4, 11, 18, 25, 33, 40].includes(daysBack)) continue;
+    const date = seedDateOffset(daysBack);
+    if (date < CHALLENGE_START) continue;
+    const wave = daysBack % 5;
+    if (wave === 0) {
+      entries.push(
+        ...seedWorkout(personId, date, {
+          pushups: 100,
+          squats: 100,
+          planks: 4,
+          run: true,
+          time: "07:12:00",
+        }),
+      );
+    } else if (wave === 1) {
+      entries.push(...seedWorkout(personId, date, { pushups: 100, squats: 45, time: "08:05:00" }));
+    } else if (wave === 2) {
+      entries.push(
+        ...seedWorkout(personId, date, { pushups: 35, squats: 100, planks: 2, time: "18:22:00" }),
+      );
+    } else if (wave === 3) {
+      entries.push(...seedWorkout(personId, date, { squats: 60, planks: 4, time: "12:10:00" }));
+    } else {
+      entries.push(...seedWorkout(personId, date, { pushups: 70, time: "09:00:00" }));
+      entries.push(
+        seedOther(personId, date, { name: "Bike", type: "workouts", amount: 80, time: "09:18:00" }),
+      );
+    }
+  }
+  return entries;
+}
+
 const seedActivities = [
   ...seedWorkout("matt", "2026-07-17", { pushups: 100, pushupNote: "5 reps × 20" }),
   ...seedWorkout("matt", "2026-07-18", { pushups: 100, pushupNote: "10 reps × 4, 5 reps × 12" }),
@@ -216,6 +261,11 @@ const seedActivities = [
 
   ...seedWorkout("kelly", "2026-08-23", { pushups: 40, time: "09:40:00" }),
   seedOther("evan", "2026-08-23", { name: "Yoga", type: "time", amount: 20, time: "07:30:00" }),
+
+  ...seedCalendarPreview("andrew"),
+  ...seedCalendarPreview("joe"),
+  ...seedCalendarPreview("matt"),
+  ...seedCalendarPreview("eric"),
 ];
 
 const $ = (selector) => document.querySelector(selector);
@@ -240,6 +290,7 @@ function loadActivities() {
 let activities = loadActivities();
 let participation = {};
 let apiAvailable = false;
+let liveStateFromRemote = false;
 let pendingPulseReveal = null;
 let leaderboardSortKey = "total";
 let leaderboardSortDir = "desc";
@@ -269,7 +320,26 @@ function personStatus(personId) {
 }
 
 function getPerson(id) {
-  return crew.find((person) => person.id === id) ?? crew[0];
+  const match = crew.find((person) => person.id === id);
+  if (match) return match;
+  const label = String(id || "unknown");
+  return {
+    id: label,
+    name: label.charAt(0).toUpperCase() + label.slice(1),
+    image: "./assets/people/andrew.png",
+  };
+}
+
+function rosterForTotals() {
+  const seen = new Set(crew.map((person) => person.id));
+  const extras = [];
+  for (const activity of activities) {
+    const id = activity.personId;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    extras.push(getPerson(id));
+  }
+  return extras.length ? [...crew, ...extras] : crew;
 }
 
 function normalizePersonKey(value) {
@@ -677,11 +747,38 @@ function dayGoalProgress(dayActivities) {
   return { totals, percents, complete };
 }
 
-function dayGoalCheck(complete) {
-  if (!complete) return "";
+function dailyPulseShareIconHtml() {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" /></svg>`;
+}
+
+function dailyPulseShareButtonHtml(personId, dateKey, extraClass = "") {
+  return `<button type="button" class="share-whatsapp-button daily-pulse-share${extraClass ? ` ${extraClass}` : ""}" data-person-id="${escapeHtml(personId)}" data-date="${escapeHtml(dateKey)}" aria-label="Share to WhatsApp">${dailyPulseShareIconHtml()}</button>`;
+}
+
+function dailyPulseCompleteRowHtml(personId, dateKey, extraClass = "") {
+  const share =
+    personId && isPersonPageOwner(personId)
+      ? dailyPulseShareButtonHtml(personId, dateKey, extraClass)
+      : "";
   return `
-    <span class="history-day-goal is-complete" aria-label="Daily goals complete">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" /></svg>
+    <div class="daily-pulse-banner${extraClass ? ` ${extraClass}` : ""}" role="status">
+      <span>Daily goal met</span>
+      ${share}
+    </div>
+  `;
+}
+
+function dayGoalCheck(complete) {
+  if (complete) {
+    return `
+      <span class="history-day-goal is-complete" aria-label="Daily goals complete">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" /></svg>
+      </span>
+    `;
+  }
+  return `
+    <span class="history-day-goal is-pending" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
     </span>
   `;
 }
@@ -913,10 +1010,29 @@ function isCondensedHistoryDay(dateKey, todayKey = localDateValue()) {
   return historyDayAgeDays(dateKey, todayKey) >= 2;
 }
 
+function historyDayRelLabelHtml(dateKey, todayKey = localDateValue()) {
+  const age = historyDayAgeDays(dateKey, todayKey);
+  if (age === 0) return `<span class="history-day-rel-label">Today</span>`;
+  if (age === 1) return `<span class="history-day-rel-label">Yesterday</span>`;
+  return "";
+}
+
 const PERSON_HISTORY_PAGE_SIZE = 10;
+const PERSON_HISTORY_VIEW_KEY = "rippedchella-person-history-view-v1";
 /** How many condensed History days are visible on the person page (session memory). */
 let personHistoryVisibleDays = PERSON_HISTORY_PAGE_SIZE;
 let personHistoryForPersonId = null;
+let personHistoryView = "list";
+const personHistoryExpandedDays = new Set();
+try {
+  const storedView = localStorage.getItem(PERSON_HISTORY_VIEW_KEY);
+  if (storedView === "list" || storedView === "calendar") personHistoryView = storedView;
+} catch {
+  /* ignore */
+}
+let personCalendarMonthKey = null;
+let personCalendarSelectedKey = null;
+let personCalendarPriorOpen = new Set();
 
 /** Compact one-line summary: Plank · +3 MIN · 3×1 min */
 function formatCondensedActivityLine(activity) {
@@ -924,6 +1040,94 @@ function formatCondensedActivityLine(activity) {
   const note = activityNoteText(activity);
   if (note) bits.push(note);
   return bits.join(" · ");
+}
+
+function monthKeyFromDateKey(dateKey) {
+  return String(dateKey || "").slice(0, 7);
+}
+
+function challengeEndDateKey() {
+  return challengeDayDateKey(CHALLENGE_DAYS);
+}
+
+function shiftMonthKey(monthKey, delta) {
+  const date = new Date(`${monthKey}-01T12:00:00`);
+  date.setMonth(date.getMonth() + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function priorMonthKeysFor(monthKey, minMonth) {
+  const keys = [];
+  let key = shiftMonthKey(monthKey, -1);
+  while (key >= minMonth) {
+    keys.push(key);
+    key = shiftMonthKey(key, -1);
+  }
+  return keys;
+}
+
+function togglePersonCalendarPriorMonth(monthKey) {
+  if (!monthKey) return false;
+  const open = !personCalendarPriorOpen.has(monthKey);
+  if (open) personCalendarPriorOpen.add(monthKey);
+  else personCalendarPriorOpen.delete(monthKey);
+  return open;
+}
+
+function formatMonthHeading(monthKey) {
+  const date = new Date(`${monthKey}-01T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function personCalendarMonthBounds() {
+  const todayKey = localDateValue();
+  const minMonth = monthKeyFromDateKey(CHALLENGE_START);
+  const maxMonth = monthKeyFromDateKey(todayKey > challengeEndDateKey() ? challengeEndDateKey() : todayKey);
+  return { minMonth, maxMonth };
+}
+
+function ensurePersonCalendarMonth(todayKey = localDateValue()) {
+  const { minMonth, maxMonth } = personCalendarMonthBounds();
+  if (!personCalendarMonthKey || personCalendarMonthKey < minMonth || personCalendarMonthKey > maxMonth) {
+    const todayMonth = monthKeyFromDateKey(todayKey);
+    personCalendarMonthKey =
+      todayMonth < minMonth ? minMonth : todayMonth > maxMonth ? maxMonth : todayMonth;
+  }
+  return personCalendarMonthKey;
+}
+
+function calendarCellsForMonth(monthKey) {
+  const start = new Date(`${monthKey}-01T12:00:00`);
+  if (Number.isNaN(start.getTime())) return [];
+  const startDow = start.getDay();
+  const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startDow; i += 1) {
+    const day = new Date(start);
+    day.setDate(1 - (startDow - i));
+    cells.push({ dateKey: localDateValue(day), outside: true });
+  }
+  for (let dayNum = 1; dayNum <= daysInMonth; dayNum += 1) {
+    const day = new Date(start.getFullYear(), start.getMonth(), dayNum);
+    cells.push({ dateKey: localDateValue(day), outside: false });
+  }
+  while (cells.length % 7 !== 0) {
+    const last = new Date(`${cells[cells.length - 1].dateKey}T12:00:00`);
+    last.setDate(last.getDate() + 1);
+    cells.push({ dateKey: localDateValue(last), outside: true });
+  }
+  return cells;
+}
+
+function setPersonHistoryView(nextView) {
+  const view = nextView === "calendar" ? "calendar" : "list";
+  personHistoryView = view;
+  try {
+    localStorage.setItem(PERSON_HISTORY_VIEW_KEY, view);
+  } catch {
+    /* ignore */
+  }
 }
 
 function feedDayKeys() {
@@ -1088,7 +1292,6 @@ function renderFeedClearedPerson({ person, progress }) {
 
 function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   const list = $("#feed-cleared-list");
-  const countEl = $("#feed-cleared-count");
   const headingEl = $("#feed-cleared-heading");
   const subEl = document.querySelector("#feed-page .feed-cleared-card__sub");
   if (!list) return;
@@ -1097,13 +1300,9 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   updateFeedPageCopy(dateKey);
   renderFeedDayFilter({ smoothScroll: smoothDayScroll });
 
-  const eligible = crew.filter(
-    (person) => personStatus(person.id) !== "out",
-  );
   const closing = peopleWithBoardClosingProgress(dateKey);
   const cleared = closing.filter(({ progress }) => progress.complete);
   const partials = closing.filter(({ progress }) => !progress.complete);
-  if (countEl) countEl.textContent = `${cleared.length} / ${eligible.length}`;
 
   const isToday = dateKey === localDateValue();
   const longLabel = formatFeedDayLabel(dateKey, { long: true });
@@ -1307,17 +1506,12 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
   const deferCompleteChrome = Boolean(fromPercents && pendingPulseReveal?.boardCleared);
   const showCompleteChrome = complete && !compact && !deferCompleteChrome;
   const banner = showCompleteChrome
-    ? `<div class="daily-pulse-banner" role="status"><span>Daily goal met</span></div>`
+    ? dailyPulseCompleteRowHtml(personId, dateKey)
     : "";
-  const share =
-    showCompleteChrome && personId && isPersonPageOwner(personId)
-      ? `<button type="button" class="share-whatsapp-button daily-pulse-share" data-person-id="${escapeHtml(personId)}" data-date="${escapeHtml(dateKey)}">Share to WhatsApp</button>`
-      : "";
 
   return `
     <div class="daily-goals-card daily-pulse${compact ? " is-compact" : ""}${complete ? " is-complete" : ""}${revealClass}" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
       ${banner}
-      ${share}
       <div class="daily-goals-card-head">
         <p class="label">DAILY PULSE</p>
         <span class="daily-goals-complete">${complete ? "BOARD CLEARED" : `${boardScore}% LOCKED IN`}</span>
@@ -1351,7 +1545,6 @@ function dayGoalSummaryCard(dayActivities, dateKey = localDateValue(), personId 
 }
 
 function dayGoalBreakdown(dayActivities) {
-  const { lines } = dayGoalProgressLines(dayActivities);
   const { totals } = dayGoalProgress(dayActivities);
   const chips = [
     { key: "pushups", amount: totals.pushups, value: number.format(totals.pushups) },
@@ -1360,21 +1553,21 @@ function dayGoalBreakdown(dayActivities) {
     { key: "other", amount: totals.other, value: number.format(totals.other) },
   ];
   return `
-    <span class="history-day-breakdown" tabindex="0" aria-label="Daily goal progress: ${escapeHtml(lines.join(", "))}">
-      <span class="history-day-breakdown-inline" aria-hidden="true">${chips
+    <span class="history-day-breakdown" aria-hidden="true">
+      <span class="history-day-breakdown-inline">${chips
         .map((chip) => {
-          // Zero amounts keep the base .history-condensed-dot --quiet (unrealized) style.
           const dotClass = chip.amount
             ? `history-condensed-dot is-${chip.key}`
             : "history-condensed-dot";
           return `<span class="history-day-breakdown-chip"><span class="${dotClass}"></span>${escapeHtml(chip.value)}</span>`;
         })
         .join("")}</span>
-      <span class="history-day-breakdown-card" role="tooltip">
-        ${dayGoalSummaryCard(dayActivities, "", "", { compact: true })}
-      </span>
     </span>
   `;
+}
+
+function dayGoalPulseMini(dayActivities) {
+  return `<div class="history-day-pulse">${dayGoalSummaryCard(dayActivities, "", "", { compact: true })}</div>`;
 }
 
 function exerciseIcon(activity) {
@@ -1418,7 +1611,7 @@ function activityInLeaderboardPeriod(activity, period = "all") {
 }
 
 function totalsByPerson(period = "all") {
-  return crew.map((person) => {
+  return rosterForTotals().map((person) => {
     const personActivities = activities.filter(
       (activity) => activity.personId === person.id && activityInLeaderboardPeriod(activity, period),
     );
@@ -2388,28 +2581,43 @@ function setConnectionState(isLive) {
   pill.innerHTML = `<span></span> ${isLive ? "LIVE" : "DEMO"}`;
 }
 
-async function loadSharedState() {
-  try {
-    const response = await fetch("/api/state", {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error("Shared API did not respond.");
-    const state = await response.json();
-    if (!Array.isArray(state.activities) || !state.participation || typeof state.participation !== "object") {
-      throw new Error("Shared API returned invalid data.");
-    }
-    activities = state.activities;
-    participation = state.participation;
-    apiAvailable = true;
-    setConnectionState(true);
-    render();
-    return true;
-  } catch {
-    apiAvailable = false;
-    setConnectionState(false);
-    return false;
+const LIVE_STATE_URL = "https://rippedchella.vercel.app/api/state";
+
+async function fetchSharedState(url) {
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error("Shared API did not respond.");
+  const state = await response.json();
+  if (!Array.isArray(state.activities) || !state.participation || typeof state.participation !== "object") {
+    throw new Error("Shared API returned invalid data.");
   }
+  return state;
+}
+
+async function loadSharedState() {
+  const localHost =
+    location.hostname === "127.0.0.1" || location.hostname === "localhost";
+  const endpoints = localHost ? ["/api/state", LIVE_STATE_URL] : ["/api/state"];
+  for (const url of endpoints) {
+    try {
+      const state = await fetchSharedState(url);
+      activities = state.activities;
+      participation = state.participation;
+      liveStateFromRemote = url === LIVE_STATE_URL;
+      apiAvailable = url === "/api/state";
+      setConnectionState(true);
+      render();
+      return true;
+    } catch {
+      /* try next endpoint */
+    }
+  }
+  apiAvailable = false;
+  liveStateFromRemote = false;
+  setConnectionState(false);
+  return false;
 }
 
 async function apiRequest(path, method, body) {
@@ -2717,6 +2925,12 @@ function parseLocalActivityFields(body) {
 
 /** Local-only mutations when the shared API is offline. Session memory only — refresh resets. */
 function demoRequest(path, method, personId, body) {
+  if (liveStateFromRemote) {
+    throw new ApiError(
+      "This preview is showing live data. Log reps on rippedchella.vercel.app so they save.",
+      503,
+    );
+  }
   if (path === "/api/participation" && method === "PUT") {
     const status = body.status === "out" ? "out" : "in";
     participation[personId] = status;
@@ -3247,6 +3461,277 @@ function showAppPage(pageId, { skipScroll = false } = {}) {
   }
 }
 
+function personCalendarDetailHtml(group, { person, isOwner, todayKey }) {
+  const isToday = group.dateKey === todayKey;
+  const emptyDayCopy = '<p class="history-day-empty" role="status">No reps recorded</p>';
+  const activitiesHtml = !group.activities.length
+    ? emptyDayCopy
+    : `<div class="history-day-condensed${person.honorary ? " is-honorary" : ""}">
+        <ul class="history-condensed-list">
+          ${group.activities
+            .map((activity) => {
+              const line = escapeHtml(formatCondensedActivityLine(activity));
+              const name = escapeHtml(exerciseName(activity));
+              const exercise = activityExercise(activity);
+              const colorDot = `<span class="history-condensed-dot is-${escapeHtml(exercise)}" aria-hidden="true"></span>`;
+              if (isOwner) {
+                return `
+                  <li
+                    class="history-condensed-row is-editable"
+                    data-activity-id="${escapeHtml(activity.id)}"
+                    role="button"
+                    tabindex="0"
+                    aria-label="Edit ${name} entry"
+                  >
+                    ${colorDot}
+                    <span class="history-condensed-text">${line}</span>
+                    <button
+                      class="delete-activity-button"
+                      type="button"
+                      data-delete-activity-id="${escapeHtml(activity.id)}"
+                      aria-label="Delete ${name} entry"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" />
+                      </svg>
+                    </button>
+                  </li>
+                `;
+              }
+              return `
+                <li
+                  class="history-condensed-row is-readonly"
+                  data-activity-id="${escapeHtml(activity.id)}"
+                  aria-label="${name} entry"
+                >
+                  ${colorDot}
+                  <span class="history-condensed-text">${line}</span>
+                </li>
+              `;
+            })
+            .join("")}
+        </ul>
+      </div>`;
+
+  return `
+    <div class="history-day${isToday ? " is-today" : ""} is-condensed">
+      <div class="history-date-divider">
+        ${dayGoalCheck(dayGoalProgress(group.activities).complete)}
+        ${historyDayRelLabelHtml(group.dateKey, todayKey)}
+        <span class="history-day-date">${group.date.toLocaleDateString("en-US", {
+          weekday: "long",
+          month: "short",
+          day: "numeric",
+        })}</span>
+        <span class="history-day-rule" aria-hidden="true"></span>
+        ${dayGoalBreakdown(group.activities)}
+      </div>
+      ${dayGoalPulseMini(group.activities)}
+      <div class="history-day-activities is-condensed">
+        ${activitiesHtml}
+      </div>
+      ${
+        isOwner
+          ? `<button class="add-to-date-button is-on-timeline" type="button" data-log-date="${group.dateKey}">
+              <span class="add-to-date-icon" aria-hidden="true">+</span>
+              <span class="add-to-date-label">Add Reps</span>
+            </button>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderPersonHistoryCalendar(historyGroups, { person, isOwner }) {
+  const calendar = $("#person-history-calendar");
+  if (!calendar) return;
+
+  const todayKey = localDateValue();
+  const monthKey = ensurePersonCalendarMonth(todayKey);
+  const { minMonth } = personCalendarMonthBounds();
+  const byDate = new Map(historyGroups.map((group) => [group.dateKey, group]));
+  const challengeEnd = challengeEndDateKey();
+  const selectedKey =
+    personCalendarSelectedKey &&
+    personCalendarSelectedKey >= CHALLENGE_START &&
+    personCalendarSelectedKey <= todayKey
+      ? personCalendarSelectedKey
+      : null;
+
+  const weekdayLabels = WEEKDAY_ABBR.map(
+    (label) => `<span class="person-cal__dow">${label}</span>`,
+  ).join("");
+
+  const cellHtml = ({ dateKey, outside }) => {
+      if (outside) {
+        return `<div class="person-cal__day is-outside" aria-hidden="true"></div>`;
+      }
+      const group = byDate.get(dateKey);
+      const activities = group?.activities || [];
+      const progress = dayGoalProgress(activities);
+      const inChallenge = dateKey >= CHALLENGE_START && dateKey <= challengeEnd;
+      const isFuture = dateKey > todayKey;
+      const selectable = inChallenge && !isFuture;
+      const isToday = dateKey === todayKey;
+      const selected = Boolean(selectedKey) && selectable && dateKey === selectedKey;
+      const dayNum = Number(dateKey.slice(8, 10));
+      const bars = ["pushups", "squats", "planks", "other"]
+        .map((key) => {
+          const pct = Math.max(0, Math.min(100, Number(progress.percents[key]) || 0));
+          const full = pct >= 100;
+          const check = full
+            ? `<svg class="person-cal__bar-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 13 4 4L19 7" /></svg>`
+            : "";
+          return `<span class="person-cal__bar is-${key}${full ? " is-full" : ""}" style="--p:${pct}" title="${pct}%">${check}</span>`;
+        })
+        .join("");
+      const classes = [
+        "person-cal__day",
+        outside ? "is-outside" : "",
+        isToday ? "is-today" : "",
+        selected ? "is-selected" : "",
+        progress.complete ? "is-complete" : "",
+        selectable ? "is-active" : "is-muted",
+        (progress.totals.pushups || progress.totals.squats || progress.totals.planks || progress.totals.other)
+          ? "has-logs"
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const label = new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+      });
+      const statusLabel = [
+        `${progress.percents.pushups}% push-ups`,
+        `${progress.percents.squats}% squats`,
+        `${progress.percents.planks}% plank`,
+        `${progress.percents.other}% other`,
+      ].join(", ");
+      return `
+        <button
+          type="button"
+          class="${classes}"
+          data-cal-date="${dateKey}"
+          ${selectable ? "" : "disabled"}
+          aria-pressed="${selected ? "true" : "false"}"
+          aria-expanded="${selected ? "true" : "false"}"
+          aria-label="${escapeHtml(label)}, ${escapeHtml(statusLabel)}${progress.complete ? ", board cleared" : ""}"
+        >
+          <span class="person-cal__num">${dayNum}</span>
+          ${
+            progress.complete
+              ? `<span class="history-day-goal is-complete person-cal__trifecta" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="m5 13 4 4L19 7" /></svg>
+                </span>`
+              : ""
+          }
+          <span class="person-cal__bars" aria-hidden="true">${bars}</span>
+        </button>
+      `;
+  };
+
+  const monthGridHtml = (forMonthKey) => {
+    const monthCells = calendarCellsForMonth(forMonthKey);
+    const gridParts = [];
+    for (let i = 0; i < monthCells.length; i += 7) {
+      const week = monthCells.slice(i, i + 7);
+      gridParts.push(...week.map(cellHtml));
+      const openInWeek =
+        selectedKey && week.some((cell) => cell.dateKey === selectedKey && !cell.outside);
+      if (openInWeek) {
+        const selectedGroup = byDate.get(selectedKey) || {
+          dateKey: selectedKey,
+          date: new Date(`${selectedKey}T12:00:00`),
+          activities: [],
+        };
+        gridParts.push(`
+          <div class="person-cal__panel" data-cal-panel="${selectedKey}">
+            <div class="person-cal__panel-inner">
+              ${personCalendarDetailHtml(selectedGroup, { person, isOwner, todayKey })}
+            </div>
+          </div>
+        `);
+      }
+    }
+    return gridParts.join("");
+  };
+
+  const priorMonthKeys = priorMonthKeysFor(monthKey, minMonth);
+
+  calendar.innerHTML = `
+    <div class="person-cal">
+      <div class="person-cal__nav">
+        <h3 class="person-cal__month">${escapeHtml(formatMonthHeading(monthKey))}</h3>
+      </div>
+      <div class="person-cal__weekdays" aria-hidden="true">${weekdayLabels}</div>
+      <div class="person-cal__grid">${monthGridHtml(monthKey)}</div>
+      ${priorMonthKeys
+        .map((priorKey) => {
+          const priorOpen = personCalendarPriorOpen.has(priorKey);
+          return `<div class="person-cal__prior${priorOpen ? " is-open" : ""}" data-cal-prior-month="${priorKey}">
+              <button type="button" class="person-cal__prior-toggle" data-cal-prior-toggle="${priorKey}" aria-expanded="${
+                priorOpen ? "true" : "false"
+              }">
+                <span>${escapeHtml(formatMonthHeading(priorKey))}</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              </button>
+              <div class="person-cal__prior-panel">
+                <div class="person-cal__prior-inner">
+                  <div class="person-cal__weekdays" aria-hidden="true">${weekdayLabels}</div>
+                  <div class="person-cal__grid">${monthGridHtml(priorKey)}</div>
+                </div>
+              </div>
+            </div>`;
+        })
+        .join("")}
+      <p class="person-cal__legend" aria-hidden="true">
+        <span class="is-pushups">PU</span>
+        <span class="is-squats">SQ</span>
+        <span class="is-planks">PL</span>
+        <span class="is-other">OT</span>
+      </p>
+    </div>
+  `;
+
+  if (selectedKey) {
+    const panel = calendar.querySelector(".person-cal__panel");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        panel?.classList.add("is-open");
+      });
+    });
+  }
+
+  calendar.querySelectorAll("[data-cal-prior-toggle]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const key = button.dataset.calPriorToggle;
+      const open = togglePersonCalendarPriorMonth(key);
+      button.closest(".person-cal__prior")?.classList.toggle("is-open", open);
+      button.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  });
+}
+
+function applyPersonHistoryView(historyGroups, { person, isOwner, hasMoreHistoryDays }) {
+  const isCalendar = personHistoryView === "calendar";
+  const list = $("#person-activity-list");
+  const calendar = $("#person-history-calendar");
+  const moreBtn = $("#person-history-more");
+  document.querySelectorAll("[data-history-view]").forEach((button) => {
+    const selected = button.dataset.historyView === personHistoryView;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+  if (list) list.hidden = isCalendar;
+  if (calendar) calendar.hidden = !isCalendar;
+  if (moreBtn) moreBtn.hidden = isCalendar || !hasMoreHistoryDays;
+  if (isCalendar) renderPersonHistoryCalendar(historyGroups, { person, isOwner });
+}
+
 function renderPersonPage({ skipScroll = false } = {}) {
   const appRoute = parseAppRoute();
 
@@ -3260,6 +3745,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
     return;
   }
 
+  const openingPersonPage = !wasShowingPersonPage;
   const personId = appRoute.personId;
   const route = { personId, openAdd: appRoute.openAdd };
   wasShowingPersonPage = true;
@@ -3444,6 +3930,13 @@ function renderPersonPage({ skipScroll = false } = {}) {
   if (personHistoryForPersonId !== personId) {
     personHistoryForPersonId = personId;
     personHistoryVisibleDays = PERSON_HISTORY_PAGE_SIZE;
+    personHistoryExpandedDays.clear();
+    personCalendarPriorOpen.clear();
+    personCalendarSelectedKey = localDateValue();
+    personCalendarMonthKey = monthKeyFromDateKey(localDateValue());
+  } else if (openingPersonPage) {
+    personCalendarSelectedKey = localDateValue();
+    personCalendarMonthKey = monthKeyFromDateKey(localDateValue());
   }
   const recentHistoryGroups = historyGroups.filter(
     (group) => !isCondensedHistoryDay(group.dateKey, todayKey),
@@ -3460,7 +3953,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
     ? (() => {
         const parts = [];
         let timelineStarted = false;
-        let yesterdayHeadingStarted = false;
         let historyHeadingStarted = false;
         visibleHistoryGroups.forEach((group) => {
           const isToday = group.dateKey === todayKey;
@@ -3566,36 +4058,54 @@ function renderPersonPage({ skipScroll = false } = {}) {
                     `;
                   })
                   .join("");
+          const expanded = condensed && personHistoryExpandedDays.has(group.dateKey);
           const dayHtml = `
-            <div class="history-day${isToday ? " is-today" : ""}${condensed ? " is-condensed" : ""}">
-              <div class="history-date-divider">
+            <div class="history-day${isToday ? " is-today" : ""}${condensed ? " is-condensed" : ""}${expanded ? " is-open" : ""}"${condensed ? ` data-history-date="${group.dateKey}"` : ""}>
+              <div class="history-date-divider${condensed ? " is-toggle" : ""}"${condensed ? ` data-history-toggle-date="${group.dateKey}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}"` : ""}>
                 ${dayGoalCheck(dayGoalProgress(group.activities).complete)}
+                ${historyDayRelLabelHtml(group.dateKey, todayKey)}
                 <span class="history-day-date">${group.date.toLocaleDateString("en-US", {
                   weekday: "long",
-                  month: "long",
+                  month: "short",
                   day: "numeric",
                 })}</span>
                 <span class="history-day-rule" aria-hidden="true"></span>
                 ${isToday ? "" : dayGoalBreakdown(group.activities)}
               </div>
               ${isToday ? dayGoalSummaryCard(group.activities, group.dateKey, personId) : ""}
-              <div class="history-day-activities${condensed ? " is-condensed" : ""}">
-                ${activitiesHtml}
-              </div>
               ${
-                isOwner
-                  ? `<button class="add-to-date-button${condensed ? " is-on-timeline" : ""}" type="button" data-log-date="${group.dateKey}">
-                <span class="add-to-date-icon" aria-hidden="true">+</span>
-                <span class="add-to-date-label">Add Reps</span>
-              </button>`
-                  : ""
+                condensed
+                  ? `<div class="history-day-panel"${expanded ? "" : " inert"}>
+                      <div class="history-day-panel-inner">
+                        ${dayGoalPulseMini(group.activities)}
+                        <div class="history-day-activities is-condensed">
+                          ${activitiesHtml}
+                        </div>
+                        ${
+                          isOwner
+                            ? `<button class="add-to-date-button is-on-timeline" type="button" data-log-date="${group.dateKey}">
+                          <span class="add-to-date-icon" aria-hidden="true">+</span>
+                          <span class="add-to-date-label">Add Reps</span>
+                        </button>`
+                            : ""
+                        }
+                      </div>
+                    </div>`
+                  : `${isToday ? "" : dayGoalPulseMini(group.activities)}
+                    <div class="history-day-activities">
+                      ${activitiesHtml}
+                    </div>
+                    ${
+                      isOwner
+                        ? `<button class="add-to-date-button" type="button" data-log-date="${group.dateKey}">
+                      <span class="add-to-date-icon" aria-hidden="true">+</span>
+                      <span class="add-to-date-label">Add Reps</span>
+                    </button>`
+                        : ""
+                    }`
               }
             </div>
           `;
-          if (dayAge === 1 && !yesterdayHeadingStarted) {
-            parts.push('<h2 class="person-history-heading">Yesterday</h2>');
-            yesterdayHeadingStarted = true;
-          }
           if (dayAge >= 2 && !historyHeadingStarted) {
             parts.push('<h2 class="person-history-heading">History</h2>');
             historyHeadingStarted = true;
@@ -3610,6 +4120,9 @@ function renderPersonPage({ skipScroll = false } = {}) {
         return parts.join("");
       })()
     : '<div class="empty-state">No sessions yet. Time to get on the board.</div>';
+  bindCondensedHistoryToggles();
+
+  applyPersonHistoryView(historyGroups, { person, isOwner, hasMoreHistoryDays });
 
   const justAddedMs = history
     .filter(isJustAdded)
@@ -4975,43 +5488,39 @@ function revealDailyPulseAfterLog() {
   }
 
   const injectDailyPulseShare = () => {
-    const banner = pulse.querySelector(".daily-pulse-banner");
-    if (!banner) return;
     const personId = pendingPulseReveal?.personId || currentPersonId();
     const dateKey = pendingPulseReveal?.activityDate || localDateValue();
     if (!personId || !isPersonPageOwner(personId)) return;
+    const banner = pulse.querySelector(".daily-pulse-banner");
+    if (!banner) return;
     let share = pulse.querySelector(".daily-pulse-share");
     if (!share) {
-      share = document.createElement("button");
-      share.type = "button";
-      share.className = "share-whatsapp-button daily-pulse-share is-entering";
-      share.dataset.personId = personId;
-      share.dataset.date = dateKey;
-      share.textContent = "Share to WhatsApp";
-      banner.insertAdjacentElement("afterend", share);
-      void share.offsetWidth;
+      banner.insertAdjacentHTML("beforeend", dailyPulseShareButtonHtml(personId, dateKey, "is-entering"));
+      share = pulse.querySelector(".daily-pulse-share");
+      void share?.offsetWidth;
     }
-    share.classList.add("is-in");
+    share?.classList.add("is-in");
     pendingShareGoal = {
-      personId: share.dataset.personId,
-      activityDate: share.dataset.date,
+      personId,
+      activityDate: dateKey,
     };
-    ensureDailyGoalShareBlob(share.dataset.personId, share.dataset.date).catch(() => {});
+    ensureDailyGoalShareBlob(personId, dateKey).catch(() => {});
   };
 
   const run = () => {
     if (showBanner) {
       let banner = pulse.querySelector(".daily-pulse-banner");
       if (!banner) {
-        banner = document.createElement("div");
-        banner.className = "daily-pulse-banner is-entering";
-        banner.setAttribute("role", "status");
-        banner.innerHTML = "<span>Daily goal met</span>";
-        pulse.insertBefore(banner, pulse.firstChild);
-        void banner.offsetWidth;
+        const personId = pendingPulseReveal?.personId || currentPersonId();
+        const dateKey = pendingPulseReveal?.activityDate || localDateValue();
+        pulse.insertAdjacentHTML(
+          "afterbegin",
+          dailyPulseCompleteRowHtml(personId, dateKey, "is-entering"),
+        );
+        banner = pulse.querySelector(".daily-pulse-banner");
+        void pulse.querySelector(".daily-pulse-banner")?.offsetWidth;
       }
       banner.classList.add("is-in");
-      // Keep Share off the LET'S GO / board-cleared overlay — only reveal after LFG exits.
       if (!showPulseLfg) injectDailyPulseShare();
     }
 
@@ -5569,7 +6078,7 @@ async function shareDailyGoalMetToWhatsApp(personId, dateKey, buttonEl = null) {
   const button = buttonEl || document.querySelector(".daily-pulse-share");
   if (button) {
     button.disabled = true;
-    button.textContent = "Preparing…";
+    button.setAttribute("aria-busy", "true");
   }
   try {
     const blob = await ensureDailyGoalShareBlob(personId, dateKey);
@@ -5610,7 +6119,7 @@ async function shareDailyGoalMetToWhatsApp(personId, dateKey, buttonEl = null) {
   } finally {
     if (button) {
       button.disabled = false;
-      button.textContent = "Share to WhatsApp";
+      button.removeAttribute("aria-busy");
     }
   }
 }
@@ -5824,7 +6333,76 @@ $("#person-quick-add")?.addEventListener("click", (event) => {
   quickAddActivity(button);
 });
 
+function bindCondensedHistoryToggles() {
+  document.querySelectorAll("#person-activity-list [data-history-toggle-date]").forEach((el) => {
+    el.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleCondensedHistoryDay(el);
+    });
+  });
+}
+
+function toggleCondensedHistoryDay(toggleEl) {
+  const dateKey = toggleEl?.dataset.historyToggleDate;
+  const day = toggleEl?.closest(".history-day");
+  if (!dateKey || !day) return;
+  const willOpen = !personHistoryExpandedDays.has(dateKey);
+  if (willOpen) personHistoryExpandedDays.add(dateKey);
+  else personHistoryExpandedDays.delete(dateKey);
+  day.classList.toggle("is-open", willOpen);
+  toggleEl.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  const panel = day.querySelector(".history-day-panel");
+  if (panel) panel.inert = !willOpen;
+}
+
 document.addEventListener("click", async (event) => {
+  const viewBtn = event.target.closest("#person-history-section [data-history-view]");
+  if (viewBtn) {
+    event.preventDefault();
+    const next = viewBtn.dataset.historyView;
+    if (next && next !== personHistoryView) {
+      setPersonHistoryView(next);
+      renderPersonPage({ skipScroll: true });
+    }
+    return;
+  }
+
+  const toggleEl = event.target.closest("[data-history-toggle-date]");
+  if (toggleEl) {
+    event.preventDefault();
+    toggleCondensedHistoryDay(toggleEl);
+    return;
+  }
+
+  const priorToggle = event.target.closest("[data-cal-prior-toggle]");
+  if (priorToggle) {
+    event.preventDefault();
+    const key = priorToggle.dataset.calPriorToggle;
+    const open = togglePersonCalendarPriorMonth(key);
+    const prior = priorToggle.closest(".person-cal__prior");
+    prior?.classList.toggle("is-open", open);
+    priorToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    return;
+  }
+
+  const dayBtn = event.target.closest("#person-history-section [data-cal-date]");
+  if (dayBtn && !dayBtn.disabled) {
+    event.preventDefault();
+    const dateKey = dayBtn.dataset.calDate;
+    personCalendarSelectedKey = personCalendarSelectedKey === dateKey ? null : dateKey;
+    if (personCalendarSelectedKey) {
+      const selectedMonth = monthKeyFromDateKey(personCalendarSelectedKey);
+      const viewing = ensurePersonCalendarMonth();
+      const { minMonth } = personCalendarMonthBounds();
+      if (selectedMonth !== viewing && selectedMonth >= minMonth && selectedMonth < viewing) {
+        personCalendarPriorOpen.add(selectedMonth);
+      }
+    }
+    renderPersonPage({ skipScroll: true });
+    return;
+  }
+
   const shareButton = event.target.closest(
     ".daily-pulse-share, .share-whatsapp-button[data-person-id]",
   );
@@ -6510,9 +7088,10 @@ $("#person-history-more")?.addEventListener("click", () => {
   renderPersonPage({ skipScroll: true });
 });
 
-$("#person-activity-list").addEventListener("click", async (event) => {
+async function onPersonHistoryActivityClick(event) {
   const personId = currentPersonId();
   if (!personId || !isPersonPageOwner(personId)) return;
+  if (event.target.closest("[data-history-view], [data-cal-date], [data-history-toggle-date]")) return;
 
   const addButton = event.target.closest("[data-log-date]");
   if (addButton) {
@@ -6541,10 +7120,22 @@ $("#person-activity-list").addEventListener("click", async (event) => {
     activity,
     activityDate: localDateValue(new Date(activity.createdAt)),
   });
-});
+}
 
-$("#person-activity-list").addEventListener("keydown", (event) => {
+$("#person-activity-list").addEventListener("click", onPersonHistoryActivityClick);
+$("#person-history-calendar")?.addEventListener("click", onPersonHistoryActivityClick);
+
+$("#person-activity-list").addEventListener("keydown", onPersonHistoryActivityKeydown);
+$("#person-history-calendar")?.addEventListener("keydown", onPersonHistoryActivityKeydown);
+
+function onPersonHistoryActivityKeydown(event) {
   if (event.key !== "Enter" && event.key !== " ") return;
+  const toggleEl = event.target.closest("[data-history-toggle-date]");
+  if (toggleEl) {
+    event.preventDefault();
+    toggleEl.click();
+    return;
+  }
   const item = event.target.closest("[data-activity-id].is-editable");
   if (!item || event.target.closest("[data-delete-activity-id]") || item.classList.contains("is-deleting")) {
     return;
@@ -6552,7 +7143,7 @@ $("#person-activity-list").addEventListener("keydown", (event) => {
   if (!isPersonPageOwner(currentPersonId())) return;
   event.preventDefault();
   item.click();
-});
+}
 
 function onLeaderboardClick(event) {
   const periodBtn = event.target.closest("[data-leader-period]");

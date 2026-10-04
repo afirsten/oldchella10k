@@ -7,7 +7,9 @@ export default async function handler(request, response) {
   }
 
   try {
-    return send(response, 200, await getState());
+    return send(response, 200, await getState(), {
+      "Access-Control-Allow-Origin": "*",
+    });
   } catch (error) {
     return sendError(response, error);
   }
