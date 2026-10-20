@@ -8,12 +8,27 @@ import {
   send,
   sendError,
 } from "../server/lib.mjs";
+import { challengeIdForDate, setChallengeParticipation } from "../challenges.mjs";
 
 const EXERCISES = new Set(["pushups", "squats", "planks", "other", "weight"]);
 const OTHER_TYPES = new Set(["workouts", "reps", "time"]);
 const OTHER_WORKOUTS_MAX = 100;
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
+
+function activityDateFromFields(fields) {
+  return String(fields.createdAt || "").slice(0, 10);
+}
+
+function participationPayload(state, activity, challengeId) {
+  return {
+    activity,
+    status: "in",
+    challengeId: challengeId || "",
+    participation: state.participation,
+    challengeParticipation: state.challengeParticipation || {},
+  };
+}
 
 function parseActivityFields(body) {
   const exercise = typeof body.exercise === "string" ? body.exercise : "";
@@ -111,6 +126,7 @@ export default async function handler(request, response) {
       );
       if (activityIndex < 0) throw httpError(404, "That activity could not be found.");
 
+      const challengeId = challengeIdForDate(activityDateFromFields(fields));
       const activity = {
         ...state.activities[activityIndex],
         ...fields,
@@ -119,14 +135,17 @@ export default async function handler(request, response) {
         note: state.activities[activityIndex].note || "",
         loggedAt: state.activities[activityIndex].loggedAt || new Date().toISOString(),
       };
+      if (challengeId) activity.challengeId = challengeId;
+      else delete activity.challengeId;
       state.activities[activityIndex] = activity;
-      state.participation[personId] = "in";
+      if (challengeId) setChallengeParticipation(state, personId, challengeId, "in");
       await saveState(state);
-      return send(response, 200, { activity, status: "in" });
+      return send(response, 200, participationPayload(state, activity, challengeId));
     }
 
     const state = await getState();
 
+    const challengeId = challengeIdForDate(activityDateFromFields(fields));
     const activity = {
       id: crypto.randomUUID(),
       personId,
@@ -134,11 +153,12 @@ export default async function handler(request, response) {
       ...fields,
       loggedAt: new Date().toISOString(),
     };
+    if (challengeId) activity.challengeId = challengeId;
     state.activities.push(activity);
-    state.participation[personId] = "in";
+    if (challengeId) setChallengeParticipation(state, personId, challengeId, "in");
     await saveState(state);
 
-    return send(response, 201, { activity, status: "in" });
+    return send(response, 201, participationPayload(state, activity, challengeId));
   } catch (error) {
     return sendError(response, error);
   }

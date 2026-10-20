@@ -8,6 +8,11 @@ import {
   send,
   sendError,
 } from "../server/lib.mjs";
+import {
+  DEFAULT_CHALLENGE_ID,
+  challengeById,
+  setChallengeParticipation,
+} from "../challenges.mjs";
 
 export default async function handler(request, response) {
   if (request.method !== "PUT") {
@@ -26,10 +31,21 @@ export default async function handler(request, response) {
     }
     await authorize(request, personId, body.pin);
 
+    const challengeId = typeof body.challengeId === "string" && body.challengeId
+      ? body.challengeId
+      : DEFAULT_CHALLENGE_ID;
+    if (!challengeById(challengeId)) throw httpError(400, "Unknown challenge.");
+
     const state = await getState();
-    state.participation[personId] = body.status;
+    setChallengeParticipation(state, personId, challengeId, body.status);
     await saveState(state);
-    return send(response, 200, { personId, status: body.status });
+    return send(response, 200, {
+      personId,
+      status: body.status,
+      challengeId,
+      participation: state.participation,
+      challengeParticipation: state.challengeParticipation || {},
+    });
   } catch (error) {
     return sendError(response, error);
   }

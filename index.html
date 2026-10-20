@@ -39,10 +39,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:ital,wght@0,300;1,300&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Bebas+Neue&family=Manrope:wght@600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=402" />
+    <link rel="stylesheet" href="./styles.css?v=467" />
     <script>
       (function () {
         try {
@@ -57,6 +57,18 @@
         } catch (e) {
           document.documentElement.setAttribute("data-theme", "dark");
         }
+      })();
+    </script>
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem("rippedchella-active-challenge-v1") === "wrap-2026") {
+            document.documentElement.setAttribute("data-challenge", "lfg");
+            var meta = document.getElementById("theme-color-meta");
+            var theme = document.documentElement.getAttribute("data-theme");
+            if (meta) meta.setAttribute("content", theme === "light" ? "#f7eef6" : "#07060b");
+          }
+        } catch (e) {}
       })();
     </script>
     <script>
@@ -98,7 +110,8 @@
       })();
     </script>
     <script src="./vendor/confetti.browser.min.js"></script>
-    <script src="./app.js?v=296" defer></script>
+    <script type="module" src="./challenges.mjs?v=1"></script>
+    <script src="./app.js?v=392" defer></script>
   </head>
   <body>
     <nav class="site-nav" aria-label="Site">
@@ -141,21 +154,43 @@
     <div class="site-menu" id="site-menu" hidden>
       <button type="button" class="site-menu-backdrop" id="site-menu-backdrop" tabindex="-1" aria-label="Close menu"></button>
       <div class="site-menu-panel" role="dialog" aria-modal="true" aria-label="Site menu" tabindex="-1">
+        <div class="site-menu-stage">
+          <div class="site-menu-views" id="site-menu-views">
+            <div class="site-menu-view">
         <nav class="site-menu-nav" aria-label="Primary">
           <a class="site-menu-link" data-menu-route="home" href="#/" id="menu-my-home" hidden>
             <span class="site-menu-link__icon site-menu-link__icon--avatar" aria-hidden="true">
               <img id="menu-my-home-avatar" alt="" />
             </span>
             <span class="site-menu-link__text">
-              <span class="site-menu-link__label" id="menu-my-home-label">My home</span>
-              <span class="site-menu-link__meta" id="menu-my-home-meta"></span>
+              <span class="site-menu-link__label" id="menu-my-home-label">My Progress</span>
+              <span class="site-menu-link__meta" id="menu-my-home-meta">Progress, Stats, etc</span>
             </span>
           </a>
+          <button type="button" class="site-menu-link" data-menu-route="challenges" data-open-menu-challenges aria-expanded="false">
+            <span class="site-menu-link__icon" aria-hidden="true">swap_horiz</span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">My Challenges</span>
+              <span class="site-menu-link__meta" id="menu-challenges-meta">Current: Ripped-Chella</span>
+            </span>
+            <span class="site-menu-link__chevron" aria-hidden="true">chevron_right</span>
+          </button>
+          <hr class="site-menu-rule" />
+          <div class="site-menu-group">
+            <p class="site-menu-group__label" id="menu-challenge-label">Ripped-Chella</p>
+            <div class="site-menu-group__items">
           <a class="site-menu-link" data-menu-route="challenge" href="#/">
             <span class="site-menu-link__icon" aria-hidden="true">home</span>
             <span class="site-menu-link__text">
               <span class="site-menu-link__label">Home</span>
-              <span class="site-menu-link__meta">Training Center</span>
+              <span class="site-menu-link__meta">Current challenge</span>
+            </span>
+          </a>
+          <a class="site-menu-link" data-menu-route="awards" href="#/awards">
+            <span class="site-menu-link__icon" aria-hidden="true">trophy</span>
+            <span class="site-menu-link__text">
+              <span class="site-menu-link__label">Final Results</span>
+              <span class="site-menu-link__meta" id="menu-awards-meta">Live on OCT 22</span>
             </span>
           </a>
           <a class="site-menu-link" data-menu-route="feed" href="#/feed">
@@ -176,7 +211,7 @@
             </span>
           </a>
           <a class="site-menu-link" data-menu-route="leaderboard" href="#/leaderboard">
-            <span class="site-menu-link__icon" aria-hidden="true">trophy</span>
+            <span class="site-menu-link__icon" aria-hidden="true">leaderboard</span>
             <span class="site-menu-link__text">
               <span class="site-menu-link__label">Leaderboard</span>
               <span class="site-menu-link__meta">Crew Standings</span>
@@ -189,42 +224,31 @@
               <span class="site-menu-link__meta">Group + Feed</span>
             </span>
           </a>
-          <a class="site-menu-link" data-menu-route="recipes" href="#/recipes">
-            <span class="site-menu-link__icon" aria-hidden="true">lunch_dining</span>
+            </div>
+          </div>
+          <a class="site-menu-link" data-menu-route="all-time" href="#/all-time">
+            <span class="site-menu-link__icon" aria-hidden="true">query_stats</span>
             <span class="site-menu-link__text">
-              <span class="site-menu-link__label">Eats</span>
-              <span class="site-menu-link__meta">Crew Kitchen</span>
+              <span class="site-menu-link__label">All-Time Stats</span>
+              <span class="site-menu-link__meta">Every rep logged</span>
             </span>
           </a>
           <a class="site-menu-link" data-menu-route="inspiration" href="#/inspiration">
             <span class="site-menu-link__icon" aria-hidden="true">auto_awesome</span>
             <span class="site-menu-link__text">
               <span class="site-menu-link__label">Tips Etc</span>
-              <span class="site-menu-link__meta">Videos, Links, Apps</span>
-            </span>
-          </a>
-          <a
-            class="site-menu-link"
-            data-menu-route="oldchella"
-            href="https://goingtoliveforever.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="site-menu-link__icon site-menu-link__icon--cactus" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <!-- saguaro: thin verticals, short bridges, left arm lower -->
-                <path d="M11.1 21V3.9c0-.77.63-1.4 1.4-1.4s1.4.63 1.4 1.4V21h-2.8Z"/>
-                <path d="M11.1 15.8H7.9V9.7c0-.66-.54-1.2-1.2-1.2s-1.2.54-1.2 1.2V17.5H11.1v-1.7Z"/>
-                <path d="M13.9 14.3h3.2V8.2c0-.66.54-1.2 1.2-1.2s1.2.54 1.2 1.2V16H13.9v-1.7Z"/>
-                <path d="M10.2 20.5h4.6v1.7c0 .55-.45 1-1 1h-2.6c-.55 0-1-.45-1-1v-1.7Z"/>
-              </svg>
-            </span>
-            <span class="site-menu-link__text">
-              <span class="site-menu-link__label">Old-Chella</span>
-              <span class="site-menu-link__meta">Trip Hub</span>
+              <span class="site-menu-link__meta">Videos, links, recipes, etc</span>
             </span>
           </a>
         </nav>
+            </div>
+            <div class="site-menu-view" id="menu-challenges-view" inert aria-hidden="true">
+              <button type="button" class="site-menu-back" data-menu-back>&lt; Back</button>
+              <div class="challenge-list" id="challenge-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="site-menu-footer">
         <label class="site-menu-theme-switch">
           <input
             id="theme-toggle"
@@ -239,6 +263,23 @@
             <span class="theme-switch__thumb"></span>
           </span>
         </label>
+        <a
+          class="site-menu-oldchella"
+          href="https://goingtoliveforever.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="site-menu-oldchella__label">Old-Chella</span>
+          <span class="site-menu-link__icon site-menu-link__icon--cactus" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M11.1 21V3.9c0-.77.63-1.4 1.4-1.4s1.4.63 1.4 1.4V21h-2.8Z"/>
+              <path d="M11.1 15.8H7.9V9.7c0-.66-.54-1.2-1.2-1.2s-1.2.54-1.2 1.2V17.5H11.1v-1.7Z"/>
+              <path d="M13.9 14.3h3.2V8.2c0-.66.54-1.2 1.2-1.2s1.2.54 1.2 1.2V16H13.9v-1.7Z"/>
+              <path d="M10.2 20.5h4.6v1.7c0 .55-.45 1-1 1h-2.6c-.55 0-1-.45-1-1v-1.7Z"/>
+            </svg>
+          </span>
+        </a>
+        </div>
         <script>
           (function () {
             var theme = document.documentElement.getAttribute("data-theme");
@@ -259,12 +300,18 @@
       <main id="dashboard-page">
         <section class="hero" id="home-hero">
           <h1 class="hero-logo" id="hero-logo">
-            <span class="hero-welcome" id="hero-welcome">WELCOME TO</span>
+            <span class="hero-welcome" id="hero-welcome">Current challenge</span>
             <span class="logo-top">Ripped-</span>
             <span class="logo-chella">Chella</span>
           </h1>
-          <p class="eyebrow">TRAINING CENTER + TRACKER</p>
-          <p class="hero-copy">SCAD Bros Trip · Joshua Tree Desert Festival · Oct 22–25</p>
+          <p class="home-challenge__detail" id="home-challenge-detail"></p>
+          <div class="home-soon" id="home-soon" hidden>
+            <p class="home-soon__status">Coming soon</p>
+            <h2 id="home-soon-title"></h2>
+            <p class="home-soon__when" id="home-soon-when"></p>
+            <p class="home-soon__summary" id="home-soon-summary"></p>
+          </div>
+          <p class="hero-copy">Getting fit for the Old-Chella</p>
           <button type="button" class="hero-add-reps" id="hero-add-reps">
             ADD YOUR REPS
           </button>
@@ -286,13 +333,12 @@
               aria-controls="rules-panel"
             >
               <span class="rules-toggle-copy">
-                <span class="label">OUR GOAL</span>
-                <span class="rules-toggle-title" id="rules-heading">Bank 10k pushups EACH… before Old-Chella</span>
+                <span class="rules-toggle-title" id="rules-heading">Challenge Details</span>
               </span>
               <span class="rules-chevron" aria-hidden="true"></span>
             </button>
             <div class="rules-panel" id="rules-panel">
-              <p class="rules-copy">
+              <p class="rules-copy" id="rules-copy">
                 Each day, clear all 3 goals. Push-ups are what really count towards the 10k.
                 Nursing an injury? Log under Other (Misc Workout %, Misc Rep, or Misc Timed) and flip Injury Input — 100% misc workout, 100 misc rep, or 30 min each credit 100 push-ups.
               </p>
@@ -311,14 +357,21 @@
                   <span>PLANK</span>
                 </div>
                 <div class="is-other">
-                  <strong>WORKOUTS</strong>
-                  <span>BONUS</span>
+                  <strong>BONUS</strong>
+                  <span>Misc Workouts</span>
                 </div>
               </div>
             </div>
           </aside>
 
-          <div class="goal-card">
+          <div class="goal-card" id="home-goal-card">
+            <a class="goal-complete" id="goal-complete" href="#/awards" hidden>
+              <p class="goal-complete__eyebrow">Ripped-Chella</p>
+              <p class="goal-complete__title">The challenge is complete</p>
+              <p class="goal-complete__copy">The 100 days are done. See how the crew finished.</p>
+              <span class="goal-complete__cta">View final results</span>
+            </a>
+            <div class="goal-card__body" id="goal-card-body">
             <div class="goal-card__top">
               <div>
                 <p class="label">GROUP PROGRESS</p>
@@ -422,13 +475,14 @@
                 <small>IN / OUT</small>
               </div>
             </div>
+            </div>
           </div>
         </section>
 
         <section class="section hero-returning" id="crew">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">THE CREW</p>
+              <p class="eyebrow" id="crew-eyebrow">Ripped-Chella</p>
               <h2>Leaderboard</h2>
             </div>
             <span class="live-pill"><span></span> LIVE</span>
@@ -472,11 +526,17 @@
             </div>
           </div>
 
+          <div class="leader-period-toggle person-scope-toggle" role="group" aria-label="Stats range">
+            <button type="button" data-person-scope="first-100" aria-pressed="false">Ripped-Chella</button>
+            <button type="button" data-person-scope="wrap-2026" aria-pressed="false">2027 LFG</button>
+            <button type="button" data-person-scope="all" aria-pressed="false">All time</button>
+          </div>
+
           <div class="participation-card" id="participation-card" hidden>
             <div>
-              <p class="label">CHALLENGE STATUS</p>
+              <p class="label">New Challenge</p>
               <strong>Are you in?</strong>
-              <span>Choose whether you’re participating in the Ripped-Chella challenge.</span>
+              <span id="participation-copy">Choose whether you’re participating in the Ripped-Chella challenge.</span>
             </div>
             <div class="participation-actions">
               <button type="button" data-participation="in">I’M IN</button>
@@ -661,7 +721,7 @@
           href="https://goingtoliveforever.com/"
           aria-label="Days left in the challenge — open Going To Live Forever"
         >
-          <span class="activity-days-countdown__label">COUNT DOWN TO OLD-CHELLA</span>
+          <span class="activity-days-countdown__label" id="activity-countdown-label">COUNT DOWN TO OLD-CHELLA</span>
           <span class="activity-days-countdown__clock">
             <span class="cd-unit">
               <span class="cd-num" id="activity-cd-days">---</span>
@@ -1062,16 +1122,6 @@
             </div>
           </div>
         </section>
-
-        <section class="section activity-section">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">LATEST</p>
-              <h2>Live Rep Activity</h2>
-            </div>
-          </div>
-          <div class="activity-list" id="activity-page-list"></div>
-        </section>
       </main>
 
       <main id="feed-page" hidden>
@@ -1089,11 +1139,27 @@
           <div class="feed-cleared-card__head">
             <div>
               <p class="eyebrow" id="feed-cleared-eyebrow">TODAY’S BOARD</p>
-              <h2 id="feed-cleared-heading">Daily Closers</h2>
+              <div class="feed-cleared-card__title">
+                <h2 id="feed-cleared-heading">Daily Closers</h2>
+                <button
+                  type="button"
+                  class="feed-cleared-info"
+                  id="feed-cleared-info"
+                  aria-expanded="false"
+                  aria-controls="feed-cleared-note"
+                  aria-label="About daily closers"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 11v6" />
+                    <circle cx="12" cy="8" r="0.5" fill="currentColor" stroke="none" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
-          <p class="feed-cleared-card__sub">
-            Closers hit the daily goal of 100 push-ups, 100 squats and 4min plank. Close out all 3 for a Trifecta.
+          <p class="feed-cleared-card__sub" id="feed-cleared-note" hidden>
+            Rings fill as push-ups, squats, and plank land — lock all three to clear the board.
           </p>
           <div class="feed-cleared-list" id="feed-cleared-list"></div>
         </section>
@@ -1102,10 +1168,49 @@
           <div class="section-heading">
             <div>
               <p class="eyebrow" id="feed-activity-eyebrow">LATEST</p>
-              <h2 id="feed-activity-heading">All activity</h2>
+              <h2 id="feed-activity-heading">Today's Activity</h2>
             </div>
           </div>
           <div class="activity-list" id="feed-page-list"></div>
+        </section>
+
+        <section class="section activity-section" aria-labelledby="feed-history-heading">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">History</p>
+              <h2 id="feed-history-heading">Prior Activity</h2>
+            </div>
+          </div>
+          <div class="activity-date-field feed-history-date">
+            <div
+              class="workout-date-toggle"
+              id="feed-history-toggle"
+              role="group"
+              aria-label="Prior activity date"
+              data-active="yesterday"
+            >
+              <button type="button" data-history-preset="yesterday" class="is-selected" aria-pressed="true">
+                Yesterday
+              </button>
+              <div class="workout-date-other-wrap">
+                <span class="workout-date-other__face" aria-hidden="true">
+                  <span class="workout-date-other__label" id="feed-history-other-label"></span>
+                  <svg class="workout-date-other__icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="16" rx="2" />
+                    <path d="M3 10h18M8 3v4M16 3v4" />
+                  </svg>
+                </span>
+                <input
+                  id="feed-history-date"
+                  class="workout-date-other__input"
+                  type="date"
+                  min="2026-07-14"
+                  aria-label="Pick another date"
+                />
+              </div>
+            </div>
+          </div>
+          <div class="activity-list" id="feed-history-list"></div>
         </section>
       </main>
 
@@ -1113,7 +1218,7 @@
         <section class="content-page">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">THE CREW</p>
+              <p class="eyebrow" id="leaderboard-eyebrow">Ripped-Chella</p>
               <h1>Leaderboard</h1>
             </div>
             <span class="live-pill"><span></span> LIVE</span>
@@ -1122,30 +1227,90 @@
         </section>
       </main>
 
-      <main id="recipes-page" hidden>
+      <main id="awards-page" hidden>
         <section class="content-page">
-          <p class="eyebrow">CREW KITCHEN</p>
-          <h1>Eats</h1>
-          <p class="hero-copy">
-            Meals that keep the crew fueled through the challenge — breakfasts, recovery bowls,
-            desert trip snacks, the works.
-          </p>
-          <p class="recipes-status" id="recipes-status" hidden></p>
-          <div class="recipes-list" id="recipes-list" aria-live="polite"></div>
+          <p class="eyebrow" id="awards-ended-label">Ended Oct 21, 2026</p>
+          <h1>Final Results</h1>
+          <p class="crew-podium__label">Ripped-Chella Podium</p>
+          <div class="crew-podium" id="leaderboard-podium" hidden></div>
         </section>
+        <div id="awards-stats-mirror"></div>
       </main>
+
+      <div class="results-veil" id="results-veil" hidden>
+        <div class="results-veil__stack">
+          <div class="activity-days-countdown results-veil__clock">
+            <p class="activity-days-countdown__label"><span id="results-veil-lead">Results live in</span><span class="results-veil__ellipsis">...</span></p>
+            <div class="activity-days-countdown__clock" role="timer" aria-live="polite">
+              <span class="cd-unit">
+                <span class="cd-num" id="results-cd-days">---</span>
+                <span class="cd-label">Days</span>
+              </span>
+              <span class="cd-sep" aria-hidden="true">:</span>
+              <span class="cd-unit">
+                <span class="cd-num" id="results-cd-hours">--</span>
+                <span class="cd-label">Hours</span>
+              </span>
+              <span class="cd-sep" aria-hidden="true">:</span>
+              <span class="cd-unit">
+                <span class="cd-num" id="results-cd-mins">--</span>
+                <span class="cd-label">Mins</span>
+              </span>
+              <span class="cd-sep" aria-hidden="true">:</span>
+              <span class="cd-unit">
+                <span class="cd-num" id="results-cd-secs">--</span>
+                <span class="cd-label">Secs</span>
+              </span>
+            </div>
+          </div>
+          <p class="results-veil__copy" id="results-veil-copy"></p>
+        </div>
+        <button type="button" class="results-veil__peek" id="results-veil-peek" aria-label="Cactus">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M11.1 21V3.9c0-.77.63-1.4 1.4-1.4s1.4.63 1.4 1.4V21h-2.8Z"/>
+            <path d="M11.1 15.8H7.9V9.7c0-.66-.54-1.2-1.2-1.2s-1.2.54-1.2 1.2V17.5H11.1v-1.7Z"/>
+            <path d="M13.9 14.3h3.2V8.2c0-.66.54-1.2 1.2-1.2s1.2.54 1.2 1.2V16H13.9v-1.7Z"/>
+            <path d="M10.2 20.5h4.6v1.7c0 .55-.45 1-1 1h-2.6c-.55 0-1-.45-1-1v-1.7Z"/>
+          </svg>
+        </button>
+      </div>
 
       <main id="inspiration-page" hidden>
         <section class="content-page">
-          <p class="eyebrow">SPARK PLUG</p>
-          <h1>Tips etc</h1>
-          <p class="hero-copy">
-            Videos, apps, workouts, articles, and anything else that might help the group get after it.
-          </p>
-          <p class="recipes-status" id="inspiration-status" hidden></p>
-          <div class="recipes-list" id="inspiration-list" aria-live="polite"></div>
+          <div class="leader-period-toggle tips-source-toggle" role="tablist" aria-label="Tips etc">
+            <button type="button" role="tab" data-tips-tab="inspiration" aria-selected="true">Work out tips</button>
+            <button type="button" role="tab" data-tips-tab="recipes" aria-selected="false">Eats</button>
+          </div>
+          <div id="tips-panel-workouts" data-tips-panel="inspiration" role="tabpanel">
+            <p class="eyebrow">SPARK PLUG</p>
+            <h1>Workout tips</h1>
+            <p class="hero-copy">
+              Videos, apps, workouts, articles, and anything else that might help the group get after it.
+            </p>
+            <p class="recipes-status" id="inspiration-status" hidden></p>
+            <div class="recipes-list" id="inspiration-list" aria-live="polite"></div>
+          </div>
+          <div id="tips-panel-eats" data-tips-panel="recipes" role="tabpanel" hidden>
+            <p class="eyebrow">CREW KITCHEN</p>
+            <h1>Eats</h1>
+            <p class="hero-copy">
+              Meals that keep the crew fueled through the challenge — breakfasts, recovery bowls,
+              desert trip snacks, the works.
+            </p>
+            <p class="recipes-status" id="recipes-status" hidden></p>
+            <div class="recipes-list" id="recipes-list" aria-live="polite"></div>
+          </div>
         </section>
       </main>
+
+      <div class="page-cactus" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11.1 21V3.9c0-.77.63-1.4 1.4-1.4s1.4.63 1.4 1.4V21h-2.8Z"/>
+          <path d="M11.1 15.8H7.9V9.7c0-.66-.54-1.2-1.2-1.2s-1.2.54-1.2 1.2V17.5H11.1v-1.7Z"/>
+          <path d="M13.9 14.3h3.2V8.2c0-.66.54-1.2 1.2-1.2s1.2.54 1.2 1.2V16H13.9v-1.7Z"/>
+          <path d="M10.2 20.5h4.6v1.7c0 .55-.45 1-1 1h-2.6c-.55 0-1-.45-1-1v-1.7Z"/>
+        </svg>
+      </div>
 
     </div>
 
@@ -1156,7 +1321,7 @@
         <div class="dialog-heading">
           <div class="log-heading-identity">
             <img id="log-person-image" class="log-person-avatar" src="" alt="" />
-            <h2 id="log-dialog-title">+ Add reps</h2>
+            <h2 id="log-dialog-title">+ Ripped-Chella Reps</h2>
           </div>
           <button class="icon-button close-button" id="close-dialog-button" type="button" aria-label="Close">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>

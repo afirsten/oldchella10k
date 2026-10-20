@@ -1,6 +1,18 @@
-const GOAL_PER_PERSON = 10000;
-const CHALLENGE_START = "2026-07-14";
-const CHALLENGE_DAYS = 100;
+const RIPPED_CHALLENGE_DATA = window.RIPPED_CHALLENGE_DATA;
+const DEFAULT_CHALLENGE_ID = RIPPED_CHALLENGE_DATA.DEFAULT_CHALLENGE_ID;
+const CHALLENGE_WINDOWS = Object.fromEntries(
+  RIPPED_CHALLENGE_DATA.CHALLENGES.map((challenge) => [
+    challenge.id,
+    { start: challenge.start, days: challenge.days, goal: challenge.goal },
+  ]),
+);
+/** 2027 LFG opens one second after midnight, and ends when the Times Square ball drops. */
+const LFG_OPENS = new Date("2026-10-23T00:00:01-04:00");
+const LFG_BALL_DROP = new Date("2027-01-01T00:00:00-05:00");
+const ACTIVE_CHALLENGE_KEY = "rippedchella-active-challenge-v1";
+let GOAL_PER_PERSON = CHALLENGE_WINDOWS[DEFAULT_CHALLENGE_ID].goal;
+let CHALLENGE_START = CHALLENGE_WINDOWS[DEFAULT_CHALLENGE_ID].start;
+let CHALLENGE_DAYS = CHALLENGE_WINDOWS[DEFAULT_CHALLENGE_ID].days;
 const WEIGHT_MIN_LB = 99;
 const WEIGHT_MAX_LB = 333;
 const OTHER_WORKOUTS_MAX = 100;
@@ -50,7 +62,10 @@ function applyTheme(theme) {
     }
     toggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
   }
-  if (meta) meta.setAttribute("content", isDark ? "#120a06" : "#f3ebe0");
+  if (meta) {
+    const lfg = document.documentElement.getAttribute("data-challenge") === "lfg";
+    meta.setAttribute("content", lfg ? (isDark ? "#07060b" : "#f7eef6") : isDark ? "#120a06" : "#f3ebe0");
+  }
 }
 
 function initThemeToggle() {
@@ -269,6 +284,16 @@ const seedActivities = [
 ];
 
 const $ = (selector) => document.querySelector(selector);
+let statsMount = null;
+let statsIgnoreWindow = false;
+
+function mount$(selector) {
+  if (!statsMount) return $(selector);
+  if (selector.startsWith("#activity-")) {
+    return statsMount.querySelector(`#alltime-${selector.slice("#activity-".length)}`);
+  }
+  return statsMount.querySelector(selector);
+}
 const number = new Intl.NumberFormat("en-US");
 const durationNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 /** Other workouts are logged as % effort; 100% = 1 workout unit (e.g. 50+50+75 → 1.75). */
@@ -289,6 +314,7 @@ function loadActivities() {
 
 let activities = loadActivities();
 let participation = {};
+let challengeParticipation = {};
 let apiAvailable = false;
 let liveStateFromRemote = false;
 let pendingPulseReveal = null;
@@ -313,10 +339,64 @@ try {
   participation = {};
 }
 
-function personStatus(personId) {
+function knownChallengeId(id) {
+  return CHALLENGE_WINDOWS[id] ? id : "";
+}
+
+function challengeIdForDate(dateKey) {
+  return RIPPED_CHALLENGE_DATA.challengeIdForDate(dateKey);
+}
+
+function challengeIdForActivity(activity) {
+  const stamped = typeof activity?.challengeId === "string" ? activity.challengeId : "";
+  if (knownChallengeId(stamped)) return stamped;
+  return challengeIdForDate(activityDateKey(activity));
+}
+
+function challengeIdForWindow(start = CHALLENGE_START, days = CHALLENGE_DAYS) {
+  const match = Object.entries(CHALLENGE_WINDOWS).find(
+    ([, spec]) => spec.start === start && spec.days === days,
+  );
+  return match ? match[0] : "";
+}
+
+function personStatus(personId, challengeId) {
   if (isHonorary(personId)) return "in";
-  if (participation[personId]) return participation[personId];
+  const id = challengeId || (statsIgnoreWindow ? DEFAULT_CHALLENGE_ID : activeChallengeId());
+  if (id !== DEFAULT_CHALLENGE_ID) {
+    const scoped = challengeParticipation?.[id]?.[personId];
+    if (scoped === "in" || scoped === "out") return scoped;
+    const logged = activities.some(
+      (activity) => activity.personId === personId && challengeIdForActivity(activity) === id,
+    );
+    return logged ? "in" : "unknown";
+  }
+  if (participation[personId] === "in" || participation[personId] === "out") {
+    return participation[personId];
+  }
   return activities.some((activity) => activity.personId === personId) ? "in" : "unknown";
+}
+
+function setLocalParticipation(personId, challengeId, status) {
+  const id = knownChallengeId(challengeId) || DEFAULT_CHALLENGE_ID;
+  if (status !== "in" && status !== "out") return;
+  if (id === DEFAULT_CHALLENGE_ID) {
+    participation[personId] = status;
+    return;
+  }
+  if (!challengeParticipation[id]) challengeParticipation[id] = {};
+  challengeParticipation[id][personId] = status;
+}
+
+function applyParticipationResult(personId, result) {
+  if (!result) return;
+  if (result.participation && typeof result.participation === "object") {
+    participation = result.participation;
+  }
+  if (result.challengeParticipation && typeof result.challengeParticipation === "object") {
+    challengeParticipation = result.challengeParticipation;
+  }
+  if (result.status) setLocalParticipation(personId, result.challengeId, result.status);
 }
 
 function getPerson(id) {
@@ -620,6 +700,7 @@ function bestGroupDay(participantIds) {
   const byDay = new Map(weekKeys.map((key) => [key, 0]));
   for (const activity of activities) {
     if (!participantIds.has(activity.personId)) continue;
+    if (!activityInActiveChallenge(activity)) continue;
     if (activityExercise(activity) === "planks") continue;
     if (isWeightActivity(activity)) continue;
     // Local calendar day so bucketing matches weekDateKeys / feed.
@@ -659,20 +740,26 @@ function challengeDayDateKey(dayNumber) {
  * 1.0 = one daily goal (100 PU / 100 SQ / 4 min plank / 100% Other).
  * Weight logs skipped. Misc Rep / Misc Timed convert into Other % (100 reps or 30 min ≈ 100%).
  */
-function personChallengeDayStacks(personId) {
-  const days = Array.from({ length: CHALLENGE_DAYS }, (_, index) => ({
-    day: index + 1,
-    dateKey: challengeDayDateKey(index + 1),
-    totals: { pushups: 0, squats: 0, planks: 0, other: 0 },
-  }));
-  const startMs = new Date(`${CHALLENGE_START}T12:00:00`).getTime();
+function personChallengeDayStacks(personId, range = {}) {
+  const startKey = range.start || CHALLENGE_START;
+  const dayCount = range.days || CHALLENGE_DAYS;
+  const days = Array.from({ length: dayCount }, (_, index) => {
+    const start = new Date(`${startKey}T12:00:00`);
+    start.setDate(start.getDate() + index);
+    return {
+      day: index + 1,
+      dateKey: localDateValue(start),
+      totals: { pushups: 0, squats: 0, planks: 0, other: 0 },
+    };
+  });
+  const startMs = new Date(`${startKey}T12:00:00`).getTime();
 
   for (const activity of activities) {
     if (activity.personId !== personId) continue;
     if (isWeightActivity(activity)) continue;
     const key = activityDateKey(activity);
     const idx = Math.floor((new Date(`${key}T12:00:00`).getTime() - startMs) / 86400000);
-    if (idx < 0 || idx >= CHALLENGE_DAYS) continue;
+    if (idx < 0 || idx >= dayCount) continue;
     accumulateChallengeMetrics(days[idx].totals, activity);
   }
 
@@ -700,13 +787,20 @@ function formatDayChartTitle(day) {
   return `Day ${n} · ${parts.join(" · ")}`;
 }
 
-function renderPersonDayChart(personId) {
+function renderPersonDayChart(personId, range = {}) {
   const barsEl = $("#person-day-chart-bars");
   if (!barsEl) return;
 
-  const days = personChallengeDayStacks(personId);
+  const days = personChallengeDayStacks(personId, range);
   const maxUnits = Math.max(1, ...days.map((day) => day.totalUnits));
   const todayKey = localDateValue();
+  const chart = $("#person-day-chart");
+  if (chart) {
+    chart.setAttribute(
+      "aria-label",
+      range.allTime ? "All-time day composition" : `Challenge day composition — ${days.length} days`,
+    );
+  }
 
   barsEl.innerHTML = days
     .map((day) => {
@@ -801,27 +895,36 @@ function closedBoardCount(closed) {
   return BOARD_GOAL_KEYS.filter((key) => closed[key]).length;
 }
 
-function feedClearedCategoryStack(closed = {}, { legend = false, decorative = false } = {}) {
-  const labels = BOARD_GOAL_KEYS.filter((key) => closed[key]).map(
+function feedClearedCategoryStack(percents = {}, { legend = false, decorative = false } = {}) {
+  const labels = BOARD_GOAL_KEYS.filter((key) => (Number(percents[key]) || 0) >= 100).map(
     (key) => BOARD_GOAL_LABELS[key],
   );
   const aria = decorative
     ? 'aria-hidden="true"'
     : legend
-      ? 'aria-label="Push-ups, squats, and plank — closed categories light up"'
+      ? 'aria-label="Push-ups, squats, and plank — rings fill as you close each category"'
       : labels.length
         ? `aria-label="Closed ${labels.join(", ")}"`
         : 'aria-hidden="true"';
   return `
     <span class="feed-cleared-cats${legend ? " is-legend" : ""}" ${aria}>
       ${BOARD_GOAL_KEYS.map((key, index) => {
-        const isClosed = Boolean(closed[key]);
+        const pct = Math.max(0, Math.min(100, Number(percents[key]) || 0));
+        const isClosed = pct >= 100;
+        const hasProgress = pct > 0;
+        const state = isClosed ? "is-closed" : hasProgress ? "is-progress" : "is-open";
         return `
           <span
-            class="feed-cleared-cat is-${key}${isClosed ? " is-closed" : " is-open"}"
-            style="--cat-i:${index}"
-            title="${BOARD_GOAL_LABELS[key]}${isClosed ? " closed" : " open"}"
-          >${BOARD_GOAL_SHORT[key]}</span>
+            class="feed-cleared-cat is-${key} ${state}"
+            style="--cat-i:${index}; --p:${pct}"
+            title="${BOARD_GOAL_LABELS[key]} ${Math.round(pct)}%"
+          >
+            <svg class="feed-cleared-cat__ring" viewBox="0 0 36 36" aria-hidden="true">
+              <circle class="feed-cleared-cat__track" cx="18" cy="18" r="15.5" pathLength="100" />
+              <circle class="feed-cleared-cat__fill" cx="18" cy="18" r="15.5" pathLength="100" stroke-dasharray="${pct} 100" />
+            </svg>
+            <span class="feed-cleared-cat__label">${BOARD_GOAL_SHORT[key]}</span>
+          </span>
         `;
       }).join("")}
     </span>
@@ -830,7 +933,10 @@ function feedClearedCategoryStack(closed = {}, { legend = false, decorative = fa
 
 function personBoardProgress(personId, dateKey = localDateValue()) {
   const dayActivities = activities.filter(
-    (activity) => activity.personId === personId && activityDateKey(activity) === dateKey,
+    (activity) =>
+      activity.personId === personId &&
+      activityDateKey(activity) === dateKey &&
+      activityInActiveChallenge(activity),
   );
   const progress = dayGoalProgress(dayActivities);
   const closed = closedBoardCategories(progress.percents);
@@ -860,6 +966,7 @@ function groupCloseoutStats(participantIds) {
   const byPersonDay = new Map();
   for (const activity of activities) {
     if (!participantIds.has(activity.personId)) continue;
+    if (!activityInActiveChallenge(activity)) continue;
     if (isWeightActivity(activity)) continue;
     const dateKey = activityDateKey(activity);
     const key = `${activity.personId}|${dateKey}`;
@@ -890,6 +997,7 @@ function trifectasByPersonId(participantIds) {
   const byPersonDay = new Map();
   for (const activity of activities) {
     if (!participantIds.has(activity.personId)) continue;
+    if (!activityInActiveChallenge(activity)) continue;
     if (isWeightActivity(activity)) continue;
     const dateKey = activityDateKey(activity);
     const key = `${activity.personId}|${dateKey}`;
@@ -917,36 +1025,61 @@ function podiumTopThree(people, scoreFor) {
     .slice(0, 3);
 }
 
-function renderActivityPodium(participants) {
-  const lists = {
-    pushups: $("#activity-podium-pushups"),
-    trifectas: $("#activity-podium-trifectas"),
-    total: $("#activity-podium-total"),
-  };
-  if (!lists.pushups || !lists.trifectas || !lists.total) return;
-
+function activityPodiumColumns(participants) {
   const participantIds = new Set(participants.map((person) => person.id));
   const trifectas = trifectasByPersonId(participantIds);
-  const columns = [
+  return [
     {
-      el: lists.pushups,
+      key: "pushups",
+      label: "Push-ups",
       valueClass: "is-pushups",
       format: (score) => number.format(score),
       rows: podiumTopThree(participants, (person) => person.metrics.pushups),
     },
     {
-      el: lists.trifectas,
+      key: "squats",
+      label: "Squats",
+      valueClass: "is-squats",
+      format: (score) => number.format(score),
+      rows: podiumTopThree(participants, (person) => person.metrics.squats),
+    },
+    {
+      key: "planks",
+      label: "Planks",
       valueClass: "is-planks",
+      format: (score) => formatPlankMinutes(score),
+      rows: podiumTopThree(participants, (person) => person.metrics.planks),
+    },
+    {
+      key: "trifectas",
+      label: "Trifectas",
+      valueClass: "is-trifectas",
       format: (score) => number.format(score),
       rows: podiumTopThree(participants, (person) => trifectas.get(person.id) || 0),
     },
     {
-      el: lists.total,
+      key: "total",
+      label: "Total reps",
       valueClass: "is-total",
       format: (score) => number.format(Math.round(score)),
       rows: podiumTopThree(participants, (person) => leaderboardCombinedTotal(person)),
     },
   ];
+}
+
+function renderActivityPodium(participants, q = $) {
+  const lists = {
+    pushups: q("#activity-podium-pushups"),
+    squats: q("#activity-podium-squats"),
+    planks: q("#activity-podium-planks"),
+    trifectas: q("#activity-podium-trifectas"),
+    total: q("#activity-podium-total"),
+  };
+  if (!lists.pushups || !lists.trifectas || !lists.total) return;
+
+  const columns = activityPodiumColumns(participants)
+    .filter((column) => lists[column.key])
+    .map((column) => ({ ...column, el: lists[column.key] }));
 
   for (const column of columns) {
     if (!column.rows.length) {
@@ -972,19 +1105,70 @@ function renderActivityPodium(participants) {
   }
 }
 
+function awardsMiniPodiumSlot({ person, score, place, tone, format, valueClass }) {
+  if (!person) return `<div class="mini-podium__slot is-empty" aria-hidden="true"></div>`;
+  const placeLabel = place === 1 ? "1st" : place === 2 ? "2nd" : "3rd";
+  return `
+    <a class="mini-podium__slot is-place-${place}" href="#/person/${person.id}" aria-label="${placeLabel} place, ${escapeHtml(person.name)}, ${format(score)}">
+      <span class="mini-podium__avatar-wrap">
+        <img class="mini-podium__avatar" src="${person.image}" alt="" />
+        ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
+      </span>
+      <span class="mini-podium__name">${escapeHtml(person.name)}</span>
+      <span class="mini-podium__score ${valueClass}">${format(score)}</span>
+      <span class="mini-podium__block rank-${tone}" aria-hidden="true">${place}</span>
+    </a>
+  `;
+}
+
+function renderAwardsMiniPodiums(participants) {
+  const grid = document.querySelector("#awards-stats-mirror .activity-podium__grid");
+  if (!grid) return;
+  grid.classList.add("is-mini-podiums");
+  grid.innerHTML = activityPodiumColumns(participants)
+    .map((column) => {
+      const slots = [
+        { entry: column.rows[1], place: 2, tone: "silver" },
+        { entry: column.rows[0], place: 1, tone: "gold" },
+        { entry: column.rows[2], place: 3, tone: "bronze" },
+      ];
+      const places = slots
+        .map(({ entry, place, tone }) =>
+          awardsMiniPodiumSlot({
+            person: entry?.person,
+            score: entry?.score,
+            place,
+            tone,
+            format: column.format,
+            valueClass: column.valueClass,
+          }),
+        )
+        .join("");
+      return `
+        <div class="mini-podium">
+          <span class="mini-podium__label">${escapeHtml(column.label)}</span>
+          <div class="mini-podium__places">${places}</div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 /** Bros who locked ≥1 of push / squat / plank for the day (includes full clears). */
 function peopleWithBoardClosingProgress(dateKey = localDateValue()) {
   return crew
     .filter((person) => personStatus(person.id) !== "out")
     .map((person) => ({ person, progress: personBoardProgress(person.id, dateKey) }))
-    .filter(({ progress }) => progress.closedCount > 0)
+    .filter(({ progress }) =>
+      BOARD_GOAL_KEYS.some((key) => (Number(progress.percents[key]) || 0) > 0),
+    )
     .sort((a, b) => {
       if (a.progress.complete !== b.progress.complete) {
         return a.progress.complete ? -1 : 1;
       }
-      if (b.progress.closedCount !== a.progress.closedCount) {
-        return b.progress.closedCount - a.progress.closedCount;
-      }
+      const aScore = BOARD_GOAL_KEYS.reduce((sum, key) => sum + (Number(a.progress.percents[key]) || 0), 0);
+      const bScore = BOARD_GOAL_KEYS.reduce((sum, key) => sum + (Number(b.progress.percents[key]) || 0), 0);
+      if (bScore !== aScore) return bScore - aScore;
       return a.person.name.localeCompare(b.person.name);
     });
 }
@@ -1023,6 +1207,8 @@ const PERSON_HISTORY_VIEW_KEY = "rippedchella-person-history-view-v1";
 let personHistoryVisibleDays = PERSON_HISTORY_PAGE_SIZE;
 let personHistoryForPersonId = null;
 let personHistoryView = "list";
+/** Person progress card: "challenge" follows the active window, "all" counts every log. */
+let personStatsScope = "challenge";
 const personHistoryExpandedDays = new Set();
 try {
   const storedView = localStorage.getItem(PERSON_HISTORY_VIEW_KEY);
@@ -1132,14 +1318,14 @@ function setPersonHistoryView(nextView) {
 
 function feedDayKeys() {
   const todayKey = localDateValue();
+  const endKey = challengeEndDateKey();
   const keys = [];
   for (let offset = FEED_DAY_WINDOW - 1; offset >= 0; offset -= 1) {
     const key = shiftLocalDateKey(todayKey, -offset);
-    if (key < CHALLENGE_START) continue;
-    if (key > todayKey) continue;
+    if (key < CHALLENGE_START || key > endKey || key > todayKey) continue;
     keys.push(key);
   }
-  if (!keys.includes(todayKey)) keys.push(todayKey);
+  if (todayKey >= CHALLENGE_START && todayKey <= endKey && !keys.includes(todayKey)) keys.push(todayKey);
   return keys;
 }
 
@@ -1200,13 +1386,35 @@ function scrollFeedDayFilterToSelected({ smooth = false } = {}) {
   requestAnimationFrame(() => requestAnimationFrame(run));
 }
 
+function activeChallengeName() {
+  return isLfgChallenge() ? "2027 LFG" : "Ripped-Chella";
+}
+
+function feedWindowNote() {
+  const today = localDateValue();
+  const name = activeChallengeName();
+  if (today < CHALLENGE_START) {
+    return `${name} opens ${formatChallengeDate(CHALLENGE_START, { year: true })}.`;
+  }
+  if (today > challengeEndDateKey()) {
+    return `${name} ended ${formatChallengeDate(challengeEndDateKey(), { year: true })}.`;
+  }
+  return "";
+}
+
 function renderFeedDayFilter({ smoothScroll = false } = {}) {
   const track = $("#feed-day-filter");
   if (!track) return;
+  const section = track.closest(".feed-day-filter");
 
   const todayKey = localDateValue();
   const selectedKey = ensureFeedSelectedDate();
   const keys = feedDayKeys();
+  section?.classList.toggle("is-empty", !keys.length);
+  if (!keys.length) {
+    track.innerHTML = `<p class="feed-day-filter__note">${escapeHtml(feedWindowNote() || "No challenge days to show yet.")}</p>`;
+    return;
+  }
 
   track.innerHTML = keys
     .map((key) => {
@@ -1254,16 +1462,16 @@ function updateFeedPageCopy(dateKey) {
   if (activityEyebrow) activityEyebrow.textContent = isToday ? "LATEST" : shortLabel;
 
   const activityHeading = $("#feed-activity-heading");
-  if (activityHeading) activityHeading.textContent = isToday ? "All activity" : "Day’s activity";
+  if (activityHeading) activityHeading.textContent = isToday ? "Today's Activity" : "Day’s activity";
 }
 
 function feedClearedPersonAria(person, progress) {
-  if (progress.complete) return `${person.name} cleared the board`;
-  const locked = BOARD_GOAL_KEYS.filter((key) => progress.closed[key]).map(
-    (key) => BOARD_GOAL_LABELS[key],
-  );
-  if (!locked.length) return `${person.name} — no categories closed`;
-  return `${person.name} closing the board — ${locked.join(", ")} locked`;
+  const bits = BOARD_GOAL_KEYS.map((key) => {
+    const pct = Math.round(Number(progress.percents[key]) || 0);
+    return `${pct}% ${BOARD_GOAL_LABELS[key]}`;
+  });
+  if (progress.complete) return `${person.name} cleared the board — ${bits.join(", ")}`;
+  return `${person.name} — ${bits.join(", ")}`;
 }
 
 function renderFeedClearedPerson({ person, progress }) {
@@ -1284,7 +1492,7 @@ function renderFeedClearedPerson({ person, progress }) {
               : ""
           }
         </span>
-        ${feedClearedCategoryStack(progress.closed, { decorative: true })}
+        ${feedClearedCategoryStack(progress.percents, { decorative: true })}
       </a>
     </li>
   `;
@@ -1316,8 +1524,8 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
         "Closers hit the daily goal of 100 push-ups, 100 squats and 4min plank. Close out all 3 for a Trifecta.";
     } else if (partials.length) {
       subEl.textContent = isToday
-        ? "Categories lighting up — lock all three to clear the board."
-        : "Categories locked that day — all three make a full clear.";
+        ? "Rings fill as push-ups, squats, and plank land — lock all three to clear the board."
+        : "Rings show how far each category got that day — all three make a full clear.";
     } else {
       subEl.textContent =
         "Closers hit the daily goal of 100 push-ups, 100 squats and 4min plank. Close out all 3 for a Trifecta.";
@@ -1325,18 +1533,21 @@ function renderFeedClearedToday({ smoothDayScroll = false } = {}) {
   }
 
   if (!closing.length) {
-    list.innerHTML = `
+    const windowNote = feedWindowNote();
+    list.innerHTML = windowNote
+      ? `<div class="feed-cleared-empty" role="status"><p><strong>No logs yet.</strong></p></div>`
+      : `
       <div class="feed-cleared-empty" role="status">
         ${feedClearedCategoryStack({}, { legend: true })}
         <p><strong>${
           isToday
-            ? "Nobody’s closing the board yet today."
-            : `Nobody closed a category on ${escapeHtml(longLabel)}.`
+            ? "Nobody’s on the board yet today."
+            : `Nobody logged board reps on ${escapeHtml(longLabel)}.`
         }</strong></p>
         <p>${
           isToday
-            ? "Hit push-ups, squats, or plank — light up a ring, then clear the desert daily."
-            : "No category locks that day — push-ups, squats, and plank make the board."
+            ? "Hit push-ups, squats, or plank — the ring fills as you go."
+            : "No board activity that day — push-ups, squats, and plank fill the rings."
         }</p>
       </div>
     `;
@@ -1384,16 +1595,113 @@ function renderFeedPageActivityList() {
 
   const dateKey = ensureFeedSelectedDate();
   const dayActivities = [...activities]
-    .filter((activity) => activityDateKey(activity) === dateKey && !isWeightActivity(activity))
+    .filter((activity) => activityDateKey(activity) === dateKey && activityInActiveChallenge(activity) && !isWeightActivity(activity))
     .sort(compareActivitiesRecentFirst);
   const isToday = dateKey === localDateValue();
-  const emptyFeed = isToday
-    ? '<div class="empty-state">No reps yet. Be the first to get moving.</div>'
-    : '<div class="empty-state">No logs on this day yet.</div>';
+  const windowNote = feedWindowNote();
+  const emptyFeed = windowNote
+    ? '<div class="empty-state">No logs yet.</div>'
+    : isToday
+      ? '<div class="empty-state">No reps yet. Be the first to get moving.</div>'
+      : '<div class="empty-state">No logs on this day yet.</div>';
 
   feedPageList.innerHTML = dayActivities.length
     ? dayActivities.map(activityFeedItemHtml).join("")
     : emptyFeed;
+}
+
+let feedHistoryDateKey = "";
+
+function feedHistoryRange() {
+  const today = localDateValue();
+  const end = challengeEndDateKey();
+  const prior = shiftLocalDateKey(today, -1);
+  const last = prior < end ? prior : end;
+  if (CHALLENGE_START > last) return null;
+  return { start: CHALLENGE_START, last };
+}
+
+function clampFeedHistoryDate(dateKey) {
+  const range = feedHistoryRange();
+  if (!range) return "";
+  let next = dateKey || range.last;
+  if (next > range.last) next = range.last;
+  if (next < range.start) next = range.start;
+  return next;
+}
+
+function ensureFeedHistoryDate() {
+  feedHistoryDateKey = clampFeedHistoryDate(feedHistoryDateKey);
+  return feedHistoryDateKey;
+}
+
+function syncFeedHistoryToggle() {
+  const input = $("#feed-history-date");
+  const toggle = $("#feed-history-toggle");
+  const otherLabel = $("#feed-history-other-label");
+  const otherWrap = toggle?.querySelector(".workout-date-other-wrap");
+  if (!input || !toggle) return;
+
+  const yesterday = yesterdayDateValue();
+  const range = feedHistoryRange();
+  const value = ensureFeedHistoryDate();
+  input.min = range?.start || CHALLENGE_START;
+  input.max = range?.last || yesterday;
+  input.value = value;
+  input.disabled = !value;
+  toggle.querySelectorAll("button[data-history-preset]").forEach((button) => {
+    button.disabled = !value;
+  });
+  if (!value) {
+    toggle.dataset.active = "";
+    toggle.querySelectorAll("button[data-history-preset]").forEach((button) => {
+      button.classList.remove("is-selected");
+      button.setAttribute("aria-pressed", "false");
+    });
+    otherWrap?.classList.remove("is-selected");
+    if (otherLabel) otherLabel.textContent = "";
+    input.setAttribute("aria-label", "Pick another date");
+    return;
+  }
+
+  const preset = value === yesterday ? "yesterday" : "other";
+
+  toggle.dataset.active = preset;
+  toggle.querySelectorAll("button[data-history-preset]").forEach((button) => {
+    const selected = button.dataset.historyPreset === preset;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+  otherWrap?.classList.toggle("is-selected", preset === "other");
+  if (otherLabel) otherLabel.textContent = preset === "other" ? workoutDateOtherLabel(value) : "";
+  input.setAttribute(
+    "aria-label",
+    preset === "other"
+      ? `Prior activity date ${workoutDateOtherLabel(value) || value}. Change date`
+      : "Pick another date",
+  );
+}
+
+function renderFeedHistory() {
+  const list = $("#feed-history-list");
+  if (!list) return;
+  const dateKey = ensureFeedHistoryDate();
+  syncFeedHistoryToggle();
+  if (!dateKey) {
+    list.innerHTML = `<div class="empty-state">${feedWindowNote() ? "No logs yet." : "No logs on this day yet."}</div>`;
+    return;
+  }
+  const dayActivities = [...activities]
+    .filter((activity) => activityDateKey(activity) === dateKey && activityInActiveChallenge(activity) && !isWeightActivity(activity))
+    .sort(compareActivitiesRecentFirst);
+  list.innerHTML = dayActivities.length
+    ? dayActivities.map(activityFeedItemHtml).join("")
+    : '<div class="empty-state">No logs on this day yet.</div>';
+}
+
+function setFeedHistoryDate(dateKey) {
+  feedHistoryDateKey = clampFeedHistoryDate(dateKey);
+  renderFeedHistory();
 }
 
 function activityDateKey(activity) {
@@ -1598,7 +1906,14 @@ function compareActivitiesRecentFirst(a, b) {
   return activities.indexOf(b) - activities.indexOf(a);
 }
 
+function activityInActiveChallenge(activity) {
+  if (statsIgnoreWindow) return true;
+  const id = challengeIdForWindow() || activeChallengeId();
+  return challengeIdForActivity(activity) === id;
+}
+
 function activityInLeaderboardPeriod(activity, period = "all") {
+  if (!activityInActiveChallenge(activity)) return false;
   if (period === "all") return true;
   const dateKey = activityDateKey(activity);
   if (period === "week") return weekDateKeys().includes(dateKey);
@@ -1610,7 +1925,8 @@ function activityInLeaderboardPeriod(activity, period = "all") {
   return true;
 }
 
-function totalsByPerson(period = "all") {
+function totalsByPerson(period = "all", challengeId) {
+  const statusId = challengeId || (statsIgnoreWindow ? DEFAULT_CHALLENGE_ID : activeChallengeId());
   return rosterForTotals().map((person) => {
     const personActivities = activities.filter(
       (activity) => activity.personId === person.id && activityInLeaderboardPeriod(activity, period),
@@ -1628,7 +1944,7 @@ function totalsByPerson(period = "all") {
       metrics,
       primaryType,
       total: metrics[primaryType],
-      status: personStatus(person.id),
+      status: personStatus(person.id, statusId),
       sessions: new Set(
         personActivities
           .filter((activity) => !isWeightActivity(activity))
@@ -1659,7 +1975,7 @@ function onTargetReps(asOf = new Date()) {
 
 function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDelta, groupTarget }) {
   const remaining = Math.max(0, goal - total);
-  const msLeft = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
+  const msLeft = Math.max(0, activeSpotlightDate().getTime() - Date.now());
   // Inclusive of today so daily-need pacing matches days still available to train.
   const daysLeft = challengeDaysLeftInclusive();
   const daysUntilCheckIn = challengeDaysRemaining();
@@ -1695,8 +2011,12 @@ function buildRotatingFacts({ total, goal, participants, categoryTotals, paceDel
       ? `${number.format(categoryTotals.other)}% other workouts ≈ ${number.format(otherCals)} calories (100% ≈ one daily push-up goal).`
       : null,
     msLeft > 0
-      ? `${daysUntilCheckIn} days and ${hoursLeft} hours until Old-Chella check-in. The desert is patient. Your rotator cuff is not.`
-      : "Old-Chella is live. Get ripped or get roasted.",
+      ? activeChallengeId() === "wrap-2026"
+        ? `${daysUntilCheckIn} days and ${hoursLeft} hours until the Times Square ball drop. Same goals. New year.`
+        : `${daysUntilCheckIn} days and ${hoursLeft} hours until Old-Chella check-in. The desert is patient. Your rotator cuff is not.`
+      : activeChallengeId() === "wrap-2026"
+        ? "January 1 is here. 2027 LFG is live."
+        : "Old-Chella is live. Get ripped or get roasted.",
     goal > 0
       ? `${number.format(remaining)} group reps left. That is ${number.format(Math.ceil(remaining / Math.max(participants.length, 1)))} each if everybody shows up.`
       : null,
@@ -1790,6 +2110,7 @@ function activityCallout(activity) {
 
 function buildRecentActivityFacts(limit = 8) {
   return [...activities]
+    .filter((activity) => activityInActiveChallenge(activity))
     .sort(compareActivitiesRecentFirst)
     .slice(0, limit)
     .map(activityCallout)
@@ -1904,6 +2225,14 @@ function formatRankLabel(rank) {
   return `Ranked ${value}${suffix}`;
 }
 
+function paintPersonRankMedal(tile, rank) {
+  tile.classList.remove("is-gold", "is-silver", "is-bronze");
+  if (tile.classList.contains("is-out") || tile.classList.contains("is-honorary")) return;
+  if (rank === 1) tile.classList.add("is-gold");
+  else if (rank === 2) tile.classList.add("is-silver");
+  else if (rank === 3) tile.classList.add("is-bronze");
+}
+
 function formatPersonHeadline(name) {
   const parts = String(name).trim().split(/\s+/);
   if (parts.length < 2) return escapeHtml(name);
@@ -1938,6 +2267,44 @@ function compareLeaderboardRows(a, b) {
   return delta || a.name.localeCompare(b.name);
 }
 
+function leaderboardPodiumScore(person) {
+  if (leaderboardSortKey === "planks") return formatPlankMinutes(person.metrics?.planks);
+  if (leaderboardSortKey === "combined") return number.format(Math.round(leaderboardCombinedTotal(person)));
+  if (leaderboardSortKey === "total") return number.format(Math.round(Number(person.total) || 0));
+  return number.format(Math.round(Number(person.metrics?.[leaderboardSortKey]) || 0));
+}
+
+function renderLeaderboardPodium(ranking) {
+  const podium = $("#leaderboard-podium");
+  if (!podium) return;
+  const top = ranking.filter((person) => !person.honorary).slice(0, 3);
+  if (!top.length) {
+    podium.hidden = true;
+    podium.innerHTML = "";
+    return;
+  }
+  const slots = [
+    { person: top[1], place: 2, tone: "silver" },
+    { person: top[0], place: 1, tone: "gold" },
+    { person: top[2], place: 3, tone: "bronze" },
+  ];
+  podium.hidden = false;
+  podium.innerHTML = slots
+    .map(({ person, place, tone }) => {
+      if (!person) return `<div class="crew-podium__slot is-empty" aria-hidden="true"></div>`;
+      const placeLabel = place === 1 ? "1st" : place === 2 ? "2nd" : "3rd";
+      return `
+        <a class="crew-podium__slot is-place-${place}" href="#/person/${person.id}" aria-label="${placeLabel} place, ${escapeHtml(person.name)}">
+          <img class="crew-podium__avatar" src="${person.image}" alt="" />
+          <span class="crew-podium__name">${escapeHtml(person.name)}</span>
+          <span class="crew-podium__score">${leaderboardPodiumScore(person)}</span>
+          <span class="crew-podium__block rank-${tone}" aria-hidden="true">${place}</span>
+        </a>
+      `;
+    })
+    .join("");
+}
+
 function leaderboardPeriodHtml() {
   const buttons = LEADERBOARD_PERIOD_OPTIONS.map(({ value, label }) => {
     const active = leaderboardPeriod === value;
@@ -1960,6 +2327,554 @@ function leaderboardHeadHtml() {
   </div>`;
 }
 
+function ensureAllTimePage() {
+  let page = document.querySelector("#alltime-page");
+  if (page) return page;
+  const source = document.querySelector("#activity-page");
+  if (!source) return null;
+  page = source.cloneNode(true);
+  page.hidden = true;
+  const map = new Map();
+  page.querySelectorAll("[id]").forEach((el) => {
+    const next = el.id.startsWith("activity-")
+      ? `alltime-${el.id.slice("activity-".length)}`
+      : `alltime-${el.id}`;
+    map.set(el.id, next);
+    el.id = next;
+  });
+  page.id = "alltime-page";
+  ["aria-describedby", "aria-labelledby", "aria-controls"].forEach((attr) => {
+    page.querySelectorAll(`[${attr}]`).forEach((el) => {
+      el.setAttribute(
+        attr,
+        el.getAttribute(attr).split(/\s+/).map((id) => map.get(id) || id).join(" "),
+      );
+    });
+  });
+  const eyebrow = page.querySelector(".content-page-hero .eyebrow");
+  if (eyebrow) eyebrow.textContent = "All time";
+  const heading = page.querySelector(".content-page-hero h1");
+  if (heading) heading.textContent = "Stats";
+  const copy = page.querySelector(".content-page-hero .hero-copy");
+  if (copy) copy.textContent = "Every rep the group has logged, across every challenge.";
+  page.querySelector(".activity-days-countdown")?.remove();
+  page.querySelector(".goal-meters")?.remove();
+  page.querySelector(".activity-section")?.remove();
+  page.querySelector(".activity-closeouts")?.remove();
+  page.querySelector(".activity-best")?.remove();
+  page.querySelector(".activity-active")?.remove();
+  const gaugeLabel = page.querySelector(".activity-gauge__label");
+  if (gaugeLabel) gaugeLabel.textContent = "AVG Reps per Day";
+  page.querySelector(".activity-gauge__readout small")?.remove();
+  const daysBlock = page.querySelector("#alltime-days-block");
+  if (daysBlock) {
+    daysBlock.classList.add("is-since-start");
+    daysBlock.querySelector(".activity-sessions__ticks")?.remove();
+    const since = daysBlock.querySelector(".activity-sessions__of");
+    if (since) since.textContent = "days since Ripped-Chella started";
+  }
+  const podiumGrid = page.querySelector(".activity-podium__grid");
+  const trifectasCol = page.querySelector("#alltime-podium-trifectas")?.closest(".activity-podium__col");
+  if (podiumGrid && trifectasCol) {
+    const allTimeColumn = (id, label) => {
+      const col = document.createElement("div");
+      col.className = "activity-podium__col";
+      col.innerHTML = `<span class="activity-podium__label">${label}</span><ol class="activity-podium__list" id="${id}"></ol>`;
+      return col;
+    };
+    trifectasCol.before(allTimeColumn("alltime-podium-squats", "All time squats"));
+    trifectasCol.before(allTimeColumn("alltime-podium-planks", "All time planks"));
+    const labels = {
+      "alltime-podium-pushups": "All time push-ups",
+      "alltime-podium-trifectas": "All time trifectas",
+      "alltime-podium-total": "All time total",
+    };
+    for (const [id, label] of Object.entries(labels)) {
+      const el = page.querySelector(`#${id}`)?.closest(".activity-podium__col")?.querySelector(".activity-podium__label");
+      if (el) el.textContent = label;
+    }
+  }
+  const board = document.createElement("section");
+  board.className = "section";
+  board.innerHTML = `
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">All time</p>
+        <h2>Leaderboard</h2>
+      </div>
+    </div>
+    <div class="leaderboard" id="alltime-leaderboard"></div>
+  `;
+  page.append(board);
+  source.after(page);
+  return page;
+}
+
+function renderAllTimeStats() {
+  const page = ensureAllTimePage();
+  if (!page) return;
+  const prev = {
+    start: CHALLENGE_START,
+    days: CHALLENGE_DAYS,
+    goal: GOAL_PER_PERSON,
+  };
+  const ripped = CHALLENGE_WINDOWS["first-100"];
+  CHALLENGE_START = ripped.start;
+  CHALLENGE_DAYS = ripped.days;
+  GOAL_PER_PERSON = ripped.goal;
+  statsIgnoreWindow = true;
+  statsMount = page;
+  try {
+    const ranking = totalsByPerson("all").sort(compareLeaderboardRows);
+    const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
+    const honoraryMembers = ranking.filter((person) => person.honorary);
+    const optedOut = ranking.filter((person) => person.status === "out" && !person.honorary);
+    const goal = participants.length * GOAL_PER_PERSON;
+    const total = participants.reduce((sum, person) => sum + person.total, 0);
+    const honoraryTotal = honoraryMembers.reduce((sum, person) => sum + person.total, 0);
+    const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
+    let honoraryPercent = goal ? Math.min(100, Math.round((honoraryTotal / goal) * 100)) : 0;
+    if (honoraryPercent + percent > 100) honoraryPercent = Math.max(0, 100 - percent);
+    const groupTarget = participants.length * onTargetReps();
+    const targetPercent = goal ? Math.min(100, Math.round((groupTarget / goal) * 100)) : 0;
+    const paceDelta = total - groupTarget;
+    const participantIds = new Set(participants.map((person) => person.id));
+    const categoryTotals = activities
+      .filter((activity) => participantIds.has(activity.personId) && activityInActiveChallenge(activity))
+      .reduce(
+        (totals, activity) => accumulateChallengeMetrics(totals, activity),
+        { pushups: 0, squats: 0, planks: 0, other: 0 },
+      );
+    paintActivityStats(mount$, {
+      participants,
+      honoraryMembers,
+      optedOut,
+      goal,
+      total,
+      honoraryTotal,
+      percent,
+      honoraryPercent,
+      groupTarget,
+      targetPercent,
+      paceDelta,
+      participantIds,
+      categoryTotals,
+    });
+    const allTimeBoard = page.querySelector("#alltime-leaderboard");
+    if (allTimeBoard) {
+      const allTimeRanking = totalsByPerson(leaderboardPeriod).sort(compareLeaderboardRows);
+      allTimeBoard.innerHTML = leaderboardBoardHtml(allTimeRanking);
+    }
+    const sinceStart = Math.max(0, challengeDayIndex());
+    const avgPerDay = sinceStart > 0 ? Math.round(total / sinceStart) : 0;
+    const avgValue = page.querySelector("#alltime-daily-need");
+    if (avgValue) avgValue.textContent = number.format(avgPerDay);
+    const avgGauge = page.querySelector("#alltime-daily-gauge");
+    if (avgGauge) {
+      avgGauge.classList.remove("is-easy", "is-warm", "is-hot");
+      avgGauge.setAttribute("aria-label", `Average ${number.format(avgPerDay)} reps per day`);
+    }
+    const avgArc = page.querySelector("#alltime-daily-gauge-arc");
+    if (avgArc) avgArc.style.strokeDasharray = "100 100";
+    const sinceValue = page.querySelector("#alltime-sessions-total");
+    if (sinceValue) sinceValue.textContent = number.format(sinceStart);
+    const sinceBlock = page.querySelector("#alltime-days-block");
+    if (sinceBlock) {
+      sinceBlock.setAttribute(
+        "aria-label",
+        `${number.format(sinceStart)} days since Ripped-Chella started`,
+      );
+    }
+  } finally {
+    statsMount = null;
+    statsIgnoreWindow = false;
+    CHALLENGE_START = prev.start;
+    CHALLENGE_DAYS = prev.days;
+    GOAL_PER_PERSON = prev.goal;
+  }
+}
+
+function paintActivityStats(q, {
+  participants,
+  honoraryMembers,
+  optedOut,
+  goal,
+  total,
+  honoraryTotal,
+  percent,
+  honoraryPercent,
+  groupTarget,
+  targetPercent,
+  paceDelta,
+  participantIds,
+  categoryTotals,
+}) {
+  const applyGroupProgressBar = ({
+    track,
+    fill,
+    honoraryFill,
+    target,
+    pace,
+    breakdown = {},
+  }) => {
+    if (!track || !fill) return;
+    const hasHonorary = honoraryPercent > 0;
+    const hasPrimary = percent > 0;
+    track.classList.toggle("has-honorary", hasHonorary);
+    track.classList.toggle("has-primary", hasPrimary);
+    if (honoraryFill) {
+      honoraryFill.style.width = `${honoraryPercent}%`;
+      honoraryFill.classList.toggle("is-empty", !hasHonorary);
+      honoraryFill.hidden = !hasHonorary;
+    }
+    fill.style.left = `${honoraryPercent}%`;
+    fill.style.width = `${percent}%`;
+    if (target) target.style.width = `${targetPercent}%`;
+    if (pace) pace.style.left = `${targetPercent}%`;
+    const setBreakdown = (el, value) => {
+      if (el) el.textContent = number.format(value);
+    };
+    setBreakdown(breakdown.goal, goal);
+    setBreakdown(breakdown.daily, groupTarget);
+    setBreakdown(breakdown.bros, total);
+    setBreakdown(breakdown.honorary, honoraryTotal);
+  };
+
+  // Mirror key stats onto the Stats page.
+  const setText = (id, value) => {
+    const el = q(id);
+    if (el) el.textContent = value;
+  };
+  setText("#activity-group-total", number.format(total));
+  setText("#activity-goal-target", number.format(goal));
+  setText("#activity-pushups-total", number.format(categoryTotals.pushups));
+  setText("#activity-squats-total", number.format(categoryTotals.squats));
+  setText("#activity-planks-total", formatPlankMinutes(categoryTotals.planks));
+  setText("#activity-other-total", number.format(categoryTotals.other));
+  setText("#activity-crew-status-total", `${participants.length} / ${optedOut.length}`);
+  setText("#activity-remaining-total", number.format(Math.max(0, goal - total)));
+  setText("#activity-goal-percent-value", `${percent}%`);
+  const activityGoalPercent = q("#activity-goal-percent");
+  if (activityGoalPercent) activityGoalPercent.setAttribute("aria-label", `${percent}% done`);
+  applyGroupProgressBar({
+    track: q("#activity-progress-track"),
+    fill: q("#activity-progress-fill"),
+    honoraryFill: q("#activity-progress-honorary"),
+    target: q("#activity-progress-target"),
+    pace: q("#activity-progress-pace"),
+    breakdown: {
+      goal: q("#activity-progress-breakdown-goal"),
+      daily: q("#activity-progress-breakdown-daily"),
+      bros: q("#activity-progress-breakdown-bros"),
+      honorary: q("#activity-progress-breakdown-honorary"),
+    },
+  });
+  const activityTrack = q("#activity-progress-track");
+  if (activityTrack) {
+    activityTrack.setAttribute("aria-valuenow", String(total));
+    activityTrack.setAttribute("aria-valuemax", String(goal));
+    activityTrack.setAttribute(
+      "aria-valuetext",
+      honoraryTotal > 0
+        ? `${number.format(total)} of ${number.format(goal)}, plus ${number.format(honoraryTotal)} honorary`
+        : `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
+    );
+  }
+  setText(
+    "#activity-pace-copy",
+    goal > 0 && total >= goal
+      ? "Challenge complete!"
+      : groupTarget <= 0
+        ? statsMount
+          ? "Oldchella awaits"
+          : activeChallengeId() === "wrap-2026"
+            ? "January 1 awaits"
+            : "Oldchella awaits"
+        : paceDelta === 0
+          ? `On pace (${number.format(groupTarget)})`
+          : paceDelta > 0
+            ? `${number.format(paceDelta)} ahead of pace`
+            : `${number.format(Math.abs(paceDelta))} behind pace`,
+  );
+
+  const remaining = Math.max(0, goal - total);
+  // Inclusive of today for daily-need pacing (Day D … Day 100).
+  const daysLeft = challengeDaysLeftInclusive();
+  const avgPerson = participants.length ? Math.round(total / participants.length) : 0;
+  const dailyNeed =
+    daysLeft > 0 && participants.length
+      ? Math.ceil(remaining / participants.length / daysLeft)
+      : 0;
+  const eachLeft = participants.length ? Math.ceil(remaining / participants.length) : remaining;
+  const burned = estimateCategoryCalories(categoryTotals);
+  const desertMath = desertMathFromBurn(burned);
+  // Challenge calendar progress (same D as purple DAY); D + remaining days === 100.
+  const daysGoal = CHALLENGE_DAYS;
+  const daysLogged = currentChallengeDay();
+  const bestDay = bestGroupDay(participantIds);
+  const activeCrew = participants.filter((person) => person.sessions > 0).length;
+  const personalPace = onTargetReps();
+
+  setText("#activity-avg-person", number.format(avgPerson));
+  setText("#activity-daily-need", number.format(dailyNeed));
+  setText("#activity-pace-target", number.format(Math.round(groupTarget)));
+  setText("#activity-each-left", number.format(eachLeft));
+  setText("#activity-cal-burn", burned > 0 ? `~${number.format(burned)}` : "0");
+  setCompactMagnitude(q("#activity-avg-person"), avgPerson);
+  setCompactMagnitude(q("#activity-each-left"), eachLeft);
+  setCompactMagnitude(q("#activity-cal-burn"), burned);
+  setCompactMagnitude(q("#activity-pace-target"), Math.round(groupTarget));
+  setText("#activity-fun-beers", number.format(desertMath.beers));
+  setText("#activity-fun-pizza", number.format(desertMath.pizzaSlices));
+  setText("#activity-fun-cabs", number.format(desertMath.callACabs));
+  setText("#activity-fun-biscuits", number.format(desertMath.biscuits));
+  setText("#activity-fun-wings", number.format(desertMath.wings));
+  renderActivityPodium([...participants, ...honoraryMembers], q);
+  const closeouts = groupCloseoutStats(participantIds);
+  setText("#activity-closeout-pushups", number.format(closeouts.pushupClosers));
+  setText("#activity-closeout-reps", number.format(closeouts.repClosers));
+  setText("#activity-closeout-trifectas", number.format(closeouts.trifectas));
+  setText("#activity-sessions-total", number.format(daysLogged));
+  setText("#activity-days-goal", number.format(daysGoal));
+  if (bestDay.reps > 0 && bestDay.label) {
+    setText("#activity-best-day", `${bestDay.label} · ${number.format(bestDay.reps)}`);
+    setText("#activity-best-day-label", "REPS");
+  } else {
+    setText("#activity-best-day", "—");
+    setText("#activity-best-day-label", "0 REPS");
+  }
+  const bestBars = q(".activity-best__bars");
+  if (bestBars) {
+    const maxReps = Math.max(1, ...bestDay.days.map((day) => day.reps));
+    bestBars.innerHTML = bestDay.days
+      .map((day) => {
+        const pct =
+          day.reps > 0 ? Math.max(10, Math.round((day.reps / maxReps) * 100)) : 10;
+        const peakClass = bestDay.date && day.date === bestDay.date ? " is-peak" : "";
+        return `
+          <div class="activity-best__col">
+            <div class="activity-best__bar-slot">
+              <span class="${peakClass.trim()}" style="--h: ${pct}%"></span>
+            </div>
+            <em>${day.label}</em>
+          </div>
+        `;
+      })
+      .join("");
+  }
+  const bestBlock = q(".activity-best");
+  if (bestBlock) {
+    bestBlock.setAttribute(
+      "aria-label",
+      bestDay.reps > 0 && bestDay.label
+        ? `Best day this week ${bestDay.label} with ${number.format(bestDay.reps)} reps`
+        : "Best day this week — no reps logged yet",
+    );
+  }
+  setText("#activity-active-crew", `${activeCrew} / ${participants.length}`);
+
+  const daysBlock = q("#activity-days-block");
+  if (daysBlock) {
+    daysBlock.setAttribute(
+      "aria-label",
+      `Day ${number.format(daysLogged)} of ${number.format(daysGoal)}`,
+    );
+  }
+
+  // Pulse-row mini-viz: AVG/BRO, PUSH-UPS REMAINING, ~BURN, PACE TARGET.
+  const avgFill = q("#activity-avg-fill");
+  const avgMark = q("#activity-avg-mark");
+  const avgPct = Math.min(100, Math.round((avgPerson / GOAL_PER_PERSON) * 100));
+  const avgPacePct = Math.min(100, Math.round((personalPace / GOAL_PER_PERSON) * 100));
+  if (avgFill) avgFill.style.width = `${avgPct}%`;
+  if (avgMark) avgMark.style.left = `${avgPacePct}%`;
+
+  const leftTicks = q("#activity-left-ticks");
+  if (leftTicks) {
+    const tickCount = 8;
+    const leftShare = Math.min(1, Math.max(0, eachLeft / GOAL_PER_PERSON));
+    const leftCount = Math.round(leftShare * tickCount);
+    const doneCount = tickCount - leftCount;
+    let ticksHtml = "";
+    for (let i = 0; i < tickCount; i += 1) {
+      ticksHtml += `<i class="${i < doneCount ? "is-done" : "is-left"}"></i>`;
+    }
+    leftTicks.innerHTML = ticksHtml;
+  }
+
+  const burnFill = q("#activity-burn-fill");
+  const burnViz = q("#activity-burn-viz");
+  const burnRef = Math.max(
+    1,
+    Math.round(participants.length * Math.max(personalPace, 1) * 0.39),
+  );
+  const burnPct = Math.min(100, Math.round((burned / burnRef) * 100));
+  if (burnFill) burnFill.style.width = `${burnPct}%`;
+  if (burnViz) burnViz.classList.toggle("is-hot", burnPct >= 70);
+
+  const paceFill = q("#activity-pace-fill");
+  const paceMark = q("#activity-pace-mark");
+  const paceViz = q("#activity-pace-viz");
+  const paceScale = Math.max(goal, groupTarget, total, 1);
+  const actualPct = Math.min(100, Math.round((total / paceScale) * 100));
+  const targetPctMini = Math.min(100, Math.round((groupTarget / paceScale) * 100));
+  if (paceFill) paceFill.style.width = `${actualPct}%`;
+  if (paceMark) paceMark.style.left = `${targetPctMini}%`;
+  if (paceViz) {
+    paceViz.classList.toggle("is-ahead", paceDelta > 0);
+    paceViz.classList.toggle("is-on", paceDelta === 0 && groupTarget > 0);
+  }
+
+  // Activity-page visual storytelling (gauges, mix bar, day ticks).
+  const fairDaily = GOAL_PER_PERSON / CHALLENGE_DAYS;
+  const challengeDone = goal > 0 && total >= goal;
+  const dailyPressure = challengeDone
+    ? 100
+    : dailyNeed <= 0
+      ? 0
+      : Math.min(100, Math.round((dailyNeed / Math.max(fairDaily, 1)) * 55));
+  const dailyGaugeArc = q("#activity-daily-gauge-arc");
+  if (dailyGaugeArc) dailyGaugeArc.style.strokeDasharray = `${dailyPressure} 100`;
+  const dailyGauge = q("#activity-daily-gauge");
+  if (dailyGauge) {
+    dailyGauge.classList.toggle("is-easy", challengeDone || (dailyNeed > 0 && dailyNeed <= fairDaily));
+    dailyGauge.classList.toggle(
+      "is-warm",
+      !challengeDone && dailyNeed > fairDaily && dailyNeed <= fairDaily * 1.5,
+    );
+    dailyGauge.classList.toggle("is-hot", !challengeDone && dailyNeed > fairDaily * 1.5);
+    dailyGauge.setAttribute(
+      "aria-label",
+      dailyNeed > 0
+        ? `Daily goal progress: ${number.format(dailyNeed)} reps per bro per day`
+        : challengeDone
+          ? "Challenge complete — daily goal met"
+          : "Daily goal progress pending",
+    );
+  }
+
+  const activeShare =
+    participants.length > 0 ? Math.round((activeCrew / participants.length) * 100) : 0;
+  const activeArc = q("#activity-active-arc");
+  if (activeArc) activeArc.style.strokeDasharray = `${activeShare} 100`;
+  const activeRing = q("#activity-active-ring");
+  if (activeRing) {
+    activeRing.setAttribute(
+      "aria-label",
+      `${activeCrew} of ${participants.length} active bros logging`,
+    );
+  }
+
+  const plankMinutes = Math.max(0, Math.round((categoryTotals.planks || 0) / 60));
+  const mixParts = {
+    pushups: Math.max(0, categoryTotals.pushups || 0),
+    squats: Math.max(0, categoryTotals.squats || 0),
+    planks: plankMinutes,
+    other: Math.max(0, categoryTotals.other || 0),
+  };
+  const mixSum = mixParts.pushups + mixParts.squats + mixParts.planks + mixParts.other;
+  const setMixSegment = (id, value) => {
+    const el = q(id);
+    if (!el) return;
+    el.style.flexGrow = String(mixSum > 0 ? value : 0);
+  };
+  setMixSegment("#activity-mix-pushups", mixParts.pushups);
+  setMixSegment("#activity-mix-squats", mixParts.squats);
+  setMixSegment("#activity-mix-planks", mixParts.planks);
+  setMixSegment("#activity-mix-other", mixParts.other);
+  const mixBar = q("#activity-mix-bar");
+  if (mixBar) {
+    mixBar.classList.toggle("is-empty", mixSum <= 0);
+    const mixLabel =
+      mixSum > 0
+        ? `Exercise mix: ${number.format(mixParts.pushups)} push-ups, ${number.format(mixParts.squats)} squats, ${number.format(mixParts.planks)} plank min, ${number.format(mixParts.other)} other`
+        : "Exercise mix empty";
+    mixBar.setAttribute("aria-label", mixLabel);
+  }
+
+  const sessionsTicks = q("#activity-sessions-ticks");
+  if (sessionsTicks) {
+    const tickCount = daysGoal;
+    const lit = Math.min(tickCount, daysLogged);
+    let ticksHtml = "";
+    for (let i = 0; i < tickCount; i += 1) {
+      ticksHtml += `<i class="${i < lit ? "is-on" : ""}"></i>`;
+    }
+    sessionsTicks.innerHTML = ticksHtml;
+  }
+
+}
+
+function leaderboardBoardHtml(ranking) {
+  let competitiveIndex = 0;
+  const rows = ranking
+    .map((person) => {
+      const rowState = person.honorary
+        ? " is-honorary"
+        : person.status === "out"
+          ? " is-out"
+          : person.status === "unknown"
+            ? " is-undecided"
+            : "";
+      const subtitle =
+        person.status === "out" && !person.honorary
+          ? "Out"
+          : person.status === "unknown" && !person.honorary
+            ? "Undecided"
+            : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${!person.honorary && person.primaryType === "other" ? " · alternative" : ""}`;
+      const rankHtml = person.honorary
+        ? `<span class="rank rank-honorary" title="Honorary · not counted in group total">★</span>`
+        : (() => {
+            const index = competitiveIndex;
+            competitiveIndex += 1;
+            const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
+            return `<span class="rank rank-${tone}">${index + 1}</span>`;
+          })();
+      const plankMinutes = (Number(person.metrics.planks) || 0) / 60;
+      const combinedTotal = leaderboardCombinedTotal(person);
+      const repsMag = compactMagnitudeAttr([
+        person.metrics.pushups,
+        person.metrics.squats,
+        plankMinutes,
+        person.metrics.other,
+        combinedTotal,
+      ]);
+      return `
+        <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
+          ${rankHtml}
+          <span class="avatar-wrap">
+            <img class="avatar" src="${person.image}" alt="" />
+            ${person.status === "out" ? '<span class="out-stamp">OUT</span>' : ""}
+            ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
+          </span>
+          <div>
+            <p class="leader-name">${escapeHtml(person.name)}</p>
+            <p class="leader-sub">${subtitle}</p>
+          </div>
+          <div class="leader-reps${repsMag}">
+            <span class="is-pushups${(Number(person.metrics.pushups) || 0) === 0 ? " is-zero" : ""}">
+              <strong>${number.format(person.metrics.pushups)}</strong>
+            </span>
+            <span class="is-squats${(Number(person.metrics.squats) || 0) === 0 ? " is-zero" : ""}">
+              <strong>${number.format(person.metrics.squats)}</strong>
+            </span>
+            <span class="is-planks${(Number(person.metrics.planks) || 0) === 0 ? " is-zero" : ""}">
+              <strong>${formatPlankMinutes(person.metrics.planks)}</strong>
+            </span>
+            <span class="is-other${(Number(person.metrics.other) || 0) === 0 ? " is-zero" : ""}">
+              <strong>${number.format(person.metrics.other)}</strong>
+            </span>
+            <span class="is-total${Math.round(combinedTotal) === 0 ? " is-zero" : ""}">
+              <strong>${number.format(Math.round(combinedTotal))}</strong>
+            </span>
+          </div>
+        </a>
+      `;
+    })
+    .join("");
+  return `${leaderboardPeriodHtml()}${leaderboardHeadHtml()}${rows}`;
+}
+
 function render({ skipScroll = false } = {}) {
   const ranking = totalsByPerson(leaderboardPeriod).sort(compareLeaderboardRows);
   const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
@@ -1978,7 +2893,7 @@ function render({ skipScroll = false } = {}) {
   const paceDelta = total - groupTarget;
   const participantIds = new Set(participants.map((person) => person.id));
   const categoryTotals = activities
-    .filter((activity) => participantIds.has(activity.personId))
+    .filter((activity) => participantIds.has(activity.personId) && activityInActiveChallenge(activity))
     .reduce(
     (totals, activity) => accumulateChallengeMetrics(totals, activity),
     { pushups: 0, squats: 0, planks: 0, other: 0 },
@@ -2053,12 +2968,23 @@ function render({ skipScroll = false } = {}) {
     goal > 0 && total >= goal
       ? "Challenge complete!"
       : groupTarget <= 0
-        ? "Oldchella awaits"
+        ? activeChallengeId() === "wrap-2026"
+          ? "January 1 awaits"
+          : "Oldchella awaits"
         : paceDelta === 0
           ? `On pace (${number.format(groupTarget)})`
           : paceDelta > 0
             ? `${number.format(paceDelta)} ahead of pace`
             : `${number.format(Math.abs(paceDelta))} behind pace`;
+  const homeGoalCard = $("#home-goal-card");
+  const homeGoalBody = $("#goal-card-body");
+  const homeGoalComplete = $("#goal-complete");
+  if (homeGoalCard && homeGoalBody && homeGoalComplete) {
+    const challengeOver = localDateValue() > challengeEndDateKey();
+    homeGoalCard.classList.toggle("is-complete", challengeOver);
+    homeGoalBody.hidden = challengeOver;
+    homeGoalComplete.hidden = !challengeOver;
+  }
   startFactRotation(
     buildRotatingFacts({
       total,
@@ -2071,354 +2997,98 @@ function render({ skipScroll = false } = {}) {
   );
   updateQuickAddButton();
 
-  let competitiveIndex = 0;
-  const leaderboardHtml = ranking
-    .map((person) => {
-      const rowState = person.honorary
-        ? " is-honorary"
-        : person.status === "out"
-          ? " is-out"
-          : person.status === "unknown"
-            ? " is-undecided"
-            : "";
-      const subtitle =
-        person.status === "out" && !person.honorary
-          ? "Out"
-          : person.status === "unknown" && !person.honorary
-            ? "Undecided"
-            : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${!person.honorary && person.primaryType === "other" ? " · alternative" : ""}`;
-      const rankHtml = person.honorary
-        ? `<span class="rank rank-honorary" title="Honorary · not counted in group total">★</span>`
-        : (() => {
-            const index = competitiveIndex;
-            competitiveIndex += 1;
-            const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
-            return `<span class="rank rank-${tone}">${index + 1}</span>`;
-          })();
-      const plankMinutes = (Number(person.metrics.planks) || 0) / 60;
-      const combinedTotal = leaderboardCombinedTotal(person);
-      const repsMag = compactMagnitudeAttr([
-        person.metrics.pushups,
-        person.metrics.squats,
-        plankMinutes,
-        person.metrics.other,
-        combinedTotal,
-      ]);
-      return `
-        <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
-          ${rankHtml}
-          <span class="avatar-wrap">
-            <img class="avatar" src="${person.image}" alt="" />
-            ${person.status === "out" ? '<span class="out-stamp">OUT</span>' : ""}
-            ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
-          </span>
-          <div>
-            <p class="leader-name">${escapeHtml(person.name)}</p>
-            <p class="leader-sub">${subtitle}</p>
-          </div>
-          <div class="leader-reps${repsMag}">
-            <span class="is-pushups${(Number(person.metrics.pushups) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(person.metrics.pushups)}</strong>
-            </span>
-            <span class="is-squats${(Number(person.metrics.squats) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(person.metrics.squats)}</strong>
-            </span>
-            <span class="is-planks${(Number(person.metrics.planks) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${formatPlankMinutes(person.metrics.planks)}</strong>
-            </span>
-            <span class="is-other${(Number(person.metrics.other) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(person.metrics.other)}</strong>
-            </span>
-            <span class="is-total${Math.round(combinedTotal) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(Math.round(combinedTotal))}</strong>
-            </span>
-          </div>
-        </a>
-      `;
-    })
-    .join("");
-  const leaderboardMarkup = `${leaderboardPeriodHtml()}${leaderboardHeadHtml()}${leaderboardHtml}`;
+  const leaderboardMarkup = leaderboardBoardHtml(ranking);
   $("#leaderboard").innerHTML = leaderboardMarkup;
   const leaderboardPageList = $("#leaderboard-page-list");
   if (leaderboardPageList) leaderboardPageList.innerHTML = leaderboardMarkup;
+  renderLeaderboardPodium(ranking);
 
   const recent = [...activities]
-    .filter((activity) => !isWeightActivity(activity))
+    .filter((activity) => activityInActiveChallenge(activity) && !isWeightActivity(activity))
     .sort(compareActivitiesRecentFirst);
   const emptyFeed = '<div class="empty-state">No reps yet. Be the first to get moving.</div>';
   $("#activity-list").innerHTML = recent.length
     ? recent.slice(0, 8).map(activityFeedItemHtml).join("")
     : emptyFeed;
-  const activityPageList = $("#activity-page-list");
-  if (activityPageList) {
-    activityPageList.innerHTML = recent.length
-      ? recent.map(activityFeedItemHtml).join("")
-      : emptyFeed;
-  }
   renderFeedPageActivityList();
+  renderFeedHistory();
   renderFeedClearedToday();
 
-  // Mirror key stats onto the Stats page.
-  const setText = (id, value) => {
-    const el = $(id);
-    if (el) el.textContent = value;
-  };
-  setText("#activity-group-total", number.format(total));
-  setText("#activity-goal-target", number.format(goal));
-  setText("#activity-pushups-total", number.format(categoryTotals.pushups));
-  setText("#activity-squats-total", number.format(categoryTotals.squats));
-  setText("#activity-planks-total", formatPlankMinutes(categoryTotals.planks));
-  setText("#activity-other-total", number.format(categoryTotals.other));
-  setText("#activity-crew-status-total", `${participants.length} / ${optedOut.length}`);
-  setText("#activity-remaining-total", number.format(Math.max(0, goal - total)));
-  setText("#activity-goal-percent-value", `${percent}%`);
-  const activityGoalPercent = $("#activity-goal-percent");
-  if (activityGoalPercent) activityGoalPercent.setAttribute("aria-label", `${percent}% done`);
-  applyGroupProgressBar({
-    track: $("#activity-progress-track"),
-    fill: $("#activity-progress-fill"),
-    honoraryFill: $("#activity-progress-honorary"),
-    target: $("#activity-progress-target"),
-    pace: $("#activity-progress-pace"),
-    breakdown: {
-      goal: $("#activity-progress-breakdown-goal"),
-      daily: $("#activity-progress-breakdown-daily"),
-      bros: $("#activity-progress-breakdown-bros"),
-      honorary: $("#activity-progress-breakdown-honorary"),
-    },
+  paintActivityStats($, {
+    participants,
+    honoraryMembers,
+    optedOut,
+    goal,
+    total,
+    honoraryTotal,
+    percent,
+    honoraryPercent,
+    groupTarget,
+    targetPercent,
+    paceDelta,
+    participantIds,
+    categoryTotals,
   });
-  const activityTrack = $("#activity-progress-track");
-  if (activityTrack) {
-    activityTrack.setAttribute("aria-valuenow", String(total));
-    activityTrack.setAttribute("aria-valuemax", String(goal));
-    activityTrack.setAttribute(
-      "aria-valuetext",
-      honoraryTotal > 0
-        ? `${number.format(total)} of ${number.format(goal)}, plus ${number.format(honoraryTotal)} honorary`
-        : `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
-    );
+  renderAllTimeStats();
+
+  const awardsEnded = $("#awards-ended-label");
+  if (awardsEnded) {
+    awardsEnded.textContent = `Ended ${formatChallengeDate(challengeEndDateKey(), { year: true })}`;
   }
-  setText(
-    "#activity-pace-copy",
-    goal > 0 && total >= goal
-      ? "Challenge complete!"
-      : groupTarget <= 0
-        ? "Oldchella awaits"
-        : paceDelta === 0
-          ? `On pace (${number.format(groupTarget)})`
-          : paceDelta > 0
-            ? `${number.format(paceDelta)} ahead of pace`
-            : `${number.format(Math.abs(paceDelta))} behind pace`,
-  );
-
-  const remaining = Math.max(0, goal - total);
-  // Inclusive of today for daily-need pacing (Day D … Day 100).
-  const daysLeft = challengeDaysLeftInclusive();
-  const avgPerson = participants.length ? Math.round(total / participants.length) : 0;
-  const dailyNeed =
-    daysLeft > 0 && participants.length
-      ? Math.ceil(remaining / participants.length / daysLeft)
-      : 0;
-  const eachLeft = participants.length ? Math.ceil(remaining / participants.length) : remaining;
-  const burned = estimateCategoryCalories(categoryTotals);
-  const desertMath = desertMathFromBurn(burned);
-  // Challenge calendar progress (same D as purple DAY); D + remaining days === 100.
-  const daysGoal = CHALLENGE_DAYS;
-  const daysLogged = currentChallengeDay();
-  const bestDay = bestGroupDay(participantIds);
-  const activeCrew = participants.filter((person) => person.sessions > 0).length;
-  const personalPace = onTargetReps();
-
-  setText("#activity-avg-person", number.format(avgPerson));
-  setText("#activity-daily-need", number.format(dailyNeed));
-  setText("#activity-pace-target", number.format(Math.round(groupTarget)));
-  setText("#activity-each-left", number.format(eachLeft));
-  setText("#activity-cal-burn", burned > 0 ? `~${number.format(burned)}` : "0");
-  setCompactMagnitude($("#activity-avg-person"), avgPerson);
-  setCompactMagnitude($("#activity-each-left"), eachLeft);
-  setCompactMagnitude($("#activity-cal-burn"), burned);
-  setCompactMagnitude($("#activity-pace-target"), Math.round(groupTarget));
-  setText("#activity-fun-beers", number.format(desertMath.beers));
-  setText("#activity-fun-pizza", number.format(desertMath.pizzaSlices));
-  setText("#activity-fun-cabs", number.format(desertMath.callACabs));
-  setText("#activity-fun-biscuits", number.format(desertMath.biscuits));
-  setText("#activity-fun-wings", number.format(desertMath.wings));
-  renderActivityPodium([...participants, ...honoraryMembers]);
-  const closeouts = groupCloseoutStats(participantIds);
-  setText("#activity-closeout-pushups", number.format(closeouts.pushupClosers));
-  setText("#activity-closeout-reps", number.format(closeouts.repClosers));
-  setText("#activity-closeout-trifectas", number.format(closeouts.trifectas));
-  setText("#activity-sessions-total", number.format(daysLogged));
-  setText("#activity-days-goal", number.format(daysGoal));
-  if (bestDay.reps > 0 && bestDay.label) {
-    setText("#activity-best-day", `${bestDay.label} · ${number.format(bestDay.reps)}`);
-    setText("#activity-best-day-label", "REPS");
-  } else {
-    setText("#activity-best-day", "—");
-    setText("#activity-best-day-label", "0 REPS");
-  }
-  const bestBars = $(".activity-best__bars");
-  if (bestBars) {
-    const maxReps = Math.max(1, ...bestDay.days.map((day) => day.reps));
-    bestBars.innerHTML = bestDay.days
-      .map((day) => {
-        const pct =
-          day.reps > 0 ? Math.max(10, Math.round((day.reps / maxReps) * 100)) : 10;
-        const peakClass = bestDay.date && day.date === bestDay.date ? " is-peak" : "";
-        return `
-          <div class="activity-best__col">
-            <div class="activity-best__bar-slot">
-              <span class="${peakClass.trim()}" style="--h: ${pct}%"></span>
-            </div>
-            <em>${day.label}</em>
-          </div>
-        `;
-      })
-      .join("");
-  }
-  const bestBlock = $(".activity-best");
-  if (bestBlock) {
-    bestBlock.setAttribute(
-      "aria-label",
-      bestDay.reps > 0 && bestDay.label
-        ? `Best day this week ${bestDay.label} with ${number.format(bestDay.reps)} reps`
-        : "Best day this week — no reps logged yet",
-    );
-  }
-  setText("#activity-active-crew", `${activeCrew} / ${participants.length}`);
-
-  const daysBlock = $("#activity-days-block");
-  if (daysBlock) {
-    daysBlock.setAttribute(
-      "aria-label",
-      `Day ${number.format(daysLogged)} of ${number.format(daysGoal)}`,
-    );
-  }
-
-  // Pulse-row mini-viz: AVG/BRO, PUSH-UPS REMAINING, ~BURN, PACE TARGET.
-  const avgFill = $("#activity-avg-fill");
-  const avgMark = $("#activity-avg-mark");
-  const avgPct = Math.min(100, Math.round((avgPerson / GOAL_PER_PERSON) * 100));
-  const avgPacePct = Math.min(100, Math.round((personalPace / GOAL_PER_PERSON) * 100));
-  if (avgFill) avgFill.style.width = `${avgPct}%`;
-  if (avgMark) avgMark.style.left = `${avgPacePct}%`;
-
-  const leftTicks = $("#activity-left-ticks");
-  if (leftTicks) {
-    const tickCount = 8;
-    const leftShare = Math.min(1, Math.max(0, eachLeft / GOAL_PER_PERSON));
-    const leftCount = Math.round(leftShare * tickCount);
-    const doneCount = tickCount - leftCount;
-    let ticksHtml = "";
-    for (let i = 0; i < tickCount; i += 1) {
-      ticksHtml += `<i class="${i < doneCount ? "is-done" : "is-left"}"></i>`;
-    }
-    leftTicks.innerHTML = ticksHtml;
-  }
-
-  const burnFill = $("#activity-burn-fill");
-  const burnViz = $("#activity-burn-viz");
-  const burnRef = Math.max(
-    1,
-    Math.round(participants.length * Math.max(personalPace, 1) * 0.39),
-  );
-  const burnPct = Math.min(100, Math.round((burned / burnRef) * 100));
-  if (burnFill) burnFill.style.width = `${burnPct}%`;
-  if (burnViz) burnViz.classList.toggle("is-hot", burnPct >= 70);
-
-  const paceFill = $("#activity-pace-fill");
-  const paceMark = $("#activity-pace-mark");
-  const paceViz = $("#activity-pace-viz");
-  const paceScale = Math.max(goal, groupTarget, total, 1);
-  const actualPct = Math.min(100, Math.round((total / paceScale) * 100));
-  const targetPctMini = Math.min(100, Math.round((groupTarget / paceScale) * 100));
-  if (paceFill) paceFill.style.width = `${actualPct}%`;
-  if (paceMark) paceMark.style.left = `${targetPctMini}%`;
-  if (paceViz) {
-    paceViz.classList.toggle("is-ahead", paceDelta > 0);
-    paceViz.classList.toggle("is-on", paceDelta === 0 && groupTarget > 0);
-  }
-
-  // Activity-page visual storytelling (gauges, mix bar, day ticks).
-  const fairDaily = GOAL_PER_PERSON / CHALLENGE_DAYS;
-  const challengeDone = goal > 0 && total >= goal;
-  const dailyPressure = challengeDone
-    ? 100
-    : dailyNeed <= 0
-      ? 0
-      : Math.min(100, Math.round((dailyNeed / Math.max(fairDaily, 1)) * 55));
-  const dailyGaugeArc = $("#activity-daily-gauge-arc");
-  if (dailyGaugeArc) dailyGaugeArc.style.strokeDasharray = `${dailyPressure} 100`;
-  const dailyGauge = $("#activity-daily-gauge");
-  if (dailyGauge) {
-    dailyGauge.classList.toggle("is-easy", challengeDone || (dailyNeed > 0 && dailyNeed <= fairDaily));
-    dailyGauge.classList.toggle(
-      "is-warm",
-      !challengeDone && dailyNeed > fairDaily && dailyNeed <= fairDaily * 1.5,
-    );
-    dailyGauge.classList.toggle("is-hot", !challengeDone && dailyNeed > fairDaily * 1.5);
-    dailyGauge.setAttribute(
-      "aria-label",
-      dailyNeed > 0
-        ? `Daily goal progress: ${number.format(dailyNeed)} reps per bro per day`
-        : challengeDone
-          ? "Challenge complete — daily goal met"
-          : "Daily goal progress pending",
-    );
-  }
-
-  const activeShare =
-    participants.length > 0 ? Math.round((activeCrew / participants.length) * 100) : 0;
-  const activeArc = $("#activity-active-arc");
-  if (activeArc) activeArc.style.strokeDasharray = `${activeShare} 100`;
-  const activeRing = $("#activity-active-ring");
-  if (activeRing) {
-    activeRing.setAttribute(
-      "aria-label",
-      `${activeCrew} of ${participants.length} active bros logging`,
-    );
-  }
-
-  const plankMinutes = Math.max(0, Math.round((categoryTotals.planks || 0) / 60));
-  const mixParts = {
-    pushups: Math.max(0, categoryTotals.pushups || 0),
-    squats: Math.max(0, categoryTotals.squats || 0),
-    planks: plankMinutes,
-    other: Math.max(0, categoryTotals.other || 0),
-  };
-  const mixSum = mixParts.pushups + mixParts.squats + mixParts.planks + mixParts.other;
-  const setMixSegment = (id, value) => {
-    const el = $(id);
-    if (!el) return;
-    el.style.flexGrow = String(mixSum > 0 ? value : 0);
-  };
-  setMixSegment("#activity-mix-pushups", mixParts.pushups);
-  setMixSegment("#activity-mix-squats", mixParts.squats);
-  setMixSegment("#activity-mix-planks", mixParts.planks);
-  setMixSegment("#activity-mix-other", mixParts.other);
-  const mixBar = $("#activity-mix-bar");
-  if (mixBar) {
-    mixBar.classList.toggle("is-empty", mixSum <= 0);
-    const mixLabel =
-      mixSum > 0
-        ? `Exercise mix: ${number.format(mixParts.pushups)} push-ups, ${number.format(mixParts.squats)} squats, ${number.format(mixParts.planks)} plank min, ${number.format(mixParts.other)} other`
-        : "Exercise mix empty";
-    mixBar.setAttribute("aria-label", mixLabel);
-  }
-
-  const sessionsTicks = $("#activity-sessions-ticks");
-  if (sessionsTicks) {
-    const tickCount = daysGoal;
-    const lit = Math.min(tickCount, daysLogged);
-    let ticksHtml = "";
-    for (let i = 0; i < tickCount; i += 1) {
-      ticksHtml += `<i class="${i < lit ? "is-on" : ""}"></i>`;
-    }
-    sessionsTicks.innerHTML = ticksHtml;
-  }
-
+  mirrorActivityStatsCard();
+  renderAwardsMiniPodiums([...participants, ...honoraryMembers]);
+  renderChallengesPage();
   renderPersonPage({ skipScroll });
   updateSiteMenu();
+}
+
+function mirrorActivityStatsCard() {
+  const source = document.querySelector("#activity-page .activity-stats-card");
+  const slot = document.querySelector("#awards-stats-mirror");
+  if (!source || !slot) return;
+  const clone = source.cloneNode(true);
+  const prefix = "awards-mirror-";
+  const ids = new Set();
+  clone.querySelectorAll("[id]").forEach((el) => {
+    ids.add(el.id);
+    el.id = prefix + el.id;
+  });
+  const attrs = ["aria-describedby", "aria-labelledby", "aria-controls"];
+  clone.querySelectorAll("*").forEach((el) => {
+    attrs.forEach((attr) => {
+      const value = el.getAttribute(attr);
+      if (!value) return;
+      el.setAttribute(
+        attr,
+        value
+          .split(/\s+/)
+          .map((id) => (ids.has(id) ? prefix + id : id))
+          .join(" "),
+      );
+    });
+  });
+  clone.querySelectorAll(".activity-viz__today-label").forEach((label) => {
+    if (label.textContent.trim() === "LEADERBOARDS") label.textContent = "Event Podiums";
+  });
+  clone.querySelectorAll(".activity-viz__today").forEach((el) => {
+    const label = el.querySelector(".activity-viz__today-label");
+    if (!label || label.textContent.trim() !== "TODAY") return;
+    const hero = el.nextElementSibling;
+    if (hero && hero.classList.contains("activity-viz__hero")) hero.remove();
+    el.remove();
+  });
+  clone.querySelector(".goal-days")?.remove();
+  clone.querySelector(".activity-closeouts")?.remove();
+  clone.querySelector(".activity-pulse")?.remove();
+  const awardsMeta = clone.querySelector(".goal-meta");
+  const awardsCompleted = clone.querySelector("[id$='activity-group-total']");
+  if (awardsMeta && awardsCompleted) {
+    awardsMeta.innerHTML = `<span><strong>${awardsCompleted.textContent.trim()}</strong> reps completed</span>`;
+  }
+  const more = clone.querySelector(".activity-podium__more");
+  more?.remove();
+  slot.replaceChildren(clone);
+  if (more) slot.appendChild(more);
 }
 
 function formatDate(value) {
@@ -2482,7 +3152,7 @@ function showWeightFormError(message) {
 function hideToastSoon(toast, ms = 2400) {
   window.clearTimeout(window.__toastHideTimer);
   window.__toastHideTimer = window.setTimeout(() => {
-    toast.classList.remove("is-visible", "is-success", "is-error");
+    toast.classList.remove("is-visible", "is-success", "is-error", "has-action");
   }, ms);
 }
 
@@ -2605,6 +3275,10 @@ async function loadSharedState() {
       const state = await fetchSharedState(url);
       activities = state.activities;
       participation = state.participation;
+      challengeParticipation =
+        state.challengeParticipation && typeof state.challengeParticipation === "object"
+          ? state.challengeParticipation
+          : {};
       liveStateFromRemote = url === LIVE_STATE_URL;
       apiAvailable = url === "/api/state";
       setConnectionState(true);
@@ -2621,13 +3295,16 @@ async function loadSharedState() {
 }
 
 async function apiRequest(path, method, body) {
+  const url = apiWriteUrl(path);
+  const crossOrigin = url.startsWith("http");
   let response;
   try {
-    response = await fetch(path, {
+    response = await fetch(url, {
       method,
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        // text/plain keeps the live-site write a simple request from the local preview.
+        "Content-Type": crossOrigin ? "text/plain" : "application/json",
       },
       body: JSON.stringify(body),
     });
@@ -2695,6 +3372,7 @@ function updateHomeWelcome() {
   const howto = $("#hero-howto");
   if (howto) howto.hidden = !isNew;
   if (isNew) setRulesCollapsed(false);
+  renderHomeChallengeDetail();
 }
 
 function rememberPin(personId, pin) {
@@ -2767,7 +3445,172 @@ function updateQuickAddButton() {
   }
 }
 
+function activeChallengeId() {
+  try {
+    const stored = knownChallengeId(localStorage.getItem(ACTIVE_CHALLENGE_KEY));
+    if (stored) return stored;
+  } catch {
+    /* ignore */
+  }
+  // No saved choice. Stay on Ripped-Chella until the user presses Enter.
+  return DEFAULT_CHALLENGE_ID;
+}
+
+/** Returning visitors never picked a challenge. Lock them to Ripped-Chella. */
+function pinExistingVisitorToRippedChella() {
+  try {
+    if (localStorage.getItem(ACTIVE_CHALLENGE_KEY)) return;
+    if (!isCookiedVisitor()) return;
+    localStorage.setItem(ACTIVE_CHALLENGE_KEY, DEFAULT_CHALLENGE_ID);
+  } catch {
+    /* ignore */
+  }
+}
+
+function activeSpotlightDate() {
+  return activeChallengeId() === "wrap-2026" ? LFG_BALL_DROP : OLDCHELLA_START;
+}
+
+function isLfgChallenge() {
+  return activeChallengeId() === "wrap-2026";
+}
+
+function challengeHomeDescription(lfg = isLfgChallenge()) {
+  return lfg
+    ? "Kick off 2027 in shape. Workout till the Times Square ball drops."
+    : "Getting fit for the Old-Chella";
+}
+
+function syncChallengeChrome() {
+  const lfg = isLfgChallenge();
+  const name = lfg ? "2027 LFG" : "Ripped-Chella";
+  document.title = name;
+  const homeLink = $("#ripped-home-link");
+  if (homeLink) homeLink.setAttribute("aria-label", `${name} home`);
+  const wordBase = document.querySelector(".ripped-wordmark .wordmark-base");
+  const wordAccent = document.querySelector(".ripped-wordmark .wordmark-accent");
+  if (wordBase) wordBase.textContent = lfg ? "2027" : "RIPPED-";
+  if (wordAccent) wordAccent.textContent = lfg ? "LFG" : "CHELLA";
+  const logoTop = document.querySelector("#hero-logo .logo-top");
+  const logoChella = document.querySelector("#hero-logo .logo-chella");
+  if (logoTop) logoTop.textContent = lfg ? "2027" : "Ripped-";
+  if (logoChella) logoChella.textContent = lfg ? "LFG" : "Chella";
+  const heroCopy = document.querySelector("#home-hero .hero-copy");
+  if (heroCopy) heroCopy.textContent = challengeHomeDescription(lfg);
+  const rulesHeading = $("#rules-heading");
+  if (rulesHeading) {
+    rulesHeading.textContent = "Challenge Details";
+  }
+  const rulesCopy = $("#rules-copy");
+  if (rulesCopy) {
+    rulesCopy.textContent = lfg
+      ? "Each day, clear all 3 goals. Push-ups count toward 7,000 across the 10 weeks. Nursing an injury? Log under Other (Misc Workout %, Misc Rep, or Misc Timed) and flip Injury Input — 100% misc workout, 100 misc rep, or 30 min each credit 100 push-ups."
+      : "Each day, clear all 3 goals. Push-ups are what really count towards the 10k. Nursing an injury? Log under Other (Misc Workout %, Misc Rep, or Misc Timed) and flip Injury Input — 100% misc workout, 100 misc rep, or 30 min each credit 100 push-ups.";
+  }
+  const menuLabel = $("#menu-challenge-label");
+  if (menuLabel) menuLabel.textContent = name;
+  const challengesMeta = $("#menu-challenges-meta");
+  if (challengesMeta) challengesMeta.textContent = `Current: ${name}`;
+  const awardsMeta = $("#menu-awards-meta");
+  if (awardsMeta) awardsMeta.textContent = lfg ? "Live on JAN 1" : "Live on OCT 22";
+  const leaderboardEyebrow = $("#leaderboard-eyebrow");
+  if (leaderboardEyebrow) leaderboardEyebrow.textContent = name;
+  const podiumLabel = document.querySelector(".crew-podium__label");
+  if (podiumLabel) podiumLabel.textContent = lfg ? "2027 LFG Podium" : "Ripped-Chella Podium";
+  const completeEyebrow = document.querySelector("#goal-complete .goal-complete__eyebrow");
+  const completeCopy = document.querySelector("#goal-complete .goal-complete__copy");
+  if (completeEyebrow) completeEyebrow.textContent = name;
+  if (completeCopy) {
+    completeCopy.textContent = lfg
+      ? "The 10 weeks are done. See how the crew finished."
+      : "The 100 days are done. See how the crew finished.";
+  }
+  const participation = $("#participation-copy");
+  if (participation) {
+    participation.textContent = `Choose whether you’re participating in the ${name} challenge.`;
+  }
+  const countdownLabel = $("#activity-countdown-label");
+  const countdown = $("#activity-days-countdown");
+  if (countdownLabel) countdownLabel.textContent = lfg ? "Count down to the ball drop" : "Count down to Old-Chella";
+  if (countdown) countdown.href = lfg ? "#/awards" : OLD_CHELLA_URL;
+}
+
+function applyActiveChallenge(id, { persist = false } = {}) {
+  const next = knownChallengeId(id) || DEFAULT_CHALLENGE_ID;
+  if (persist) {
+    try {
+      localStorage.setItem(ACTIVE_CHALLENGE_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  }
+  const windowSpec = CHALLENGE_WINDOWS[next];
+  CHALLENGE_START = windowSpec.start;
+  CHALLENGE_DAYS = windowSpec.days;
+  GOAL_PER_PERSON = windowSpec.goal;
+  const theme = RIPPED_CHALLENGE_DATA.challengeById(next)?.theme || "ripped";
+  document.documentElement.setAttribute("data-challenge", theme);
+  syncChallengeChrome();
+  applyTheme(getPreferredTheme());
+  if (typeof tickOldchellaCountdown === "function") tickOldchellaCountdown();
+}
+
+function enterChallenge(id) {
+  if (!knownChallengeId(id)) return;
+  closeSiteMenu();
+  applyActiveChallenge(id, { persist: true });
+  if ((window.location.hash || "#/") !== "#/") window.location.hash = "#/";
+  render();
+  updateSiteMenu();
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+function currentLoggingChallenge() {
+  return challengeCatalog().find((challenge) => challenge.id === activeChallengeId()) || null;
+}
+
+function challengeLoggingClosed(todayKey = localDateValue()) {
+  const challenge = currentLoggingChallenge();
+  if (!challenge) return false;
+  const phase = challengePhase(challenge, todayKey);
+  return phase === "complete" || phase === "upcoming";
+}
+
+function showClosedChallengeError() {
+  const challenge = currentLoggingChallenge();
+  const name = challenge?.name || "This challenge";
+  const upcoming = challenge && challengePhase(challenge, localDateValue()) === "upcoming";
+  const toast = $("#toast");
+  if (!toast) return;
+  toast.classList.remove("is-success");
+  toast.classList.add("is-error", "is-visible", "has-action");
+  toast.replaceChildren();
+  const text = document.createElement("p");
+  text.className = "toast__text";
+  text.textContent = upcoming
+    ? challenge?.id === "wrap-2026"
+      ? `${name} opens Oct 23 at 12:00:01 AM. Reps can’t be added yet.`
+      : `${name} opens ${formatChallengeDate(challenge.start, { year: true })}. Reps can’t be added yet.`
+    : challenge?.id === "wrap-2026"
+      ? `${name} ended at the Times Square ball drop. Reps can’t be added.`
+      : `${name} is closed. Reps can’t be added.`;
+  const link = document.createElement("a");
+  link.className = "toast__link";
+  link.href = "#/challenges";
+  link.textContent = "View Challenges";
+  toast.append(text, link);
+  hideToastSoon(toast, 8000);
+}
+
+function blockClosedChallengeAdd() {
+  if (!challengeLoggingClosed()) return false;
+  if (typeof dialog !== "undefined" && dialog?.open) closeLogDialog();
+  showClosedChallengeError();
+  return true;
+}
+
 function startAddRepsFlow() {
+  if (blockClosedChallengeAdd()) return;
   const personId = rememberedPersonId();
   if (personId) {
     window.location.hash = `/person/${personId}/add`;
@@ -2862,8 +3705,16 @@ function closePinPrompt(value = null) {
 }
 
 async function ensureApiAvailable() {
-  if (apiAvailable) return true;
-  return loadSharedState();
+  if (apiAvailable || liveStateFromRemote) return true;
+  await loadSharedState();
+  return apiAvailable || liveStateFromRemote;
+}
+
+function apiWriteUrl(path) {
+  if (!apiAvailable && liveStateFromRemote) {
+    return new URL(path, "https://rippedchella.vercel.app").href;
+  }
+  return path;
 }
 
 function parseLocalActivityFields(body) {
@@ -2933,8 +3784,9 @@ function demoRequest(path, method, personId, body) {
   }
   if (path === "/api/participation" && method === "PUT") {
     const status = body.status === "out" ? "out" : "in";
-    participation[personId] = status;
-    return { status };
+    const challengeId = knownChallengeId(body.challengeId) || DEFAULT_CHALLENGE_ID;
+    setLocalParticipation(personId, challengeId, status);
+    return { status, challengeId, participation, challengeParticipation };
   }
 
   if (path !== "/api/activities") {
@@ -2968,8 +3820,12 @@ function demoRequest(path, method, personId, body) {
       loggedAt: activities[index].loggedAt || new Date().toISOString(),
     };
     activities[index] = activity;
-    participation[personId] = "in";
-    return { activity, status: "in" };
+    const challengeId = challengeIdForDate(String(activity.createdAt).slice(0, 10));
+    if (challengeId) {
+      activity.challengeId = challengeId;
+      setLocalParticipation(personId, challengeId, "in");
+    }
+    return { activity, status: "in", challengeId, participation, challengeParticipation };
   }
 
   if (method === "POST") {
@@ -2980,8 +3836,12 @@ function demoRequest(path, method, personId, body) {
       ...fields,
       loggedAt: new Date().toISOString(),
     };
-    participation[personId] = "in";
-    return { activity, status: "in" };
+    const challengeId = challengeIdForDate(String(activity.createdAt).slice(0, 10));
+    if (challengeId) {
+      activity.challengeId = challengeId;
+      setLocalParticipation(personId, challengeId, "in");
+    }
+    return { activity, status: "in", challengeId, participation, challengeParticipation };
   }
 
   throw new ApiError("Unsupported demo action.", 400);
@@ -3033,6 +3893,9 @@ function parseAppRoute() {
   }
   if (path === "/recipes" || path.startsWith("/recipes/")) return { type: "recipes" };
   if (path === "/inspiration" || path.startsWith("/inspiration/")) return { type: "inspiration" };
+  if (path === "/challenges" || path.startsWith("/challenges/")) return { type: "challenges" };
+  if (path === "/all-time" || path.startsWith("/all-time/")) return { type: "all-time" };
+  if (path === "/awards" || path.startsWith("/awards/")) return { type: "awards" };
   return { type: "challenge" };
 }
 
@@ -3429,10 +4292,272 @@ async function loadSheetFeedPage(kind, { force = false } = {}) {
   }
 }
 
+function challengeWindowEnd(spec) {
+  const start = new Date(`${spec.start}T12:00:00`);
+  start.setDate(start.getDate() + spec.days - 1);
+  return localDateValue(start);
+}
+
+function challengeCatalog() {
+  const copy = {
+    "first-100": {
+      summary: "10k push-ups each, before Old-Chella.",
+      action: "Enter Ripped-Chella",
+    },
+    "wrap-2026": {
+      summary: "Opens Oct 23 and runs until the Times Square ball drops.",
+      action: "Enter 2027 LFG",
+    },
+  };
+  return [
+    ...RIPPED_CHALLENGE_DATA.CHALLENGES.map((challenge) => ({
+      id: challenge.id,
+      short: challenge.name,
+      name: challenge.name,
+      start: challenge.start,
+      end: RIPPED_CHALLENGE_DATA.challengeEndKey(challenge),
+      summary: copy[challenge.id]?.summary || "",
+      href: "#/",
+      action: copy[challenge.id]?.action || "",
+      theme: challenge.theme || "ripped",
+    })),
+    {
+      id: "kickoff-2027",
+      short: "Future challenge TBD",
+      name: "FUTURE CHALLENGE TBD",
+      start: "2027-01-01",
+      end: "2027-03-31",
+      summary: "TBD",
+      href: "",
+      action: "",
+    },
+  ];
+}
+
+function challengePhase(challenge, todayKey) {
+  if (challenge.id === "wrap-2026") {
+    const now = Date.now();
+    if (now < LFG_OPENS.getTime()) return "upcoming";
+    if (now >= LFG_BALL_DROP.getTime()) return "complete";
+    return "now";
+  }
+  if (todayKey < challenge.start) return "upcoming";
+  if (todayKey > challenge.end) return "complete";
+  return "now";
+}
+
+function formatChallengeDate(dateKey, { year = false } = {}) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: year ? "numeric" : undefined,
+  });
+}
+
+function formatChallengeRange(start, end) {
+  const startYear = start.slice(0, 4);
+  const endYear = end.slice(0, 4);
+  return `${formatChallengeDate(start, { year: startYear !== endYear })} – ${formatChallengeDate(end, { year: true })}`;
+}
+
+function inclusiveDateSpan(start, end) {
+  const startMs = new Date(`${start}T12:00:00`).getTime();
+  const endMs = new Date(`${end}T12:00:00`).getTime();
+  return Math.round((endMs - startMs) / 86400000) + 1;
+}
+
+function homeChallengeDetail(challenge, todayKey) {
+  const phase = challengePhase(challenge, todayKey);
+  const dayCount = inclusiveDateSpan(challenge.start, challenge.end);
+  if (challenge.id === "wrap-2026" && phase === "upcoming") {
+    return "Begins October 23rd";
+  }
+  if (phase === "now") {
+    return `${formatChallengeRange(challenge.start, challenge.end)} · Day ${currentChallengeDay()} of ${dayCount}`;
+  }
+  if (phase === "upcoming") {
+    return `Opens ${formatChallengeDate(challenge.start, { year: true })} · ${formatChallengeRange(challenge.start, challenge.end)}`;
+  }
+  if (phase === "complete") {
+    return `Closed ${formatChallengeDate(challenge.end, { year: true })}`;
+  }
+  return formatChallengeRange(challenge.start, challenge.end);
+}
+
+function renderHomeChallengeDetail() {
+  const current = challengeCatalog().find((challenge) => challenge.id === activeChallengeId());
+  const crewEyebrow = $("#crew-eyebrow");
+  if (crewEyebrow && current) crewEyebrow.textContent = current.name;
+  const detail = $("#home-challenge-detail");
+  if (!detail || !current) return;
+  detail.hidden = false;
+  detail.textContent = homeChallengeDetail(current, localDateValue());
+}
+
+function renderChallengesPage() {
+  const list = $("#challenge-list");
+  if (!list) return;
+  const todayKey = localDateValue();
+  const challenges = challengeCatalog();
+  let markedNext = false;
+  list.innerHTML = challenges
+    .map((challenge) => {
+      const phase = challengePhase(challenge, todayKey);
+      let eyebrow = "Later";
+      if (phase === "now") eyebrow = "In Progress";
+      else if (phase === "complete") eyebrow = "Done";
+      else if (!markedNext) {
+        eyebrow = "Up next";
+        markedNext = true;
+      }
+      const dayCount = inclusiveDateSpan(challenge.start, challenge.end);
+      const ownDay = Math.min(
+        dayCount,
+        Math.max(1, challengeDayIndexFor(challenge.start)),
+      );
+      const isTbd = challenge.id === "kickoff-2027";
+      const isLfg = challenge.id === "wrap-2026";
+      const detail = isTbd
+        ? "Stay tuned for details"
+        : isLfg && phase === "upcoming"
+          ? `${dayCount} days`
+          : phase === "now"
+            ? `Day ${ownDay} of ${dayCount}`
+            : phase === "complete"
+              ? `${dayCount} days · Closed ${formatChallengeDate(challenge.end, { year: true })}`
+              : phase === "upcoming"
+                ? `${dayCount} days · Opens ${formatChallengeDate(challenge.start, { year: true })}`
+                : `${dayCount} days`;
+      const when = isTbd
+        ? "Begins Jan 1, 2027"
+        : `${formatChallengeDate(challenge.start)} – ${formatChallengeDate(challenge.end)}`;
+      const summary = isTbd ? "" : challenge.summary;
+      const enterable = Boolean(challenge.action);
+      const action = enterable
+        ? `<button type="button" class="challenge-card__action">${escapeHtml(challenge.action)}</button>`
+        : phase === "now"
+          ? `<p class="challenge-card__wait">This block is live. Logging for it is not in the app yet.</p>`
+          : "";
+      const current = challenge.id === activeChallengeId() ? " is-current" : "";
+      return `
+        <article
+          class="challenge-card is-${phase}${current}"
+          data-challenge-id="${escapeHtml(challenge.id)}"
+          ${enterable ? `data-enter-challenge="${escapeHtml(challenge.id)}"` : ""}
+        >
+          <p class="challenge-card__status">${eyebrow}</p>
+          <h2>${escapeHtml(challenge.name)}</h2>
+          <p class="challenge-card__when">${escapeHtml(when)}</p>
+          <p class="challenge-card__meta">${escapeHtml(detail)}</p>
+          ${summary ? `<p class="challenge-card__summary">${escapeHtml(summary)}</p>` : ""}
+          ${action}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function syncTipsPanel(kind) {
+  const eats = kind === "recipes";
+  document.querySelectorAll("[data-tips-tab]").forEach((button) => {
+    const selected = button.dataset.tipsTab === (eats ? "recipes" : "inspiration");
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+  });
+  document.querySelectorAll("[data-tips-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.tipsPanel !== (eats ? "recipes" : "inspiration");
+  });
+}
+
+function personScopeSpec(scope = personStatsScope) {
+  if (scope === "all") {
+    const ripped = CHALLENGE_WINDOWS["first-100"];
+    return { id: "all", allTime: true, start: ripped.start, days: ripped.days, goal: ripped.goal, end: null };
+  }
+  const id = knownChallengeId(scope) || activeChallengeId();
+  const spec = CHALLENGE_WINDOWS[id];
+  return {
+    id,
+    allTime: false,
+    start: spec.start,
+    days: spec.days,
+    goal: spec.goal,
+    end: shiftLocalDateKey(spec.start, spec.days - 1),
+  };
+}
+
+function activityInPersonScope(activity, scope = personStatsScope) {
+  const spec = personScopeSpec(scope);
+  if (spec.allTime) return true;
+  return challengeIdForActivity(activity) === spec.id;
+}
+
+function syncPersonScopeToggle() {
+  const selectedId = personScopeSpec().id;
+  document.querySelectorAll("[data-person-scope]").forEach((button) => {
+    const selected = button.dataset.personScope === selectedId;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+  });
+}
+
+/** Card numbers for the active challenge, or every rep since Ripped-Chella started. */
+function personCardModel(personId, scope) {
+  const spec = personScopeSpec(scope);
+  const savedIgnore = statsIgnoreWindow;
+  const savedWindow = {
+    start: CHALLENGE_START,
+    days: CHALLENGE_DAYS,
+    goal: GOAL_PER_PERSON,
+  };
+  statsIgnoreWindow = spec.allTime;
+  CHALLENGE_START = spec.start;
+  CHALLENGE_DAYS = spec.days;
+  GOAL_PER_PERSON = spec.goal;
+  try {
+    const statusId = spec.allTime ? DEFAULT_CHALLENGE_ID : spec.id;
+    const cardStats = totalsByPerson("all", statusId).find((entry) => entry.id === personId);
+    const ranked = totalsByPerson("all", statusId)
+      .filter((entry) => !entry.honorary && (spec.allTime ? entry.total > 0 : entry.status === "in"))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    const scoped = activities.filter(
+      (activity) => activity.personId === personId && activityInActiveChallenge(activity),
+    );
+    const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
+    scoped.forEach((activity) => {
+      const exercise = activityExercise(activity);
+      if (exercise === "weight") return;
+      sessionDays[exercise].add(activity.createdAt.slice(0, 10));
+    });
+    const targetReps = onTargetReps();
+    const goal = GOAL_PER_PERSON;
+    const trifectaCount = trifectasByPersonId(new Set([personId])).get(personId) || 0;
+    return {
+      cardStats,
+      sessionDays,
+      targetReps,
+      goal,
+      trifectaCount,
+      rank: ranked.findIndex((entry) => entry.id === personId) + 1,
+      chartStart: spec.start,
+      chartDays: spec.allTime ? inclusiveDateSpan(spec.start, localDateValue()) : spec.days,
+    };
+  } finally {
+    statsIgnoreWindow = savedIgnore;
+    CHALLENGE_START = savedWindow.start;
+    CHALLENGE_DAYS = savedWindow.days;
+    GOAL_PER_PERSON = savedWindow.goal;
+  }
+}
+
 function renderResourcePages() {
   const route = parseAppRoute();
-  if (route.type === "recipes") loadSheetFeedPage("recipes");
-  if (route.type === "inspiration") loadSheetFeedPage("inspiration");
+  if (route.type === "recipes" || route.type === "inspiration") {
+    const kind = route.type === "recipes" ? "recipes" : "inspiration";
+    syncTipsPanel(kind);
+    loadSheetFeedPage(kind);
+  }
 }
 
 function showAppPage(pageId, { skipScroll = false } = {}) {
@@ -3442,7 +4567,8 @@ function showAppPage(pageId, { skipScroll = false } = {}) {
     activity: $("#activity-page"),
     feed: $("#feed-page"),
     leaderboard: $("#leaderboard-page"),
-    recipes: $("#recipes-page"),
+    awards: $("#awards-page"),
+    "all-time": $("#alltime-page"),
     inspiration: $("#inspiration-page"),
   };
   Object.entries(pages).forEach(([id, el]) => {
@@ -3459,6 +4585,7 @@ function showAppPage(pageId, { skipScroll = false } = {}) {
   if (pageId === "feed") {
     scrollFeedDayFilterToSelected({ smooth: false });
   }
+  syncResultsVeil();
 }
 
 function personCalendarDetailHtml(group, { person, isOwner, todayKey }) {
@@ -3735,10 +4862,17 @@ function applyPersonHistoryView(historyGroups, { person, isOwner, hasMoreHistory
 function renderPersonPage({ skipScroll = false } = {}) {
   const appRoute = parseAppRoute();
 
+  if (appRoute.type === "challenges") {
+    openChallengesInMenu();
+    const visible = document.querySelector(".app-shell > main:not([hidden])");
+    if (!visible) showAppPage("challenge", { skipScroll: true });
+    return;
+  }
+
   if (appRoute.type !== "person") {
     const returningHome = wasShowingPersonPage;
     wasShowingPersonPage = false;
-    showAppPage(appRoute.type, { skipScroll });
+    showAppPage(appRoute.type === "recipes" ? "inspiration" : appRoute.type, { skipScroll });
     updateQuickAddButton();
     renderResourcePages();
     if (returningHome && appRoute.type === "challenge" && !skipScroll) scrollHomeToTop();
@@ -3760,7 +4894,10 @@ function renderPersonPage({ skipScroll = false } = {}) {
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   const personStats = allStats.find((entry) => entry.id === personId);
   const rank = ranking.findIndex((entry) => entry.id === personId) + 1;
-  const history = activities.filter((activity) => activity.personId === personId);
+  const scopeSpec = personScopeSpec(personStatsScope);
+  const history = activities.filter(
+    (activity) => activity.personId === personId && activityInPersonScope(activity, personStatsScope),
+  );
   const historyByDate = history.reduce((groups, activity) => {
     const date = new Date(activity.createdAt);
     const dateKey = [
@@ -3780,22 +4917,6 @@ function renderPersonPage({ skipScroll = false } = {}) {
   historyByDate.forEach((group) => {
     group.activities.sort(compareActivitiesRecentFirst);
   });
-  const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
-  history.forEach((activity) => {
-    const exercise = activityExercise(activity);
-    if (exercise === "weight") return;
-    sessionDays[exercise].add(activity.createdAt.slice(0, 10));
-  });
-  const averageFor = (exercise, value) => {
-    const days = sessionDays[exercise].size;
-    return days ? value / days : 0;
-  };
-  const personalPercent = Math.round((personStats.total / GOAL_PER_PERSON) * 100);
-  const targetReps = onTargetReps();
-  const targetPercent = Math.round((targetReps / GOAL_PER_PERSON) * 100);
-  const paceDelta = personStats.total - targetReps;
-  const plankMinutes = personStats.metrics.planks / 60;
-  const workoutUnits = otherWorkoutUnits(personStats.metrics.other);
   const latestWeight =
     history
       .filter((activity) => isWeightActivity(activity))
@@ -3818,92 +4939,135 @@ function renderPersonPage({ skipScroll = false } = {}) {
   rankTile.hidden = !rankLabel;
   rankTile.classList.toggle("is-out", personStats.status === "out");
   rankTile.classList.toggle("is-honorary", Boolean(person.honorary));
+  paintPersonRankMedal(rankTile, person.honorary || personStats.status === "out" ? 0 : rank);
   $("#person-name").innerHTML = formatPersonHeadline(person.name);
   const streakDays = personStreakDays(person.id);
-  const trifectaCount = trifectasByPersonId(new Set([person.id])).get(person.id) || 0;
   const personSummary = $("#person-summary");
+  const streakSummaryHtml = () => {
+    const dayLabel = streakDays === 1 ? "day" : "days";
+    return `<span class="person-summary-label">STREAK:</span> ${number.format(streakDays)} ${dayLabel} in a row`;
+  };
   if (personStats.status === "out" && !person.honorary) {
     personSummary.textContent =
       `${person.name.split(" ")[0]} is sitting this challenge out.`;
   } else {
-    const dayLabel = streakDays === 1 ? "day" : "days";
-    const trifectaLabel = trifectaCount === 1 ? "Trifecta" : "Trifectas";
-    personSummary.innerHTML =
-      `<span class="person-summary-label">STREAKS</span> ${streakDays} ${dayLabel}` +
-      `<span class="person-summary-sep" aria-hidden="true">|</span>` +
-      `${number.format(trifectaCount)} ${trifectaLabel}`;
+    personSummary.innerHTML = streakSummaryHtml();
   }
+  const lfgNotLive = isLfgChallenge() && !lfgIsLive();
   const participationCard = $("#participation-card");
-  participationCard.hidden = !isOwner || person.honorary || history.length > 0;
+  const viewedStatus = scopeSpec.allTime
+    ? personStats.status
+    : personStatus(person.id, scopeSpec.id);
+  const challengeName = RIPPED_CHALLENGE_DATA.challengeById(scopeSpec.id)?.name || "Ripped-Chella";
+  const participationCopy = $("#participation-copy");
+  if (participationCopy && !scopeSpec.allTime) {
+    participationCopy.textContent = `Choose whether you’re participating in the ${challengeName} challenge.`;
+  }
+  participationCard.hidden = scopeSpec.allTime || !isOwner || person.honorary || history.length > 0;
   participationCard.querySelectorAll("[data-participation]").forEach((button) => {
-    button.classList.toggle("is-selected", button.dataset.participation === personStats.status);
+    button.classList.toggle("is-selected", button.dataset.participation === viewedStatus);
   });
   const showProgress = person.honorary || history.length > 0 || personStats.status === "in";
   const todayKey = localDateValue();
-  $(".personal-total").hidden = !showProgress;
+  const card = personCardModel(personId, personStatsScope);
+  const viewingActiveChallenge = !scopeSpec.allTime && scopeSpec.id === activeChallengeId();
+  if (!(viewingActiveChallenge && personStats.status === "out" && !person.honorary)) {
+    personSummary.innerHTML = streakSummaryHtml();
+    if (card.rank && !person.honorary) {
+      rankBadge.textContent = formatRankLabel(card.rank);
+      rankTile.hidden = false;
+      rankTile.classList.remove("is-out");
+      paintPersonRankMedal(rankTile, card.rank);
+    } else if (!scopeSpec.allTime && viewedStatus !== "in" && !person.honorary) {
+      rankTile.hidden = true;
+    }
+  }
+  const cardStats = card.cardStats;
+  const cardMetrics = cardStats?.metrics || { pushups: 0, squats: 0, planks: 0, other: 0 };
+  const cardHasReps = cardMetrics.pushups + cardMetrics.squats + cardMetrics.planks + cardMetrics.other > 0;
+  const showCard = scopeSpec.allTime || Boolean(knownChallengeId(scopeSpec.id)) || showProgress || cardHasReps;
+  const scopeToggle = document.querySelector(".person-scope-toggle");
+  if (scopeToggle) scopeToggle.hidden = false;
+  syncPersonScopeToggle();
+  $(".personal-total").hidden = !showCard;
   $(".personal-total")?.classList.toggle("is-honorary", Boolean(person.honorary));
-  $("#person-log-button").hidden = !isOwner || personStats.status !== "in";
+  $("#person-log-button").hidden = !isOwner || personStats.status !== "in" || lfgNotLive;
   const quickAdd = $("#person-quick-add");
-  if (quickAdd) quickAdd.hidden = !isOwner || personStats.status !== "in";
-  $("#person-total").textContent = number.format(personStats.total);
+  if (quickAdd) quickAdd.hidden = !isOwner || personStats.status !== "in" || lfgNotLive;
+  const cardTotal = cardStats?.total || 0;
+  const cardGoal = card.goal || GOAL_PER_PERSON;
+  const cardPercent = Math.round((cardTotal / cardGoal) * 100);
+  const cardTargetPercent = Math.round((card.targetReps / cardGoal) * 100);
+  const cardPaceDelta = cardTotal - card.targetReps;
+  const cardPlankMinutes = cardMetrics.planks / 60;
+  const cardWorkoutUnits = otherWorkoutUnits(cardMetrics.other);
+  const cardAverageFor = (exercise, value) => {
+    const days = card.sessionDays[exercise]?.size || 0;
+    return days ? value / days : 0;
+  };
+  $("#person-total").textContent = number.format(cardTotal);
   $("#person-total-label").textContent = person.honorary
-    ? personStats.primaryType === "other"
+    ? cardStats?.primaryType === "other"
       ? "HONORARY ALTERNATIVE"
       : "HONORARY PUSH-UPS"
-    : personStats.primaryType === "other"
+    : cardStats?.primaryType === "other"
       ? "TOTAL ALTERNATIVE WORK"
       : "PUSH-UP COUNT";
-  $("#person-progress-fill").style.width = `${Math.min(100, personalPercent)}%`;
-  $("#person-progress-target").style.width = `${Math.min(100, targetPercent)}%`;
-  $("#person-progress-pace").style.left = `${Math.min(100, targetPercent)}%`;
-  $(".personal-progress-track").setAttribute("aria-valuenow", String(personStats.total));
+  $("#person-progress-fill").style.width = `${Math.min(100, cardPercent)}%`;
+  $("#person-progress-target").style.width = `${Math.min(100, cardTargetPercent)}%`;
+  $("#person-progress-pace").style.left = `${Math.min(100, cardTargetPercent)}%`;
+  $(".personal-progress-track").setAttribute("aria-valuemax", String(cardGoal));
+  $(".personal-progress-track").setAttribute("aria-valuenow", String(cardTotal));
   $(".personal-progress-track").setAttribute(
     "aria-valuetext",
-    `${number.format(personStats.total)} of ${number.format(GOAL_PER_PERSON)}, on-target pace ${number.format(targetReps)}`,
+    `${number.format(cardTotal)} of ${number.format(cardGoal)}, on-target pace ${number.format(card.targetReps)}`,
   );
   $("#person-pace-copy").textContent =
-    targetReps <= 0
+    card.targetReps <= 0
       ? ""
-      : paceDelta === 0
+      : cardPaceDelta === 0
         ? "on track"
-        : paceDelta > 0
-          ? `${number.format(paceDelta)} ahead of pace`
-          : `${number.format(Math.abs(paceDelta))} behind pace`;
-  $("#person-pushups-total").textContent = number.format(personStats.metrics.pushups);
-  $("#person-squats-total").textContent = number.format(personStats.metrics.squats);
+        : cardPaceDelta > 0
+          ? `${number.format(cardPaceDelta)} ahead of pace`
+          : `${number.format(Math.abs(cardPaceDelta))} behind pace`;
+  $("#person-pushups-total").textContent = number.format(cardMetrics.pushups);
+  $("#person-squats-total").textContent = number.format(cardMetrics.squats);
   $("#person-plank-minutes").innerHTML =
-    `${durationNumber.format(plankMinutes)}<span class="stat-unit">MIN</span>`;
-  $("#person-other-days").textContent = workoutNumber.format(workoutUnits);
-  const combinedTotal = Math.round(leaderboardCombinedTotal(personStats));
-  $("#person-trifectas-total").textContent = number.format(trifectaCount);
+    `${durationNumber.format(cardPlankMinutes)}<span class="stat-unit">MIN</span>`;
+  $("#person-other-days").textContent = workoutNumber.format(cardWorkoutUnits);
+  const combinedTotal = Math.round(leaderboardCombinedTotal(cardStats));
+  $("#person-trifectas-total").textContent = number.format(card.trifectaCount);
   $("#person-combined-total").textContent = number.format(combinedTotal);
   setCompactMagnitude(
     $(".personal-breakdown"),
-    personStats.metrics.pushups,
-    personStats.metrics.squats,
-    plankMinutes,
-    workoutUnits,
-    trifectaCount,
+    cardMetrics.pushups,
+    cardMetrics.squats,
+    cardPlankMinutes,
+    cardWorkoutUnits,
+    card.trifectaCount,
     combinedTotal,
   );
   $("#person-avg-pushups").textContent = number.format(
-    Math.round(averageFor("pushups", personStats.metrics.pushups)),
+    Math.round(cardAverageFor("pushups", cardMetrics.pushups)),
   );
   $("#person-avg-squats").textContent = number.format(
-    Math.round(averageFor("squats", personStats.metrics.squats)),
+    Math.round(cardAverageFor("squats", cardMetrics.squats)),
   );
   $("#person-avg-planks").textContent = durationNumber.format(
-    averageFor("planks", plankMinutes),
+    cardAverageFor("planks", cardPlankMinutes),
   );
-  renderPersonDayChart(personId);
+  renderPersonDayChart(personId, {
+    start: card.chartStart,
+    days: card.chartDays,
+    allTime: personStatsScope === "all",
+  });
   const weightSection = $("#person-weight-section");
   const updateWeightBtn = $("#person-update-weight");
   const canTrackWeight = isOwner && personStats.status === "in";
-  const showWeightSection =
-    showProgress && (Boolean(latestWeight) || canTrackWeight);
+  const showWeightSection = showProgress && (Boolean(latestWeight) || canTrackWeight);
   if (weightSection) weightSection.hidden = !showWeightSection;
   if (updateWeightBtn) {
-    updateWeightBtn.hidden = !canTrackWeight;
+    updateWeightBtn.hidden = !canTrackWeight || lfgNotLive;
     updateWeightBtn.textContent = latestWeight ? "Update weight" : "Add weight";
   }
   if (showWeightSection) {
@@ -3911,11 +5075,11 @@ function renderPersonPage({ skipScroll = false } = {}) {
   }
   $("#person-button-name").textContent = person.name.split(" ")[0].toUpperCase();
   const historyGroups = [...historyByDate];
-  if (showProgress) {
+  if (showProgress && !scopeSpec.allTime) {
     const presentKeys = new Set(historyGroups.map((group) => group.dateKey));
     // Fill every challenge day through today so empty days still show + Add Reps.
-    for (let day = 1; day <= CHALLENGE_DAYS; day += 1) {
-      const dateKey = challengeDayDateKey(day);
+    for (let day = 1; day <= scopeSpec.days; day += 1) {
+      const dateKey = shiftLocalDateKey(scopeSpec.start, day - 1);
       if (dateKey > todayKey) break;
       if (presentKeys.has(dateKey)) continue;
       historyGroups.push({
@@ -3947,6 +5111,8 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const visibleCondensedHistory = condensedHistoryGroups.slice(0, personHistoryVisibleDays);
   const hasMoreHistoryDays = condensedHistoryGroups.length > personHistoryVisibleDays;
   const visibleHistoryGroups = [...recentHistoryGroups, ...visibleCondensedHistory];
+  const historySection = $("#person-history-section");
+  if (historySection) historySection.hidden = false;
   const historyMoreBtn = $("#person-history-more");
   if (historyMoreBtn) historyMoreBtn.hidden = !hasMoreHistoryDays;
   $("#person-activity-list").innerHTML = visibleHistoryGroups.length
@@ -4119,7 +5285,9 @@ function renderPersonPage({ skipScroll = false } = {}) {
         if (timelineStarted) parts.push("</div>");
         return parts.join("");
       })()
-    : '<div class="empty-state">No sessions yet. Time to get on the board.</div>';
+    : !scopeSpec.allTime && scopeSpec.start > todayKey
+      ? `<div class="empty-state">Begins ${scopeSpec.id === "wrap-2026" ? "October 23rd" : formatChallengeDate(scopeSpec.start, { year: true })}.</div>`
+      : '<div class="empty-state">No sessions yet. Time to get on the board.</div>';
   bindCondensedHistoryToggles();
 
   applyPersonHistoryView(historyGroups, { person, isOwner, hasMoreHistoryDays });
@@ -4828,14 +5996,21 @@ function paintWeightChart(chartOrSelector, personId) {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svg.setAttribute("aria-hidden", "true");
   svg.innerHTML = axis + series;
-  empty.textContent = "Add starting weight";
+  const scopeSpec = personScopeSpec();
+  const startsLater = !scopeSpec.allTime && scopeSpec.start > localDateValue();
+  const emptyCopy = startsLater
+    ? `Begins ${scopeSpec.id === "wrap-2026" ? "October 23rd" : formatChallengeDate(scopeSpec.start, { year: true })}.`
+    : "Add starting weight";
+  empty.textContent = emptyCopy;
   empty.hidden = points.length > 0;
   chart.classList.toggle("is-empty", points.length === 0);
   chart.setAttribute(
     "aria-label",
     points.length
       ? `Body weight across ${CHALLENGE_DAYS} challenge days`
-      : `Body weight across ${CHALLENGE_DAYS} challenge days, add starting weight`,
+      : startsLater
+        ? `Body weight across ${CHALLENGE_DAYS} challenge days, ${emptyCopy}`
+        : `Body weight across ${CHALLENGE_DAYS} challenge days, add starting weight`,
   );
 }
 
@@ -5069,6 +6244,7 @@ function showWeightCard({ reps = null, activityDate = null, editing = false, hid
 
 function openLogDialog(personId, options = {}) {
   if (!personId) return;
+  if (blockClosedChallengeAdd()) return;
   const activity = options.activity || null;
   const activityDate = options.activityDate || localDateValue();
   editingActivityId = activity?.id || null;
@@ -5093,7 +6269,9 @@ function openLogDialog(personId, options = {}) {
   $("#activity-date-input").max = localDateValue();
   $("#activity-date-input").value = activityDate;
   syncWorkoutDateToggle();
-  $("#log-dialog-title").textContent = activity ? "+ Edit reps" : "+ Add reps";
+  const challengeName =
+    currentLoggingChallenge()?.name || "Ripped-Chella";
+  $("#log-dialog-title").textContent = activity ? "+ Edit reps" : `+ ${challengeName} Reps`;
 
   const isWeight = activity && activityExercise(activity) === "weight";
 
@@ -5248,7 +6426,10 @@ function closeLogDialog() {
 
 function personDayActivities(personId, dateKey) {
   return activities.filter(
-    (activity) => activity.personId === personId && activityDateKey(activity) === dateKey,
+    (activity) =>
+      activity.personId === personId &&
+      activityDateKey(activity) === dateKey &&
+      activityInActiveChallenge(activity),
   );
 }
 
@@ -5675,7 +6856,9 @@ function drawCoverImage(ctx, image, x, y, size) {
 
 function personChallengeStats(personId) {
   const personStats = totalsByPerson().find((entry) => entry.id === personId);
-  const history = activities.filter((activity) => activity.personId === personId);
+  const history = activities.filter(
+    (activity) => activity.personId === personId && activityInActiveChallenge(activity),
+  );
   const sessionDays = { pushups: new Set(), squats: new Set(), planks: new Set(), other: new Set() };
   history.forEach((activity) => {
     const exercise = activityExercise(activity);
@@ -6193,6 +7376,7 @@ async function quickAddActivity(button) {
   const reps = Number(button.dataset.quickReps);
   const otherActivity = button.dataset.quickOther || "";
   if (!exercise || !Number.isInteger(reps) || reps < 1) return;
+  if (blockClosedChallengeAdd()) return;
   const activityDate = localDateValue();
   const quickLimitError = amountLimitError(
     reps,
@@ -6225,7 +7409,7 @@ async function quickAddActivity(button) {
       return;
     }
     activities.push(result.activity);
-    participation[personId] = result.status;
+    applyParticipationResult(personId, result);
     const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
     queuePulseReveal(personId, activityDate, boardCleared, previousPercents, {
       showPulseLfg: boardCleared,
@@ -6415,6 +7599,50 @@ document.addEventListener("click", async (event) => {
   await shareDailyGoalMetToWhatsApp(personId, activityDate, shareButton);
 });
 
+function openFeedHistoryDatePicker() {
+  const input = $("#feed-history-date");
+  if (!input) return;
+  const range = feedHistoryRange();
+  input.min = range?.start || CHALLENGE_START;
+  input.max = range?.last || yesterdayDateValue();
+  if (typeof input.showPicker !== "function") return;
+  try {
+    const result = input.showPicker();
+    if (result && typeof result.then === "function") result.catch(() => {});
+  } catch {
+    // The native control still opens from the tap when showPicker is blocked.
+  }
+}
+
+$("#feed-history-toggle")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-history-preset]");
+  if (!button) return;
+  if (button.dataset.historyPreset === "yesterday") setFeedHistoryDate(yesterdayDateValue());
+});
+$("#feed-history-date")?.addEventListener("change", () => {
+  setFeedHistoryDate($("#feed-history-date")?.value || yesterdayDateValue());
+});
+$("#feed-history-date")?.addEventListener("click", () => {
+  openFeedHistoryDatePicker();
+});
+
+$("#feed-cleared-info")?.addEventListener("click", () => {
+  const button = $("#feed-cleared-info");
+  const note = $("#feed-cleared-note");
+  if (!button || !note) return;
+  const open = button.getAttribute("aria-expanded") === "true";
+  button.setAttribute("aria-expanded", open ? "false" : "true");
+  note.hidden = open;
+});
+document.addEventListener("click", (event) => {
+  const button = $("#feed-cleared-info");
+  const note = $("#feed-cleared-note");
+  if (!button || button.getAttribute("aria-expanded") !== "true") return;
+  if (event.target.closest("#feed-cleared-info") || event.target.closest("#feed-cleared-note")) return;
+  button.setAttribute("aria-expanded", "false");
+  if (note) note.hidden = true;
+});
+
 $("#feed-day-filter")?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-feed-date]");
   if (!button) return;
@@ -6509,6 +7737,7 @@ $("#weight-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const personId = personInput.value;
   clearWeightFormError();
+  if (blockClosedChallengeAdd()) return;
   if (personId !== currentPersonId()) {
     closeLogDialog();
     showToast("Open a participant profile before adding activity.");
@@ -6543,7 +7772,7 @@ $("#weight-form")?.addEventListener("submit", async (event) => {
       const index = activities.findIndex((entry) => entry.id === activityId);
       if (index >= 0) activities[index] = result.activity;
       else activities.push(result.activity);
-      participation[personId] = result.status;
+      applyParticipationResult(personId, result);
       await finishWeightSave(personId, reps);
       return;
     }
@@ -6558,7 +7787,7 @@ $("#weight-form")?.addEventListener("submit", async (event) => {
     });
     if (!result) return;
     activities.push(result.activity);
-    participation[personId] = result.status;
+    applyParticipationResult(personId, result);
     await finishWeightSave(personId, reps);
   } catch (error) {
     showToast(error.message || "Weight could not be saved.");
@@ -6816,6 +8045,7 @@ $("#log-form").addEventListener("submit", async (event) => {
   const form = event.currentTarget;
   const personId = personInput.value;
   clearLogFormError();
+  if (blockClosedChallengeAdd()) return;
   if (personId !== currentPersonId()) {
     closeLogDialog();
     showToast("Open a participant profile before adding activity.");
@@ -6857,7 +8087,7 @@ $("#log-form").addEventListener("submit", async (event) => {
       const index = activities.findIndex((entry) => entry.id === activityId);
       if (index >= 0) activities[index] = result.activity;
       else activities.push(result.activity);
-      participation[personId] = result.status;
+      applyParticipationResult(personId, result);
       editingActivityId = null;
       const boardCleared = !wasComplete && personDayComplete(personId, activityDate);
       queuePulseReveal(personId, activityDate, boardCleared, previousPercents);
@@ -6956,7 +8186,7 @@ $("#log-form").addEventListener("submit", async (event) => {
           return;
         }
         activities.push(result.activity);
-        participation[personId] = result.status;
+        applyParticipationResult(personId, result);
         added.push({
           ...entry,
           otherType: result.activity.otherType || entry.otherType || "",
@@ -7068,11 +8298,13 @@ document.querySelectorAll("[data-participation]").forEach((button) => {
     if (!personId || !isPersonPageOwner(personId)) return;
     button.disabled = true;
     try {
+      const scope = personScopeSpec();
       const result = await protectedRequest("/api/participation", "PUT", personId, {
         status: button.dataset.participation,
+        challengeId: scope.allTime ? DEFAULT_CHALLENGE_ID : scope.id,
       });
       if (!result) return;
-      participation[personId] = result.status;
+      applyParticipationResult(personId, result);
       render();
       showToast(result.status === "in" ? "You’re in. Let’s move." : "Status set to out.");
     } catch (error) {
@@ -7174,13 +8406,19 @@ function onLeaderboardClick(event) {
 }
 $("#leaderboard").addEventListener("click", onLeaderboardClick);
 $("#leaderboard-page-list")?.addEventListener("click", onLeaderboardClick);
+$("#alltime-leaderboard")?.addEventListener("click", onLeaderboardClick);
+
+/** Unclamped 1-based day index from a challenge start (may be <1 or past the end). */
+function challengeDayIndexFor(start, asOf = new Date()) {
+  const todayKey = localDateValue(asOf);
+  const startDate = new Date(`${start}T12:00:00`);
+  const today = new Date(`${todayKey}T12:00:00`);
+  return Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1;
+}
 
 /** Unclamped 1-based day index from CHALLENGE_START (may be <1 or >CHALLENGE_DAYS). */
 function challengeDayIndex(asOf = new Date()) {
-  const todayKey = localDateValue(asOf);
-  const start = new Date(`${CHALLENGE_START}T12:00:00`);
-  const today = new Date(`${todayKey}T12:00:00`);
-  return Math.floor((today.getTime() - start.getTime()) / 86400000) + 1;
+  return challengeDayIndexFor(CHALLENGE_START, asOf);
 }
 
 /** 1-based challenge day (Day 1 = CHALLENGE_START), clamped to 1…CHALLENGE_DAYS. */
@@ -7205,15 +8443,79 @@ function challengeDaysLeftInclusive(asOf = new Date()) {
   return CHALLENGE_DAYS - day + 1;
 }
 
+function resultsAreLive(now = Date.now()) {
+  return now >= activeSpotlightDate().getTime();
+}
+
+function lfgIsLive(now = Date.now()) {
+  return now >= LFG_OPENS.getTime();
+}
+
+const LFG_PREVIEW_PAGE_IDS = [
+  "dashboard-page",
+  "activity-page",
+  "feed-page",
+  "leaderboard-page",
+  "person-page",
+];
+
+function lfgPreviewPage() {
+  return LFG_PREVIEW_PAGE_IDS
+    .map((id) => document.getElementById(id))
+    .find((page) => page && !page.hidden) || null;
+}
+
+/** "results" seals Final Results. "lfg" seals 2027 LFG until it opens. */
+function resultsVeilMode(now = Date.now()) {
+  const awards = $("#awards-page");
+  if (awards && !awards.hidden && !resultsAreLive(now)) return "results";
+  if (isLfgChallenge() && !lfgIsLive(now) && lfgPreviewPage()) {
+    const personPage = $("#person-page");
+    if (personPage && !personPage.hidden) return "";
+    return "lfg";
+  }
+  return "";
+}
+
+let resultsVeilDismissed = false;
+
+function dismissResultsVeil() {
+  resultsVeilDismissed = true;
+  syncResultsVeil();
+}
+
+function syncResultsVeil() {
+  const veil = $("#results-veil");
+  if (!veil) return;
+  const mode = resultsVeilDismissed ? "" : resultsVeilMode();
+  veil.hidden = mode === "";
+  const lead = $("#results-veil-lead");
+  if (lead) lead.textContent = mode === "lfg" ? "2027 LFG live in" : "Results live in";
+  const copy = $("#results-veil-copy");
+  if (copy) copy.textContent = challengeHomeDescription();
+  const awards = $("#awards-page");
+  if (awards) awards.toggleAttribute("inert", mode === "results");
+  LFG_PREVIEW_PAGE_IDS.forEach((id) => {
+    const page = document.getElementById(id);
+    if (page) page.toggleAttribute("inert", mode === "lfg" && !page.hidden);
+  });
+  document.body.classList.toggle("is-results-sealed", mode === "results");
+  document.body.classList.toggle("is-lfg-sealed", mode === "lfg");
+}
+
 function tickOldchellaCountdown() {
   // Match https://goingtoliveforever.com/ exactly: floor(ms) + 3-digit days.
-  const diff = Math.max(0, OLDCHELLA_START.getTime() - Date.now());
+  const diff = Math.max(0, activeSpotlightDate().getTime() - Date.now());
   const dayCount = Math.floor(diff / 86400000);
   const hourCount = Math.floor((diff % 86400000) / 3600000);
   const minCount = Math.floor((diff % 3600000) / 60000);
   const secCount = Math.floor((diff % 60000) / 1000);
+  const rawChallengeDay = challengeDayIndex();
   const challengeDay = currentChallengeDay();
-  const challengeDayLabel = `Day ${challengeDay} of ${CHALLENGE_DAYS}`;
+  const challengeDayText = rawChallengeDay < 1 ? "—" : String(challengeDay);
+  const challengeDayLabel = rawChallengeDay < 1
+    ? `Opens ${formatChallengeDate(CHALLENGE_START, { year: true })}`
+    : `Day ${challengeDay} of ${CHALLENGE_DAYS}`;
   const daysToGo = challengeDaysLeftInclusive();
   const navDaysCount = $("#nav-days-left-count");
   const navDaysLabel = $("#nav-days-left-label");
@@ -7228,16 +8530,19 @@ function tickOldchellaCountdown() {
   }
   const goalDays = $("#goal-days-value");
   if (goalDays) {
-    goalDays.textContent = String(challengeDay);
+    goalDays.textContent = challengeDayText;
     const goalDaysWrap = $("#goal-days");
     if (goalDaysWrap) {
       goalDaysWrap.setAttribute("aria-label", challengeDayLabel);
     }
   }
-  const activityGoalDays = $("#activity-goal-days-value");
-  if (activityGoalDays) {
-    activityGoalDays.textContent = String(challengeDay);
-    const activityGoalDaysWrap = $("#activity-goal-days");
+  for (const activityGoalDays of [
+    $("#activity-goal-days-value"),
+    $("#awards-mirror-activity-goal-days-value"),
+  ]) {
+    if (!activityGoalDays) continue;
+    activityGoalDays.textContent = challengeDayText;
+    const activityGoalDaysWrap = activityGoalDays.closest(".goal-days");
     if (activityGoalDaysWrap) {
       activityGoalDaysWrap.setAttribute("aria-label", challengeDayLabel);
     }
@@ -7255,10 +8560,38 @@ function tickOldchellaCountdown() {
     if (activityCountdown) {
       activityCountdown.setAttribute(
         "aria-label",
-        `${dayCount} days, ${hourCount} hours, ${minCount} minutes, ${secCount} seconds until Old-Chella — open Going To Live Forever`,
+        isLfgChallenge()
+          ? `${dayCount} days, ${hourCount} hours, ${minCount} minutes, ${secCount} seconds until the Times Square ball drop`
+          : `${dayCount} days, ${hourCount} hours, ${minCount} minutes, ${secCount} seconds until Old-Chella — open Going To Live Forever`,
       );
     }
   }
+  const veilMode = resultsVeilMode();
+  const veilTarget = veilMode === "lfg" ? LFG_OPENS.getTime() : activeSpotlightDate().getTime();
+  const veilDiff = Math.max(0, veilTarget - Date.now());
+  const veilDayCount = Math.floor(veilDiff / 86400000);
+  const veilHourCount = Math.floor((veilDiff % 86400000) / 3600000);
+  const veilMinCount = Math.floor((veilDiff % 3600000) / 60000);
+  const veilSecCount = Math.floor((veilDiff % 60000) / 1000);
+  const resultsDays = $("#results-cd-days");
+  const resultsHours = $("#results-cd-hours");
+  const resultsMins = $("#results-cd-mins");
+  const resultsSecs = $("#results-cd-secs");
+  if (resultsDays && resultsHours && resultsMins && resultsSecs) {
+    resultsDays.textContent = String(veilDayCount);
+    resultsHours.textContent = String(veilHourCount).padStart(2, "0");
+    resultsMins.textContent = String(veilMinCount).padStart(2, "0");
+    resultsSecs.textContent = String(veilSecCount).padStart(2, "0");
+    const resultsClock = $("#results-veil .activity-days-countdown__clock");
+    if (resultsClock) {
+      const veilLead = veilMode === "lfg" ? "2027 LFG live in" : "Results live in";
+      resultsClock.setAttribute(
+        "aria-label",
+        `${veilLead} ${veilDayCount} days, ${veilHourCount} hours, ${veilMinCount} minutes, ${veilSecCount} seconds`,
+      );
+    }
+  }
+  syncResultsVeil();
 }
 
 function scrollHomeToTop() {
@@ -7270,17 +8603,14 @@ function updateSiteMenu() {
   updateHomeWelcome();
   const myHome = $("#menu-my-home");
   const myHomeLabel = $("#menu-my-home-label");
-  const myHomeMeta = $("#menu-my-home-meta");
   const myHomeAvatar = $("#menu-my-home-avatar");
   const knownId = menuHomePersonId();
   if (myHome) {
     if (knownId) {
       const person = getPerson(knownId);
-      const first = person?.name?.split(" ")[0] || "Your";
-      myHome.hidden = false;
       myHome.href = `#/person/${knownId}`;
-      if (myHomeLabel) myHomeLabel.textContent = first;
-      if (myHomeMeta) myHomeMeta.textContent = "Your Progress";
+      if (myHomeLabel) myHomeLabel.textContent = person?.name || "My Progress";
+      myHome.hidden = false;
       if (myHomeAvatar) {
         myHomeAvatar.src = person?.image || "";
         myHomeAvatar.alt = "";
@@ -7299,11 +8629,13 @@ function updateSiteMenu() {
   let activeKey = "";
   if (viewingOwnPerson) activeKey = "home";
   else if (route.type === "challenge") activeKey = "challenge";
+  else if (route.type === "challenges") activeKey = "challenges";
+  else if (route.type === "all-time") activeKey = "all-time";
   else if (route.type === "leaderboard") activeKey = "leaderboard";
+  else if (route.type === "awards") activeKey = "awards";
   else if (route.type === "activity") activeKey = "activity";
   else if (route.type === "feed") activeKey = "feed";
-  else if (route.type === "recipes") activeKey = "recipes";
-  else if (route.type === "inspiration") activeKey = "inspiration";
+  else if (route.type === "recipes" || route.type === "inspiration") activeKey = "inspiration";
 
   document.querySelectorAll(".site-menu-link[data-menu-route]").forEach((link) => {
     if (link.dataset.menuRoute === activeKey) link.setAttribute("aria-current", "page");
@@ -7336,12 +8668,52 @@ function clearSiteMenuCloseWait() {
   }
 }
 
+let menuReturnHash = "#/";
+
+function setMenuChallengesOpen(open) {
+  const panel = document.querySelector(".site-menu-panel");
+  if (panel) panel.classList.toggle("is-challenges", open);
+  document.querySelectorAll(".site-menu-view").forEach((view, index) => {
+    const active = open ? index === 1 : index === 0;
+    view.toggleAttribute("inert", !active);
+    view.setAttribute("aria-hidden", active ? "false" : "true");
+  });
+  const trigger = document.querySelector("[data-open-menu-challenges]");
+  if (trigger) trigger.setAttribute("aria-expanded", open ? "true" : "false");
+  const stage = document.querySelector(".site-menu-stage");
+  if (stage) stage.scrollLeft = 0;
+  if (!open) return;
+  renderChallengesPage();
+  const view = $("#menu-challenges-view");
+  if (view) {
+    view.scrollTop = 0;
+    view.scrollLeft = 0;
+  }
+}
+
+function openChallengesInMenu() {
+  setMenuChallengesOpen(true);
+  openSiteMenu();
+}
+
+function resetMenuChallengesView() {
+  setMenuChallengesOpen(false);
+}
+
+function releaseChallengesHash() {
+  const hash = window.location.hash || "#/";
+  if (hash !== "#/challenges" && !hash.startsWith("#/challenges/")) return;
+  const next = menuReturnHash.startsWith("#/challenges") ? "#/" : menuReturnHash;
+  history.replaceState(null, "", `${location.pathname}${location.search}${next || "#/"}`);
+}
+
 function finishSiteMenuClose() {
   const menu = $("#site-menu");
   clearSiteMenuCloseWait();
   siteMenuClosing = false;
   if (!menu || document.body.classList.contains("is-menu-open")) return;
   menu.hidden = true;
+  resetMenuChallengesView();
 }
 
 function onSiteMenuCloseTransitionEnd(event) {
@@ -7360,11 +8732,13 @@ function setSiteMenuToggleExpanded(expanded) {
 function closeSiteMenu() {
   const menu = $("#site-menu");
   if (!menu || menu.hidden) return;
+  releaseChallengesHash();
   if (!document.body.classList.contains("is-menu-open")) {
     if (siteMenuClosing) return;
     clearSiteMenuCloseWait();
     siteMenuClosing = false;
     menu.hidden = true;
+    resetMenuChallengesView();
     return;
   }
 
@@ -7375,6 +8749,7 @@ function closeSiteMenu() {
     clearSiteMenuCloseWait();
     siteMenuClosing = false;
     menu.hidden = true;
+    resetMenuChallengesView();
     return;
   }
 
@@ -7412,7 +8787,15 @@ function openSiteMenu() {
   }
 
   const panel = menu.querySelector(".site-menu-panel");
-  if (panel) window.setTimeout(() => panel.focus(), 0);
+  if (panel) {
+    window.setTimeout(() => {
+      if (panel.classList.contains("is-challenges")) {
+        document.querySelector("[data-menu-back]")?.focus({ preventScroll: true });
+      } else {
+        panel.focus({ preventScroll: true });
+      }
+    }, 0);
+  }
 }
 
 function toggleSiteMenu() {
@@ -7422,8 +8805,50 @@ function toggleSiteMenu() {
 
 $("#nav-menu-toggle")?.addEventListener("click", () => toggleSiteMenu());
 $("#site-menu-backdrop")?.addEventListener("click", () => closeSiteMenu());
+$("#results-veil-peek")?.addEventListener("click", () => dismissResultsVeil());
+document.querySelector(".person-scope-toggle")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-person-scope]");
+  if (!button) return;
+  const next = button.dataset.personScope;
+  if (next !== "all" && !knownChallengeId(next)) return;
+  if (next === personStatsScope) return;
+  personStatsScope = next;
+  renderPersonPage({ skipScroll: true });
+});
+
+document.querySelector(".tips-source-toggle")?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-tips-tab]");
+  if (!button) return;
+  const next = button.dataset.tipsTab === "recipes" ? "#/recipes" : "#/inspiration";
+  if ((window.location.hash || "#/") !== next) window.location.hash = next;
+});
+
+function openMyProgress(event) {
+  personStatsScope = "all";
+  const route = parseAppRoute();
+  const id = menuHomePersonId();
+  const alreadyHere = route.type === "person" && id && route.personId === id;
+  if (event && alreadyHere) event.preventDefault();
+  closeSiteMenu();
+  if (alreadyHere) renderPersonPage({ skipScroll: true });
+}
+
 $("#site-menu")?.addEventListener("click", (event) => {
-  const link = event.target.closest(".site-menu-link");
+  if (event.target.closest("[data-open-menu-challenges]")) {
+    event.preventDefault();
+    openChallengesInMenu();
+    return;
+  }
+  if (event.target.closest("[data-menu-back]")) {
+    event.preventDefault();
+    setMenuChallengesOpen(false);
+    document.querySelector("[data-open-menu-challenges]")?.focus({ preventScroll: true });
+    return;
+  }
+  if (event.target.closest("#menu-my-home")) {
+    openMyProgress(event);
+  }
+  const link = event.target.closest(".site-menu-link, .site-menu-oldchella");
   if (!link) return;
   closeSiteMenu();
 });
@@ -7438,7 +8863,18 @@ $("#ripped-home-link").addEventListener("click", (event) => {
   scrollHomeToTop();
 });
 
-window.addEventListener("hashchange", () => {
+window.addEventListener("hashchange", (event) => {
+  if (parseAppRoute().type === "challenges") {
+    try {
+      const oldHash = new URL(event.oldURL).hash || "#/";
+      if (!oldHash.startsWith("#/challenges")) menuReturnHash = oldHash;
+    } catch {
+      /* ignore */
+    }
+    renderPersonPage({ skipScroll: true });
+    updateSiteMenu();
+    return;
+  }
   closeSiteMenu();
   renderPersonPage();
   updateSiteMenu();
@@ -7476,7 +8912,7 @@ function setRulesCollapsed(collapsed) {
   if (isNewVisitor()) collapsed = false;
   card.classList.toggle("is-collapsed", collapsed);
   toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
-  toggle.setAttribute("aria-label", collapsed ? "Expand our goal" : "Collapse our goal");
+  toggle.setAttribute("aria-label", collapsed ? "Expand challenge details" : "Collapse challenge details");
   if (isNewVisitor()) {
     toggle.removeAttribute("aria-label");
     return;
@@ -7499,9 +8935,27 @@ function initRulesCollapse() {
 }
 
 updateExerciseFields();
+pinExistingVisitorToRippedChella();
+applyActiveChallenge(activeChallengeId());
 initThemeToggle();
 initRulesCollapse();
 render();
+function challengeCardFromEvent(event) {
+  return event.target.closest?.("[data-enter-challenge]") || null;
+}
+
+$("#challenge-list")?.addEventListener("click", (event) => {
+  const card = challengeCardFromEvent(event);
+  if (!card) return;
+  enterChallenge(card.dataset.enterChallenge);
+});
+$("#challenge-list")?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const card = challengeCardFromEvent(event);
+  if (!card) return;
+  event.preventDefault();
+  enterChallenge(card.dataset.enterChallenge);
+});
 loadSharedState();
 tickOldchellaCountdown();
 window.setInterval(tickOldchellaCountdown, 1000);
