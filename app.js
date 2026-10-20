@@ -318,20 +318,65 @@ let challengeParticipation = {};
 let apiAvailable = false;
 let liveStateFromRemote = false;
 let pendingPulseReveal = null;
-let leaderboardSortKey = "total";
+let leaderboardSortKey = "pushups";
 let leaderboardSortDir = "desc";
 let leaderboardPeriod = "all";
+let leaderboardFilterOpen = false;
+const leaderboardFilters = {
+  honorary: true,
+  pushups: true,
+  squats: false,
+  planks: false,
+  other: false,
+  trifectas: true,
+  total: false,
+};
+const LEADERBOARD_COLUMN_KEYS = ["pushups", "squats", "planks", "other", "trifectas", "total"];
+const leaderboardDesktopMedia = window.matchMedia("(min-width: 700px)");
+let leaderboardColumnsCustomized = false;
+
+function applyLeaderboardColumnDefaults() {
+  const showAll = leaderboardDesktopMedia.matches;
+  for (const key of LEADERBOARD_COLUMN_KEYS) {
+    leaderboardFilters[key] = showAll || key === "pushups" || key === "trifectas";
+  }
+}
+
+applyLeaderboardColumnDefaults();
+leaderboardDesktopMedia.addEventListener("change", () => {
+  if (leaderboardColumnsCustomized) return;
+  render({ skipScroll: true });
+});
+window.addEventListener("resize", () => {
+  if (leaderboardColumnsCustomized) return;
+  const showAll = leaderboardDesktopMedia.matches;
+  const matchesDefault = LEADERBOARD_COLUMN_KEYS.every(
+    (key) => leaderboardFilters[key] === (showAll || key === "pushups" || key === "trifectas"),
+  );
+  if (matchesDefault) return;
+  render({ skipScroll: true });
+});
 const LEADERBOARD_PERIOD_OPTIONS = [
   { value: "all", label: "All time" },
   { value: "month", label: "Month" },
   { value: "week", label: "Week" },
 ];
+const LEADERBOARD_FILTER_OPTIONS = [
+  { key: "honorary", label: "Honorary members" },
+  { key: "pushups", label: "Push-ups" },
+  { key: "squats", label: "Squats" },
+  { key: "planks", label: "Planks" },
+  { key: "other", label: "Other" },
+  { key: "trifectas", label: "Trifectas" },
+  { key: "total", label: "Total" },
+];
 const LEADERBOARD_SORT_COLUMNS = [
-  { key: "pushups", label: "P-UPS" },
-  { key: "squats", label: "SQTS" },
-  { key: "planks", label: "PLNK" },
-  { key: "other", label: "OTHER" },
-  { key: "combined", label: "TOTAL" },
+  { key: "pushups", label: "P-UPS", filter: "pushups" },
+  { key: "squats", label: "SQTS", filter: "squats" },
+  { key: "planks", label: "PLNK", filter: "planks" },
+  { key: "other", label: "OTHER", filter: "other" },
+  { key: "trifectas", label: "TRI", filter: "trifectas" },
+  { key: "combined", label: "TOTAL", filter: "total" },
 ];
 try {
   participation = JSON.parse(localStorage.getItem(STATUS_KEY) || "{}");
@@ -1912,6 +1957,22 @@ function activityInActiveChallenge(activity) {
   return challengeIdForActivity(activity) === id;
 }
 
+function countTrifectas(personActivities) {
+  const byDay = new Map();
+  for (const activity of personActivities) {
+    if (isWeightActivity(activity)) continue;
+    const dateKey = activityDateKey(activity);
+    const bucket = byDay.get(dateKey);
+    if (bucket) bucket.push(activity);
+    else byDay.set(dateKey, [activity]);
+  }
+  let count = 0;
+  for (const dayActivities of byDay.values()) {
+    if (dayGoalProgress(dayActivities).complete) count += 1;
+  }
+  return count;
+}
+
 function activityInLeaderboardPeriod(activity, period = "all") {
   if (!activityInActiveChallenge(activity)) return false;
   if (period === "all") return true;
@@ -1951,6 +2012,7 @@ function totalsByPerson(period = "all", challengeId) {
           .map((activity) => activityDateKey(activity)),
       ).size,
       pushupSessions: pushupActivities.length,
+      trifectas: countTrifectas(personActivities),
     };
   });
 }
@@ -2254,6 +2316,7 @@ function leaderboardCombinedTotal(person) {
 function leaderboardSortValue(person, key) {
   if (key === "total") return Number(person.total) || 0;
   if (key === "combined") return leaderboardCombinedTotal(person);
+  if (key === "trifectas") return Number(person.trifectas) || 0;
   return Number(person.metrics?.[key]) || 0;
 }
 
@@ -2271,7 +2334,16 @@ function leaderboardPodiumScore(person) {
   if (leaderboardSortKey === "planks") return formatPlankMinutes(person.metrics?.planks);
   if (leaderboardSortKey === "combined") return number.format(Math.round(leaderboardCombinedTotal(person)));
   if (leaderboardSortKey === "total") return number.format(Math.round(Number(person.total) || 0));
+  if (leaderboardSortKey === "trifectas") return number.format(Number(person.trifectas) || 0);
   return number.format(Math.round(Number(person.metrics?.[leaderboardSortKey]) || 0));
+}
+
+function leaderboardVisibleColumns() {
+  return LEADERBOARD_SORT_COLUMNS.filter((column) => leaderboardFilters[column.filter] !== false);
+}
+
+function leaderboardFiltersActive() {
+  return LEADERBOARD_FILTER_OPTIONS.some((option) => !leaderboardFilters[option.key]);
 }
 
 function renderLeaderboardPodium(ranking) {
@@ -2310,20 +2382,33 @@ function leaderboardPeriodHtml() {
     const active = leaderboardPeriod === value;
     return `<button type="button" class="leader-period${active ? " is-selected" : ""}" data-leader-period="${value}" aria-pressed="${active ? "true" : "false"}">${label}</button>`;
   }).join("");
-  return `<div class="leader-period-toggle" role="group" aria-label="Leaderboard time range">${buttons}</div>`;
+  const options = LEADERBOARD_FILTER_OPTIONS.map(({ key, label }) => {
+    const on = leaderboardFilters[key] !== false;
+    return `<button type="button" data-leader-filter="${key}" aria-pressed="${on ? "true" : "false"}"><span>${label}</span><span class="leader-filter-state">${on ? "On" : "Off"}</span></button>`;
+  }).join("");
+  return `<div class="leader-period-bar">
+    <div class="leader-period-toggle" role="group" aria-label="Leaderboard time range">${buttons}</div>
+    <button type="button" class="leader-filter-toggle${leaderboardFiltersActive() ? " is-filtering" : ""}" data-leader-filter-toggle aria-expanded="${leaderboardFilterOpen ? "true" : "false"}" aria-label="Filter leaderboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 5h16l-6.2 7.2V19l-3.6 2v-8.8L4 5z"/>
+      </svg>
+    </button>
+    <div class="leader-filter-menu" role="group" aria-label="Show or hide leaderboard rows and columns"${leaderboardFilterOpen ? "" : " hidden"}>${options}</div>
+  </div>`;
 }
 
 function leaderboardHeadHtml() {
-  const cols = LEADERBOARD_SORT_COLUMNS.map(({ key, label }) => {
+  const cols = leaderboardVisibleColumns().map(({ key, label }) => {
     const active = leaderboardSortKey === key;
     const sortState = active ? leaderboardSortDir : "none";
     return `<button type="button" class="leader-sort${active ? " is-active" : ""}" data-leader-sort="${key}" aria-pressed="${active ? "true" : "false"}" aria-sort="${sortState}" title="Sort by ${label}">${label}</button>`;
   }).join("");
+  const colStyle = `--leader-cols:${Math.max(leaderboardVisibleColumns().length, 1)}`;
   return `<div class="leader-head">
     <span class="leader-head-spacer" aria-hidden="true"></span>
     <span class="leader-head-spacer" aria-hidden="true"></span>
     <span class="leader-head-spacer" aria-hidden="true"></span>
-    <div class="leader-reps">${cols}</div>
+    <div class="leader-reps" style="${colStyle}">${cols}</div>
   </div>`;
 }
 
@@ -2805,9 +2890,37 @@ function paintActivityStats(q, {
 
 }
 
+function leaderboardColumnHtml(person, column) {
+  if (column.key === "pushups") {
+    const value = Number(person.metrics.pushups) || 0;
+    return `<span class="is-pushups${value === 0 ? " is-zero" : ""}"><strong>${number.format(value)}</strong></span>`;
+  }
+  if (column.key === "squats") {
+    const value = Number(person.metrics.squats) || 0;
+    return `<span class="is-squats${value === 0 ? " is-zero" : ""}"><strong>${number.format(value)}</strong></span>`;
+  }
+  if (column.key === "planks") {
+    const value = Number(person.metrics.planks) || 0;
+    return `<span class="is-planks${value === 0 ? " is-zero" : ""}"><strong>${formatPlankMinutes(value)}</strong></span>`;
+  }
+  if (column.key === "other") {
+    const value = Number(person.metrics.other) || 0;
+    return `<span class="is-other${value === 0 ? " is-zero" : ""}"><strong>${number.format(value)}</strong></span>`;
+  }
+  if (column.key === "trifectas") {
+    const value = Number(person.trifectas) || 0;
+    return `<span class="is-trifectas${value === 0 ? " is-zero" : ""}"><strong>${number.format(value)}</strong></span>`;
+  }
+  const combinedTotal = leaderboardCombinedTotal(person);
+  return `<span class="is-total${Math.round(combinedTotal) === 0 ? " is-zero" : ""}"><strong>${number.format(Math.round(combinedTotal))}</strong></span>`;
+}
+
 function leaderboardBoardHtml(ranking) {
+  const columns = leaderboardVisibleColumns();
+  const colStyle = `--leader-cols:${Math.max(columns.length, 1)}`;
   let competitiveIndex = 0;
   const rows = ranking
+    .filter((person) => leaderboardFilters.honorary || !person.honorary)
     .map((person) => {
       const rowState = person.honorary
         ? " is-honorary"
@@ -2830,15 +2943,12 @@ function leaderboardBoardHtml(ranking) {
             const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
             return `<span class="rank rank-${tone}">${index + 1}</span>`;
           })();
-      const plankMinutes = (Number(person.metrics.planks) || 0) / 60;
-      const combinedTotal = leaderboardCombinedTotal(person);
-      const repsMag = compactMagnitudeAttr([
-        person.metrics.pushups,
-        person.metrics.squats,
-        plankMinutes,
-        person.metrics.other,
-        combinedTotal,
-      ]);
+      const repsMag = compactMagnitudeAttr(columns.map((column) => (
+        column.key === "planks"
+          ? (Number(person.metrics?.planks) || 0) / 60
+          : leaderboardSortValue(person, column.key)
+      )));
+      const reps = columns.map((column) => leaderboardColumnHtml(person, column)).join("");
       return `
         <a class="leader-row${rowState}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s progress">
           ${rankHtml}
@@ -2851,23 +2961,7 @@ function leaderboardBoardHtml(ranking) {
             <p class="leader-name">${escapeHtml(person.name)}</p>
             <p class="leader-sub">${subtitle}</p>
           </div>
-          <div class="leader-reps${repsMag}">
-            <span class="is-pushups${(Number(person.metrics.pushups) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(person.metrics.pushups)}</strong>
-            </span>
-            <span class="is-squats${(Number(person.metrics.squats) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(person.metrics.squats)}</strong>
-            </span>
-            <span class="is-planks${(Number(person.metrics.planks) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${formatPlankMinutes(person.metrics.planks)}</strong>
-            </span>
-            <span class="is-other${(Number(person.metrics.other) || 0) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(person.metrics.other)}</strong>
-            </span>
-            <span class="is-total${Math.round(combinedTotal) === 0 ? " is-zero" : ""}">
-              <strong>${number.format(Math.round(combinedTotal))}</strong>
-            </span>
-          </div>
+          <div class="leader-reps${repsMag}" style="${colStyle}">${reps}</div>
         </a>
       `;
     })
@@ -2876,6 +2970,7 @@ function leaderboardBoardHtml(ranking) {
 }
 
 function render({ skipScroll = false } = {}) {
+  if (!leaderboardColumnsCustomized) applyLeaderboardColumnDefaults();
   const ranking = totalsByPerson(leaderboardPeriod).sort(compareLeaderboardRows);
   const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
   const honoraryMembers = ranking.filter((person) => person.honorary);
@@ -8378,6 +8473,28 @@ function onPersonHistoryActivityKeydown(event) {
 }
 
 function onLeaderboardClick(event) {
+  const filterToggle = event.target.closest("[data-leader-filter-toggle]");
+  if (filterToggle) {
+    event.preventDefault();
+    leaderboardFilterOpen = !leaderboardFilterOpen;
+    render({ skipScroll: true });
+    return;
+  }
+  const filterBtn = event.target.closest("[data-leader-filter]");
+  if (filterBtn) {
+    event.preventDefault();
+    const key = filterBtn.dataset.leaderFilter;
+    if (Object.prototype.hasOwnProperty.call(leaderboardFilters, key)) {
+      leaderboardFilters[key] = !leaderboardFilters[key];
+      if (LEADERBOARD_COLUMN_KEYS.includes(key)) leaderboardColumnsCustomized = true;
+      const visible = leaderboardVisibleColumns();
+      const sortColumnHidden = LEADERBOARD_SORT_COLUMNS.some((column) => column.key === leaderboardSortKey)
+        && !visible.some((column) => column.key === leaderboardSortKey);
+      if (sortColumnHidden && visible.length) leaderboardSortKey = visible[0].key;
+      render({ skipScroll: true });
+    }
+    return;
+  }
   const periodBtn = event.target.closest("[data-leader-period]");
   if (periodBtn) {
     event.preventDefault();
@@ -8407,6 +8524,12 @@ function onLeaderboardClick(event) {
 $("#leaderboard").addEventListener("click", onLeaderboardClick);
 $("#leaderboard-page-list")?.addEventListener("click", onLeaderboardClick);
 $("#alltime-leaderboard")?.addEventListener("click", onLeaderboardClick);
+document.addEventListener("click", (event) => {
+  if (!leaderboardFilterOpen) return;
+  if (event.target.closest(".leader-period-bar")) return;
+  leaderboardFilterOpen = false;
+  render({ skipScroll: true });
+});
 
 /** Unclamped 1-based day index from a challenge start (may be <1 or past the end). */
 function challengeDayIndexFor(start, asOf = new Date()) {
