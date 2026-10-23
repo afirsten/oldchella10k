@@ -9,6 +9,8 @@ const CHALLENGE_WINDOWS = Object.fromEntries(
 /** 2027 LFG opens one second after midnight, and ends when the Times Square ball drops. */
 const LFG_OPENS = new Date("2026-10-23T00:00:01-04:00");
 const LFG_BALL_DROP = new Date("2027-01-01T00:00:00-05:00");
+/** Ripped-Chella late-entry grace: 96 hours from reopen (Oct 23, 2026 9:44 AM PT). */
+const RIPPED_LOGGING_OPEN_UNTIL = new Date("2026-10-27T09:44:00-07:00");
 const ACTIVE_CHALLENGE_KEY = "rippedchella-active-challenge-v1";
 let GOAL_PER_PERSON = CHALLENGE_WINDOWS[DEFAULT_CHALLENGE_ID].goal;
 let CHALLENGE_START = CHALLENGE_WINDOWS[DEFAULT_CHALLENGE_ID].start;
@@ -3618,7 +3620,9 @@ function syncChallengeChrome() {
   if (completeCopy) {
     completeCopy.textContent = lfg
       ? "The 10 weeks are done. See how the crew finished."
-      : "The 100 days are done. See how the crew finished.";
+      : rippedLateEntryOpen()
+        ? "The 100 days are done — late entries stay open a little longer if you forgot a day."
+        : "The 100 days are done. See how the crew finished.";
   }
   const participation = $("#participation-copy");
   if (participation) {
@@ -3664,9 +3668,20 @@ function currentLoggingChallenge() {
   return challengeCatalog().find((challenge) => challenge.id === activeChallengeId()) || null;
 }
 
+function rippedLateEntryOpen() {
+  return Date.now() < RIPPED_LOGGING_OPEN_UNTIL.getTime();
+}
+
+/** Latest calendar day that can still be logged for the active challenge window. */
+function maxActivityDateKey(todayKey = localDateValue()) {
+  const end = challengeEndDateKey();
+  return todayKey < end ? todayKey : end;
+}
+
 function challengeLoggingClosed(todayKey = localDateValue()) {
   const challenge = currentLoggingChallenge();
   if (!challenge) return false;
+  if (challenge.id === "first-100" && rippedLateEntryOpen()) return false;
   const phase = challengePhase(challenge, todayKey);
   return phase === "complete" || phase === "upcoming";
 }
@@ -4475,6 +4490,9 @@ function homeChallengeDetail(challenge, todayKey) {
     return `Opens ${formatChallengeDate(challenge.start, { year: true })} · ${formatChallengeRange(challenge.start, challenge.end)}`;
   }
   if (phase === "complete") {
+    if (challenge.id === "first-100" && rippedLateEntryOpen()) {
+      return `Closed ${formatChallengeDate(challenge.end, { year: true })} · Late entries open through Oct 27`;
+    }
     return `Closed ${formatChallengeDate(challenge.end, { year: true })}`;
   }
   return formatChallengeRange(challenge.start, challenge.end);
@@ -4520,7 +4538,9 @@ function renderChallengesPage() {
           : phase === "now"
             ? `Day ${ownDay} of ${dayCount}`
             : phase === "complete"
-              ? `${dayCount} days · Closed ${formatChallengeDate(challenge.end, { year: true })}`
+              ? challenge.id === "first-100" && rippedLateEntryOpen()
+                ? `${dayCount} days · Late entries open through Oct 27`
+                : `${dayCount} days · Closed ${formatChallengeDate(challenge.end, { year: true })}`
               : phase === "upcoming"
                 ? `${dayCount} days · Opens ${formatChallengeDate(challenge.start, { year: true })}`
                 : `${dayCount} days`;
@@ -5750,10 +5770,13 @@ function syncWorkoutDateToggle() {
 
   const today = localDateValue();
   const yesterday = yesterdayDateValue();
+  const maxDate = maxActivityDateKey(today);
   input.min = CHALLENGE_START;
-  input.max = today;
-  const value = input.value || today;
-  if (!input.value) input.value = value;
+  input.max = maxDate;
+  let value = input.value || maxDate;
+  if (value > maxDate) value = maxDate;
+  if (value < CHALLENGE_START) value = CHALLENGE_START;
+  if (!input.value || input.value !== value) input.value = value;
 
   let preset = "other";
   if (value === today) preset = "today";
@@ -5781,13 +5804,13 @@ function syncWorkoutDateToggle() {
 function setActivityDateValue(dateKey, { emitChange = false } = {}) {
   const input = $("#activity-date-input");
   if (!input) return;
-  const today = localDateValue();
-  let next = dateKey || today;
-  if (next > today) next = today;
+  const maxDate = maxActivityDateKey();
+  let next = dateKey || maxDate;
+  if (next > maxDate) next = maxDate;
   if (next < CHALLENGE_START) next = CHALLENGE_START;
   const changed = input.value !== next;
   input.min = CHALLENGE_START;
-  input.max = today;
+  input.max = maxDate;
   input.value = next;
   syncWorkoutDateToggle();
   if (emitChange && changed) {
@@ -6341,7 +6364,10 @@ function openLogDialog(personId, options = {}) {
   if (!personId) return;
   if (blockClosedChallengeAdd()) return;
   const activity = options.activity || null;
-  const activityDate = options.activityDate || localDateValue();
+  const maxDate = maxActivityDateKey();
+  let activityDate = options.activityDate || maxDate;
+  if (activityDate > maxDate) activityDate = maxDate;
+  if (activityDate < CHALLENGE_START) activityDate = CHALLENGE_START;
   editingActivityId = activity?.id || null;
   logDrafts = emptyLogDrafts();
 
@@ -6361,7 +6387,7 @@ function openLogDialog(personId, options = {}) {
   $("#log-person-image").alt = "";
   syncWeightPersonAvatar(person);
   $("#activity-date-input").min = CHALLENGE_START;
-  $("#activity-date-input").max = localDateValue();
+  $("#activity-date-input").max = maxDate;
   $("#activity-date-input").value = activityDate;
   syncWorkoutDateToggle();
   const challengeName =
@@ -8031,8 +8057,9 @@ $("#activity-date-input").addEventListener("change", () => {
   const input = $("#activity-date-input");
   const today = localDateValue();
   const yesterday = yesterdayDateValue();
-  let value = input?.value || today;
-  if (value > today) value = today;
+  const maxDate = maxActivityDateKey(today);
+  let value = input?.value || maxDate;
+  if (value > maxDate) value = maxDate;
   if (value < CHALLENGE_START) value = CHALLENGE_START;
   if (input && input.value !== value) input.value = value;
   // Snap calendar picks of today/yesterday onto those segments.
@@ -8079,7 +8106,7 @@ function openWorkoutDatePicker() {
   if (!input || workoutDatePickerGuard) return;
 
   input.min = CHALLENGE_START;
-  input.max = localDateValue();
+  input.max = maxActivityDateKey();
 
   if (typeof input.showPicker !== "function") {
     // Rely on the activating tap on the input itself (iOS / older browsers).
