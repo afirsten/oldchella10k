@@ -102,10 +102,30 @@ const crew = [
   { id: "mike", name: "Mike B", image: "./assets/people/mike.png" },
 ];
 
-function isHonorary(personOrId) {
-  if (!personOrId) return false;
-  if (typeof personOrId === "object") return Boolean(personOrId.honorary);
-  return Boolean(crew.find((person) => person.id === personOrId)?.honorary);
+/**
+ * 2027 LFG (wrap-2026) ranks every crew member. Honorary stays on every
+ * other challenge, including all-time, which is scored as Ripped-Chella.
+ */
+function honoraryApplies(challengeId) {
+  const id = challengeId || (statsIgnoreWindow ? DEFAULT_CHALLENGE_ID : activeChallengeId());
+  return id !== "wrap-2026";
+}
+
+function isHonorary(personOrId, challengeId) {
+  if (!honoraryApplies(challengeId)) return false;
+  const id = typeof personOrId === "object" ? personOrId?.id : personOrId;
+  if (!id) return false;
+  return Boolean(crew.find((person) => person.id === id)?.honorary);
+}
+
+function syncHonoraryProgressChrome(root, challengeId) {
+  if (!root) return;
+  const show = honoraryApplies(challengeId);
+  root.querySelectorAll(
+    ".progress-breakdown__row.is-honorary, .activity-pace-legend .is-honorary",
+  ).forEach((el) => {
+    el.hidden = !show;
+  });
 }
 
 function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setNote, run = false, time = "18:00:00" }) {
@@ -408,8 +428,8 @@ function challengeIdForWindow(start = CHALLENGE_START, days = CHALLENGE_DAYS) {
 }
 
 function personStatus(personId, challengeId) {
-  if (isHonorary(personId)) return "in";
   const id = challengeId || (statsIgnoreWindow ? DEFAULT_CHALLENGE_ID : activeChallengeId());
+  if (isHonorary(personId, id)) return "in";
   if (id !== DEFAULT_CHALLENGE_ID) {
     const scoped = challengeParticipation?.[id]?.[personId];
     if (scoped === "in" || scoped === "out") return scoped;
@@ -1617,7 +1637,8 @@ function activityCompactMagnitude(activity) {
 
 function activityFeedItemHtml(activity) {
   const person = getPerson(activity.personId);
-  const honoraryClass = person.honorary ? " is-honorary" : "";
+  const honorary = isHonorary(person);
+  const honoraryClass = honorary ? " is-honorary" : "";
   const repsMag = activityCompactMagnitude(activity);
   return `
       <a class="activity-item is-feed${honoraryClass}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
@@ -1626,7 +1647,7 @@ function activityFeedItemHtml(activity) {
           ${exerciseIcon(activity)}
         </div>
         <div class="activity-main">
-          <p class="activity-person">${escapeHtml(person.name)}${person.honorary ? ' <span class="honorary-tag" aria-label="Honorary Member" title="Honorary Member">H</span>' : ""}</p>
+          <p class="activity-person">${escapeHtml(person.name)}${honorary ? ' <span class="honorary-tag" aria-label="Honorary Member" title="Honorary Member">H</span>' : ""}</p>
           <span>${formatDate(activity.createdAt)}</span>
         </div>
         <div class="activity-meta">
@@ -2004,6 +2025,7 @@ function totalsByPerson(period = "all", challengeId) {
     const primaryType = metrics.pushups > 0 ? "pushups" : metrics.other > 0 ? "other" : "pushups";
     return {
       ...person,
+      honorary: isHonorary(person.id, statusId),
       metrics,
       primaryType,
       total: metrics[primaryType],
@@ -2344,8 +2366,13 @@ function leaderboardVisibleColumns() {
   return LEADERBOARD_SORT_COLUMNS.filter((column) => leaderboardFilters[column.filter] !== false);
 }
 
+function leaderboardFilterOptions() {
+  if (honoraryApplies()) return LEADERBOARD_FILTER_OPTIONS;
+  return LEADERBOARD_FILTER_OPTIONS.filter((option) => option.key !== "honorary");
+}
+
 function leaderboardFiltersActive() {
-  return LEADERBOARD_FILTER_OPTIONS.some((option) => !leaderboardFilters[option.key]);
+  return leaderboardFilterOptions().some((option) => !leaderboardFilters[option.key]);
 }
 
 function renderLeaderboardPodium(ranking) {
@@ -2384,7 +2411,7 @@ function leaderboardPeriodHtml() {
     const active = leaderboardPeriod === value;
     return `<button type="button" class="leader-period${active ? " is-selected" : ""}" data-leader-period="${value}" aria-pressed="${active ? "true" : "false"}">${label}</button>`;
   }).join("");
-  const options = LEADERBOARD_FILTER_OPTIONS.map(({ key, label }) => {
+  const options = leaderboardFilterOptions().map(({ key, label }) => {
     const on = leaderboardFilters[key] !== false;
     return `<button type="button" data-leader-filter="${key}" aria-pressed="${on ? "true" : "false"}"><span>${label}</span><span class="leader-filter-state">${on ? "On" : "Off"}</span></button>`;
   }).join("");
@@ -2511,6 +2538,7 @@ function renderAllTimeStats() {
   GOAL_PER_PERSON = ripped.goal;
   statsIgnoreWindow = true;
   statsMount = page;
+  syncHonoraryProgressChrome(page);
   try {
     const ranking = totalsByPerson("all").sort(compareLeaderboardRows);
     const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
@@ -3126,6 +3154,8 @@ function render({ skipScroll = false } = {}) {
     participantIds,
     categoryTotals,
   });
+  syncHonoraryProgressChrome($("#dashboard-page"));
+  syncHonoraryProgressChrome($("#activity-page"));
   renderAllTimeStats();
 
   const awardsEnded = $("#awards-ended-label");
@@ -5002,7 +5032,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   if (isOwner) rememberLastPerson(personId);
   showAppPage("person", { skipScroll: true });
 
-  const person = getPerson(personId);
+  let person = getPerson(personId);
   const allStats = totalsByPerson();
   const ranking = allStats
     .filter((entry) => entry.status === "in" && !entry.honorary)
@@ -5010,6 +5040,10 @@ function renderPersonPage({ skipScroll = false } = {}) {
   const personStats = allStats.find((entry) => entry.id === personId);
   const rank = ranking.findIndex((entry) => entry.id === personId) + 1;
   const scopeSpec = personScopeSpec(personStatsScope);
+  person = {
+    ...person,
+    honorary: isHonorary(person.id, scopeSpec.allTime ? DEFAULT_CHALLENGE_ID : scopeSpec.id),
+  };
   const history = activities.filter(
     (activity) => activity.personId === personId && activityInPersonScope(activity, personStatsScope),
   );
