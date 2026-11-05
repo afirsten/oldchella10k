@@ -91,16 +91,42 @@ const crew = [
   { id: "chris", name: "Chris E", image: "./assets/people/chris.png" },
   { id: "eliot", name: "Eliot B", image: "./assets/people/eliot.png" },
   { id: "eric", name: "Eric M", image: "./assets/people/eric.png" },
-  { id: "erok", name: "Erok L", image: "./assets/people/erok.png" },
-  { id: "evan", name: "Evan F", image: "./assets/people/evan.png" },
+  { id: "erok", name: "Erok L", image: "./assets/people/erok.png", honorary: true },
+  { id: "evan", name: "Evan F", image: "./assets/people/evan.png", honorary: true },
   { id: "james", name: "James Z", image: "./assets/people/james.png" },
   { id: "jamie", name: "Jamie D", image: "./assets/people/jamie.png" },
   { id: "joe", name: "Joe D", image: "./assets/people/joe.png" },
   { id: "john", name: "John Z", image: "./assets/people/john.png" },
-  { id: "kelly", name: "Kelly D", image: "./assets/people/kelly.png" },
+  { id: "kelly", name: "Kelly D", image: "./assets/people/kelly.png", honorary: true },
   { id: "matt", name: "Matt H", image: "./assets/people/matt.png" },
   { id: "mike", name: "Mike B", image: "./assets/people/mike.png" },
 ];
+
+/**
+ * 2027 LFG (wrap-2026) ranks every crew member. Honorary stays on every
+ * other challenge, including all-time, which is scored as Ripped-Chella.
+ */
+function honoraryApplies(challengeId) {
+  const id = challengeId || (statsIgnoreWindow ? DEFAULT_CHALLENGE_ID : activeChallengeId());
+  return id !== "wrap-2026";
+}
+
+function isHonorary(personOrId, challengeId) {
+  if (!honoraryApplies(challengeId)) return false;
+  const id = typeof personOrId === "object" ? personOrId?.id : personOrId;
+  if (!id) return false;
+  return Boolean(crew.find((person) => person.id === id)?.honorary);
+}
+
+function syncHonoraryProgressChrome(root, challengeId) {
+  if (!root) return;
+  const show = honoraryApplies(challengeId);
+  root.querySelectorAll(
+    ".progress-breakdown__row.is-honorary, .activity-pace-legend .is-honorary",
+  ).forEach((el) => {
+    el.hidden = !show;
+  });
+}
 
 function seedWorkout(personId, date, { pushups, squats, planks, pushupNote, setNote, run = false, time = "18:00:00" }) {
   const entries = [];
@@ -319,6 +345,7 @@ let leaderboardSortDir = "desc";
 let leaderboardPeriod = "all";
 let leaderboardFilterOpen = false;
 const leaderboardFilters = {
+  honorary: true,
   pushups: true,
   squats: false,
   planks: false,
@@ -357,6 +384,7 @@ const LEADERBOARD_PERIOD_OPTIONS = [
   { value: "week", label: "Week" },
 ];
 const LEADERBOARD_FILTER_OPTIONS = [
+  { key: "honorary", label: "Honorary members" },
   { key: "pushups", label: "Push-ups" },
   { key: "squats", label: "Squats" },
   { key: "planks", label: "Planks" },
@@ -401,6 +429,7 @@ function challengeIdForWindow(start = CHALLENGE_START, days = CHALLENGE_DAYS) {
 
 function personStatus(personId, challengeId) {
   const id = challengeId || (statsIgnoreWindow ? DEFAULT_CHALLENGE_ID : activeChallengeId());
+  if (isHonorary(personId, id)) return "in";
   if (id !== DEFAULT_CHALLENGE_ID) {
     const scoped = challengeParticipation?.[id]?.[personId];
     if (scoped === "in" || scoped === "out") return scoped;
@@ -1128,9 +1157,10 @@ function renderActivityPodium(participants, q = $) {
       .map(({ person, score }) => {
         return `
           <li>
-            <a class="activity-podium__row" href="#/person/${person.id}">
+            <a class="activity-podium__row${person.honorary ? " is-honorary" : ""}" href="#/person/${person.id}">
               <span class="activity-podium__avatar-wrap">
                 <img class="activity-podium__avatar" src="${person.image}" alt="" />
+                ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
               </span>
               <span class="activity-podium__name">${escapeHtml(person.name)}</span>
               <strong class="activity-podium__value ${column.valueClass}">${column.format(score)}</strong>
@@ -1149,6 +1179,7 @@ function awardsMiniPodiumSlot({ person, score, place, tone, format, valueClass }
     <a class="mini-podium__slot is-place-${place}" href="#/person/${person.id}" aria-label="${placeLabel} place, ${escapeHtml(person.name)}, ${format(score)}">
       <span class="mini-podium__avatar-wrap">
         <img class="mini-podium__avatar" src="${person.image}" alt="" />
+        ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
       </span>
       <span class="mini-podium__name">${escapeHtml(person.name)}</span>
       <span class="mini-podium__score ${valueClass}">${format(score)}</span>
@@ -1606,15 +1637,17 @@ function activityCompactMagnitude(activity) {
 
 function activityFeedItemHtml(activity) {
   const person = getPerson(activity.personId);
+  const honorary = isHonorary(person);
+  const honoraryClass = honorary ? " is-honorary" : "";
   const repsMag = activityCompactMagnitude(activity);
   return `
-      <a class="activity-item is-feed" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
+      <a class="activity-item is-feed${honoraryClass}" href="#/person/${person.id}" data-person-id="${person.id}" aria-label="View ${escapeHtml(person.name)}'s ${escapeHtml(exerciseName(activity))} entry">
         <div class="activity-stack" aria-hidden="true">
           <img class="activity-avatar" src="${person.image}" alt="" />
           ${exerciseIcon(activity)}
         </div>
         <div class="activity-main">
-          <p class="activity-person">${escapeHtml(person.name)}</p>
+          <p class="activity-person">${escapeHtml(person.name)}${honorary ? ' <span class="honorary-tag" aria-label="Honorary Member" title="Honorary Member">H</span>' : ""}</p>
           <span>${formatDate(activity.createdAt)}</span>
         </div>
         <div class="activity-meta">
@@ -1992,6 +2025,7 @@ function totalsByPerson(period = "all", challengeId) {
     const primaryType = metrics.pushups > 0 ? "pushups" : metrics.other > 0 ? "other" : "pushups";
     return {
       ...person,
+      honorary: isHonorary(person.id, statusId),
       metrics,
       primaryType,
       total: metrics[primaryType],
@@ -2279,7 +2313,7 @@ function formatRankLabel(rank) {
 
 function paintPersonRankMedal(tile, rank) {
   tile.classList.remove("is-gold", "is-silver", "is-bronze");
-  if (tile.classList.contains("is-out")) return;
+  if (tile.classList.contains("is-out") || tile.classList.contains("is-honorary")) return;
   if (rank === 1) tile.classList.add("is-gold");
   else if (rank === 2) tile.classList.add("is-silver");
   else if (rank === 3) tile.classList.add("is-bronze");
@@ -2332,14 +2366,19 @@ function leaderboardVisibleColumns() {
   return LEADERBOARD_SORT_COLUMNS.filter((column) => leaderboardFilters[column.filter] !== false);
 }
 
+function leaderboardFilterOptions() {
+  if (honoraryApplies()) return LEADERBOARD_FILTER_OPTIONS;
+  return LEADERBOARD_FILTER_OPTIONS.filter((option) => option.key !== "honorary");
+}
+
 function leaderboardFiltersActive() {
-  return LEADERBOARD_FILTER_OPTIONS.some((option) => !leaderboardFilters[option.key]);
+  return leaderboardFilterOptions().some((option) => !leaderboardFilters[option.key]);
 }
 
 function renderLeaderboardPodium(ranking) {
   const podium = $("#leaderboard-podium");
   if (!podium) return;
-  const top = ranking.slice(0, 3);
+  const top = ranking.filter((person) => !person.honorary).slice(0, 3);
   if (!top.length) {
     podium.hidden = true;
     podium.innerHTML = "";
@@ -2372,7 +2411,7 @@ function leaderboardPeriodHtml() {
     const active = leaderboardPeriod === value;
     return `<button type="button" class="leader-period${active ? " is-selected" : ""}" data-leader-period="${value}" aria-pressed="${active ? "true" : "false"}">${label}</button>`;
   }).join("");
-  const options = LEADERBOARD_FILTER_OPTIONS.map(({ key, label }) => {
+  const options = leaderboardFilterOptions().map(({ key, label }) => {
     const on = leaderboardFilters[key] !== false;
     return `<button type="button" data-leader-filter="${key}" aria-pressed="${on ? "true" : "false"}"><span>${label}</span><span class="leader-filter-state">${on ? "On" : "Off"}</span></button>`;
   }).join("");
@@ -2499,13 +2538,18 @@ function renderAllTimeStats() {
   GOAL_PER_PERSON = ripped.goal;
   statsIgnoreWindow = true;
   statsMount = page;
+  syncHonoraryProgressChrome(page);
   try {
     const ranking = totalsByPerson("all").sort(compareLeaderboardRows);
-    const participants = ranking.filter((person) => person.status === "in");
-    const optedOut = ranking.filter((person) => person.status === "out");
+    const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
+    const honoraryMembers = ranking.filter((person) => person.honorary);
+    const optedOut = ranking.filter((person) => person.status === "out" && !person.honorary);
     const goal = participants.length * GOAL_PER_PERSON;
     const total = participants.reduce((sum, person) => sum + person.total, 0);
+    const honoraryTotal = honoraryMembers.reduce((sum, person) => sum + person.total, 0);
     const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
+    let honoraryPercent = goal ? Math.min(100, Math.round((honoraryTotal / goal) * 100)) : 0;
+    if (honoraryPercent + percent > 100) honoraryPercent = Math.max(0, 100 - percent);
     const groupTarget = participants.length * onTargetReps();
     const targetPercent = goal ? Math.min(100, Math.round((groupTarget / goal) * 100)) : 0;
     const paceDelta = total - groupTarget;
@@ -2518,10 +2562,13 @@ function renderAllTimeStats() {
       );
     paintActivityStats(mount$, {
       participants,
+      honoraryMembers,
       optedOut,
       goal,
       total,
+      honoraryTotal,
       percent,
+      honoraryPercent,
       groupTarget,
       targetPercent,
       paceDelta,
@@ -2564,10 +2611,13 @@ function renderAllTimeStats() {
 
 function paintActivityStats(q, {
   participants,
+  honoraryMembers,
   optedOut,
   goal,
   total,
+  honoraryTotal,
   percent,
+  honoraryPercent,
   groupTarget,
   targetPercent,
   paceDelta,
@@ -2577,12 +2627,22 @@ function paintActivityStats(q, {
   const applyGroupProgressBar = ({
     track,
     fill,
+    honoraryFill,
     target,
     pace,
     breakdown = {},
   }) => {
     if (!track || !fill) return;
-    fill.style.left = "0";
+    const hasHonorary = honoraryPercent > 0;
+    const hasPrimary = percent > 0;
+    track.classList.toggle("has-honorary", hasHonorary);
+    track.classList.toggle("has-primary", hasPrimary);
+    if (honoraryFill) {
+      honoraryFill.style.width = `${honoraryPercent}%`;
+      honoraryFill.classList.toggle("is-empty", !hasHonorary);
+      honoraryFill.hidden = !hasHonorary;
+    }
+    fill.style.left = `${honoraryPercent}%`;
     fill.style.width = `${percent}%`;
     if (target) target.style.width = `${targetPercent}%`;
     if (pace) pace.style.left = `${targetPercent}%`;
@@ -2592,6 +2652,7 @@ function paintActivityStats(q, {
     setBreakdown(breakdown.goal, goal);
     setBreakdown(breakdown.daily, groupTarget);
     setBreakdown(breakdown.bros, total);
+    setBreakdown(breakdown.honorary, honoraryTotal);
   };
 
   // Mirror key stats onto the Stats page.
@@ -2613,12 +2674,14 @@ function paintActivityStats(q, {
   applyGroupProgressBar({
     track: q("#activity-progress-track"),
     fill: q("#activity-progress-fill"),
+    honoraryFill: q("#activity-progress-honorary"),
     target: q("#activity-progress-target"),
     pace: q("#activity-progress-pace"),
     breakdown: {
       goal: q("#activity-progress-breakdown-goal"),
       daily: q("#activity-progress-breakdown-daily"),
       bros: q("#activity-progress-breakdown-bros"),
+      honorary: q("#activity-progress-breakdown-honorary"),
     },
   });
   const activityTrack = q("#activity-progress-track");
@@ -2627,7 +2690,9 @@ function paintActivityStats(q, {
     activityTrack.setAttribute("aria-valuemax", String(goal));
     activityTrack.setAttribute(
       "aria-valuetext",
-      `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
+      honoraryTotal > 0
+        ? `${number.format(total)} of ${number.format(goal)}, plus ${number.format(honoraryTotal)} honorary`
+        : `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
     );
   }
   setText(
@@ -2679,7 +2744,7 @@ function paintActivityStats(q, {
   setText("#activity-fun-cabs", number.format(desertMath.callACabs));
   setText("#activity-fun-biscuits", number.format(desertMath.biscuits));
   setText("#activity-fun-wings", number.format(desertMath.wings));
-  renderActivityPodium(participants, q);
+  renderActivityPodium([...participants, ...honoraryMembers], q);
   const closeouts = groupCloseoutStats(participantIds);
   setText("#activity-closeout-pushups", number.format(closeouts.pushupClosers));
   setText("#activity-closeout-reps", number.format(closeouts.repClosers));
@@ -2883,22 +2948,31 @@ function leaderboardColumnHtml(person, column) {
 function leaderboardBoardHtml(ranking) {
   const columns = leaderboardVisibleColumns();
   const colStyle = `--leader-cols:${Math.max(columns.length, 1)}`;
+  let competitiveIndex = 0;
   const rows = ranking
-    .map((person, index) => {
-      const rowState =
-        person.status === "out"
+    .filter((person) => leaderboardFilters.honorary || !person.honorary)
+    .map((person) => {
+      const rowState = person.honorary
+        ? " is-honorary"
+        : person.status === "out"
           ? " is-out"
           : person.status === "unknown"
             ? " is-undecided"
             : "";
       const subtitle =
-        person.status === "out"
+        person.status === "out" && !person.honorary
           ? "Out"
-          : person.status === "unknown"
+          : person.status === "unknown" && !person.honorary
             ? "Undecided"
-            : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${person.primaryType === "other" ? " · alternative" : ""}`;
-      const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
-      const rankHtml = `<span class="rank rank-${tone}">${index + 1}</span>`;
+            : `${person.sessions} ${person.sessions === 1 ? "session" : "sessions"}${!person.honorary && person.primaryType === "other" ? " · alternative" : ""}`;
+      const rankHtml = person.honorary
+        ? `<span class="rank rank-honorary" title="Honorary · not counted in group total">★</span>`
+        : (() => {
+            const index = competitiveIndex;
+            competitiveIndex += 1;
+            const tone = index === 0 ? "gold" : index === 1 ? "silver" : index === 2 ? "bronze" : "steel";
+            return `<span class="rank rank-${tone}">${index + 1}</span>`;
+          })();
       const repsMag = compactMagnitudeAttr(columns.map((column) => (
         column.key === "planks"
           ? (Number(person.metrics?.planks) || 0) / 60
@@ -2911,6 +2985,7 @@ function leaderboardBoardHtml(ranking) {
           <span class="avatar-wrap">
             <img class="avatar" src="${person.image}" alt="" />
             ${person.status === "out" ? '<span class="out-stamp">OUT</span>' : ""}
+            ${person.honorary ? '<span class="honorary-stamp" aria-label="Honorary Member">H</span>' : ""}
           </span>
           <div>
             <p class="leader-name">${escapeHtml(person.name)}</p>
@@ -2927,11 +3002,17 @@ function leaderboardBoardHtml(ranking) {
 function render({ skipScroll = false } = {}) {
   if (!leaderboardColumnsCustomized) applyLeaderboardColumnDefaults();
   const ranking = totalsByPerson(leaderboardPeriod).sort(compareLeaderboardRows);
-  const participants = ranking.filter((person) => person.status === "in");
-  const optedOut = ranking.filter((person) => person.status === "out");
+  const participants = ranking.filter((person) => person.status === "in" && !person.honorary);
+  const honoraryMembers = ranking.filter((person) => person.honorary);
+  const optedOut = ranking.filter((person) => person.status === "out" && !person.honorary);
   const goal = participants.length * GOAL_PER_PERSON;
   const total = participants.reduce((sum, person) => sum + person.total, 0);
+  const honoraryTotal = honoraryMembers.reduce((sum, person) => sum + person.total, 0);
   const percent = goal ? Math.min(100, Math.round((total / goal) * 100)) : 0;
+  let honoraryPercent = goal ? Math.min(100, Math.round((honoraryTotal / goal) * 100)) : 0;
+  if (honoraryPercent + percent > 100) {
+    honoraryPercent = Math.max(0, 100 - percent);
+  }
   const groupTarget = participants.length * onTargetReps();
   const targetPercent = goal ? Math.min(100, Math.round((groupTarget / goal) * 100)) : 0;
   const paceDelta = total - groupTarget;
@@ -2946,12 +3027,22 @@ function render({ skipScroll = false } = {}) {
   const applyGroupProgressBar = ({
     track,
     fill,
+    honoraryFill,
     target,
     pace,
     breakdown = {},
   }) => {
     if (!track || !fill) return;
-    fill.style.left = "0";
+    const hasHonorary = honoraryPercent > 0;
+    const hasPrimary = percent > 0;
+    track.classList.toggle("has-honorary", hasHonorary);
+    track.classList.toggle("has-primary", hasPrimary);
+    if (honoraryFill) {
+      honoraryFill.style.width = `${honoraryPercent}%`;
+      honoraryFill.classList.toggle("is-empty", !hasHonorary);
+      honoraryFill.hidden = !hasHonorary;
+    }
+    fill.style.left = `${honoraryPercent}%`;
     fill.style.width = `${percent}%`;
     if (target) target.style.width = `${targetPercent}%`;
     if (pace) pace.style.left = `${targetPercent}%`;
@@ -2961,6 +3052,7 @@ function render({ skipScroll = false } = {}) {
     setBreakdown(breakdown.goal, goal);
     setBreakdown(breakdown.daily, groupTarget);
     setBreakdown(breakdown.bros, total);
+    setBreakdown(breakdown.honorary, honoraryTotal);
   };
 
   $("#group-total").textContent = number.format(total);
@@ -2976,12 +3068,14 @@ function render({ skipScroll = false } = {}) {
   applyGroupProgressBar({
     track: $("#progress-track") || $(".progress-track"),
     fill: $("#progress-fill"),
+    honoraryFill: $("#progress-honorary"),
     target: $("#progress-target"),
     pace: $("#progress-pace"),
     breakdown: {
       goal: $("#progress-breakdown-goal"),
       daily: $("#progress-breakdown-daily"),
       bros: $("#progress-breakdown-bros"),
+      honorary: $("#progress-breakdown-honorary"),
     },
   });
   const homeTrack = $("#progress-track") || $(".progress-track");
@@ -2990,7 +3084,9 @@ function render({ skipScroll = false } = {}) {
     homeTrack.setAttribute("aria-valuemax", String(goal));
     homeTrack.setAttribute(
       "aria-valuetext",
-      `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
+      honoraryTotal > 0
+        ? `${number.format(total)} of ${number.format(goal)}, plus ${number.format(honoraryTotal)} honorary`
+        : `${number.format(total)} of ${number.format(goal)}, on-target pace ${number.format(groupTarget)}`,
     );
   }
   $("#pace-copy").textContent =
@@ -3045,16 +3141,21 @@ function render({ skipScroll = false } = {}) {
 
   paintActivityStats($, {
     participants,
+    honoraryMembers,
     optedOut,
     goal,
     total,
+    honoraryTotal,
     percent,
+    honoraryPercent,
     groupTarget,
     targetPercent,
     paceDelta,
     participantIds,
     categoryTotals,
   });
+  syncHonoraryProgressChrome($("#dashboard-page"));
+  syncHonoraryProgressChrome($("#activity-page"));
   renderAllTimeStats();
 
   const awardsEnded = $("#awards-ended-label");
@@ -3062,7 +3163,7 @@ function render({ skipScroll = false } = {}) {
     awardsEnded.textContent = `Ended ${formatChallengeDate(challengeEndDateKey(), { year: true })}`;
   }
   mirrorActivityStatsCard();
-  renderAwardsMiniPodiums(participants);
+  renderAwardsMiniPodiums([...participants, ...honoraryMembers]);
   renderChallengesPage();
   renderPersonPage({ skipScroll });
   updateSiteMenu();
@@ -4563,7 +4664,7 @@ function personCardModel(personId, scope) {
     const statusId = spec.allTime ? DEFAULT_CHALLENGE_ID : spec.id;
     const cardStats = totalsByPerson("all", statusId).find((entry) => entry.id === personId);
     const ranked = totalsByPerson("all", statusId)
-      .filter((entry) => (spec.allTime ? entry.total > 0 : entry.status === "in"))
+      .filter((entry) => !entry.honorary && (spec.allTime ? entry.total > 0 : entry.status === "in"))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
     const scoped = activities.filter(
       (activity) => activity.personId === personId && activityInActiveChallenge(activity),
@@ -4637,7 +4738,7 @@ function personCalendarDetailHtml(group, { person, isOwner, todayKey }) {
   const emptyDayCopy = '<p class="history-day-empty" role="status">No reps recorded</p>';
   const activitiesHtml = !group.activities.length
     ? emptyDayCopy
-    : `<div class="history-day-condensed">
+    : `<div class="history-day-condensed${person.honorary ? " is-honorary" : ""}">
         <ul class="history-condensed-list">
           ${group.activities
             .map((activity) => {
@@ -4931,14 +5032,18 @@ function renderPersonPage({ skipScroll = false } = {}) {
   if (isOwner) rememberLastPerson(personId);
   showAppPage("person", { skipScroll: true });
 
-  const person = getPerson(personId);
+  let person = getPerson(personId);
   const allStats = totalsByPerson();
   const ranking = allStats
-    .filter((entry) => entry.status === "in")
+    .filter((entry) => entry.status === "in" && !entry.honorary)
     .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   const personStats = allStats.find((entry) => entry.id === personId);
   const rank = ranking.findIndex((entry) => entry.id === personId) + 1;
   const scopeSpec = personScopeSpec(personStatsScope);
+  person = {
+    ...person,
+    honorary: isHonorary(person.id, scopeSpec.allTime ? DEFAULT_CHALLENGE_ID : scopeSpec.id),
+  };
   const history = activities.filter(
     (activity) => activity.personId === personId && activityInPersonScope(activity, personStatsScope),
   );
@@ -4970,17 +5075,20 @@ function renderPersonPage({ skipScroll = false } = {}) {
   $("#person-avatar").alt = `${person.name} profile photo`;
   const rankTile = $("#person-rank-tile");
   const rankBadge = $("#person-rank");
-  const rankLabel = personStats.status === "out"
-    ? "OUT"
-    : personStats.status === "unknown"
-      ? ""
-      : rank
-        ? formatRankLabel(rank)
-        : "";
+  const rankLabel = person.honorary
+    ? "HONORARY"
+    : personStats.status === "out"
+      ? "OUT"
+      : personStats.status === "unknown"
+        ? ""
+        : rank
+          ? formatRankLabel(rank)
+          : "";
   rankBadge.textContent = rankLabel || "—";
   rankTile.hidden = !rankLabel;
   rankTile.classList.toggle("is-out", personStats.status === "out");
-  paintPersonRankMedal(rankTile, personStats.status === "out" ? 0 : rank);
+  rankTile.classList.toggle("is-honorary", Boolean(person.honorary));
+  paintPersonRankMedal(rankTile, person.honorary || personStats.status === "out" ? 0 : rank);
   $("#person-name").innerHTML = formatPersonHeadline(person.name);
   const streakDays = personStreakDays(person.id);
   const personSummary = $("#person-summary");
@@ -4988,7 +5096,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
     const dayLabel = streakDays === 1 ? "day" : "days";
     return `<span class="person-summary-label">STREAK:</span> ${number.format(streakDays)} ${dayLabel} in a row`;
   };
-  if (personStats.status === "out") {
+  if (personStats.status === "out" && !person.honorary) {
     personSummary.textContent =
       `${person.name.split(" ")[0]} is sitting this challenge out.`;
   } else {
@@ -5004,22 +5112,22 @@ function renderPersonPage({ skipScroll = false } = {}) {
   if (participationCopy && !scopeSpec.allTime) {
     participationCopy.textContent = `Choose whether you’re participating in the ${challengeName} challenge.`;
   }
-  participationCard.hidden = scopeSpec.allTime || !isOwner || history.length > 0;
+  participationCard.hidden = scopeSpec.allTime || !isOwner || person.honorary || history.length > 0;
   participationCard.querySelectorAll("[data-participation]").forEach((button) => {
     button.classList.toggle("is-selected", button.dataset.participation === viewedStatus);
   });
-  const showProgress = history.length > 0 || personStats.status === "in";
+  const showProgress = person.honorary || history.length > 0 || personStats.status === "in";
   const todayKey = localDateValue();
   const card = personCardModel(personId, personStatsScope);
   const viewingActiveChallenge = !scopeSpec.allTime && scopeSpec.id === activeChallengeId();
-  if (!(viewingActiveChallenge && personStats.status === "out")) {
+  if (!(viewingActiveChallenge && personStats.status === "out" && !person.honorary)) {
     personSummary.innerHTML = streakSummaryHtml();
-    if (card.rank) {
+    if (card.rank && !person.honorary) {
       rankBadge.textContent = formatRankLabel(card.rank);
       rankTile.hidden = false;
       rankTile.classList.remove("is-out");
       paintPersonRankMedal(rankTile, card.rank);
-    } else if (!scopeSpec.allTime && viewedStatus !== "in") {
+    } else if (!scopeSpec.allTime && viewedStatus !== "in" && !person.honorary) {
       rankTile.hidden = true;
     }
   }
@@ -5031,6 +5139,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
   if (scopeToggle) scopeToggle.hidden = false;
   syncPersonScopeToggle();
   $(".personal-total").hidden = !showCard;
+  $(".personal-total")?.classList.toggle("is-honorary", Boolean(person.honorary));
   $("#person-log-button").hidden = !isOwner || personStats.status !== "in" || lfgNotLive;
   const quickAdd = $("#person-quick-add");
   if (quickAdd) quickAdd.hidden = !isOwner || personStats.status !== "in" || lfgNotLive;
@@ -5046,9 +5155,13 @@ function renderPersonPage({ skipScroll = false } = {}) {
     return days ? value / days : 0;
   };
   $("#person-total").textContent = number.format(cardTotal);
-  $("#person-total-label").textContent = cardStats?.primaryType === "other"
-    ? "TOTAL ALTERNATIVE WORK"
-    : "PUSH-UP COUNT";
+  $("#person-total-label").textContent = person.honorary
+    ? cardStats?.primaryType === "other"
+      ? "HONORARY ALTERNATIVE"
+      : "HONORARY PUSH-UPS"
+    : cardStats?.primaryType === "other"
+      ? "TOTAL ALTERNATIVE WORK"
+      : "PUSH-UP COUNT";
   $("#person-progress-fill").style.width = `${Math.min(100, cardPercent)}%`;
   $("#person-progress-target").style.width = `${Math.min(100, cardTargetPercent)}%`;
   $("#person-progress-pace").style.left = `${Math.min(100, cardTargetPercent)}%`;
@@ -5165,7 +5278,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
           const activitiesHtml = !group.activities.length
             ? emptyDayCopy
             : condensed
-              ? `<div class="history-day-condensed">
+              ? `<div class="history-day-condensed${person.honorary ? " is-honorary" : ""}">
                   <ul class="history-condensed-list">
                     ${group.activities
                       .map((activity) => {
@@ -5229,7 +5342,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                     const repsMag = activityCompactMagnitude(activity);
                     if (isOwner) {
                       return `
-                      <article class="activity-item is-editable${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
+                      <article class="activity-item is-editable${person.honorary ? " is-honorary" : ""}${justAdded ? " is-just-added" : ""}" data-activity-id="${escapeHtml(activity.id)}" role="button" tabindex="0" aria-label="Edit ${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
                           <p>${activityAmountHtml(activity, repsMag)}</p>
@@ -5250,7 +5363,7 @@ function renderPersonPage({ skipScroll = false } = {}) {
                     `;
                     }
                     return `
-                      <article class="activity-item is-readonly" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
+                      <article class="activity-item is-readonly${person.honorary ? " is-honorary" : ""}" data-activity-id="${escapeHtml(activity.id)}" aria-label="${escapeHtml(exerciseName(activity))} entry">
                         ${exerciseIcon(activity)}
                         <div class="activity-main">
                           <p>${activityAmountHtml(activity, repsMag)}</p>
