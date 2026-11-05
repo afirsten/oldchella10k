@@ -27,6 +27,118 @@ export async function redis(command) {
   return payload.result;
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function stripHonoraryFields(record) {
+  if (!isPlainObject(record)) return false;
+  let changed = false;
+  if (Object.prototype.hasOwnProperty.call(record, "honorary")) {
+    delete record.honorary;
+    changed = true;
+  }
+  if (record.memberType === "honorary") {
+    delete record.memberType;
+    changed = true;
+  }
+  if (record.rank === "honorary") {
+    delete record.rank;
+    changed = true;
+  }
+  return changed;
+}
+
+function normalizeParticipationMap(map) {
+  if (!isPlainObject(map)) return false;
+  let changed = false;
+  for (const [id, status] of Object.entries(map)) {
+    if (status === "honorary") {
+      map[id] = "in";
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function rememberHonoraryId(ids, entry) {
+  if (typeof entry === "string" && entry) ids.add(entry);
+  else if (isPlainObject(entry) && typeof entry.id === "string" && entry.id) ids.add(entry.id);
+}
+
+/**
+ * Every stored person is a normal member. Honorary flags, ranks, and
+ * participation values are cleared in place. People and their logs stay.
+ * Returns true when the document changed and should be written back.
+ */
+export function normalizeSharedState(state) {
+  if (!isPlainObject(state)) return false;
+  let changed = false;
+  const honoraryIds = new Set();
+
+  if (Array.isArray(state.activities)) {
+    for (const activity of state.activities) {
+      if (stripHonoraryFields(activity)) changed = true;
+    }
+  }
+
+  if (normalizeParticipationMap(state.participation)) changed = true;
+
+  if (isPlainObject(state.challengeParticipation)) {
+    for (const map of Object.values(state.challengeParticipation)) {
+      if (normalizeParticipationMap(map)) changed = true;
+    }
+  }
+
+  for (const key of ["members", "people", "crew", "roster"]) {
+    if (!Array.isArray(state[key])) continue;
+    for (const person of state[key]) {
+      if (stripHonoraryFields(person)) changed = true;
+    }
+  }
+
+  if (Array.isArray(state.honoraryMembers)) {
+    for (const entry of state.honoraryMembers) {
+      rememberHonoraryId(honoraryIds, entry);
+      if (!isPlainObject(entry) || typeof entry.id !== "string") continue;
+      for (const key of ["members", "people", "crew", "roster"]) {
+        if (!Array.isArray(state[key])) continue;
+        if (state[key].some((person) => person && person.id === entry.id)) continue;
+        const next = { ...entry };
+        stripHonoraryFields(next);
+        state[key].push(next);
+      }
+    }
+    delete state.honoraryMembers;
+    changed = true;
+  }
+
+  if (Array.isArray(state.honorary)) {
+    state.honorary.forEach((entry) => rememberHonoraryId(honoraryIds, entry));
+    delete state.honorary;
+    changed = true;
+  } else if (isPlainObject(state.honorary)) {
+    Object.keys(state.honorary).forEach((id) => {
+      if (id) honoraryIds.add(id);
+    });
+    delete state.honorary;
+    changed = true;
+  }
+
+  if (honoraryIds.size) {
+    if (!isPlainObject(state.participation)) state.participation = {};
+    for (const id of honoraryIds) {
+      const current = state.participation[id];
+      if (current !== "in" && current !== "out") {
+        state.participation[id] = "in";
+      }
+    }
+    changed = true;
+  }
+
+  return changed;
+}
+
 export async function getState() {
   let raw = await redis(["GET", STATE_KEY]);
   if (!raw) {
@@ -36,13 +148,16 @@ export async function getState() {
   try {
     const state = JSON.parse(raw);
     if (!Array.isArray(state.activities) || !state.participation) throw new Error();
+    if (normalizeSharedState(state)) await saveState(state);
     return state;
-  } catch {
+  } catch (error) {
+    if (error.status) throw error;
     throw httpError(500, "Shared data is invalid.");
   }
 }
 
 export async function saveState(state) {
+  normalizeSharedState(state);
   await redis(["SET", STATE_KEY, JSON.stringify(state)]);
 }
 
